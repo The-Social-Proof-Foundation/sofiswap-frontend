@@ -11,18 +11,19 @@ const config: Config = {
     extend: {
       fontFamily: {
         // System fonts (reliable fallbacks)
-        'sans': ['Inter', 'system-ui', 'sans-serif'],
+        'sans': ['Satoshi', 'system-ui', 'sans-serif'],
         'serif': ['Georgia', 'serif'],
         'mono': ['JetBrains Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'monospace'],
         
-        // Modern web fonts (can be easily added/removed)
-        'display': ['Cal Sans', 'Inter', 'system-ui', 'sans-serif'],
-        'body': ['Inter', 'system-ui', 'sans-serif'],
-        'heading': ['Inter', 'system-ui', 'sans-serif'],
+        // Modern web fonts (now using Satoshi)
+        'display': ['Satoshi', 'system-ui', 'sans-serif'],
+        'body': ['Satoshi', 'system-ui', 'sans-serif'],
+        'heading': ['Satoshi', 'system-ui', 'sans-serif'],
         
-        // Custom fonts (add your branded fonts here)
-        // 'brand': ['YourBrandFont', 'Inter', 'sans-serif'],
-        // 'accent': ['YourAccentFont', 'Inter', 'sans-serif'],
+        // Custom fonts (Satoshi is now the primary brand font)
+        'brand': ['Satoshi', 'system-ui', 'sans-serif'],
+        'satoshi': ['Satoshi', 'system-ui', 'sans-serif'],
+        // 'accent': ['YourAccentFont', 'Satoshi', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

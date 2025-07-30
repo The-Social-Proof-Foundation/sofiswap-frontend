@@ -57,20 +57,18 @@ export default function Home() {
           </div>
 
           {/* Hero Text */}
-          <h1 ref={titleRef} className="text-3xl md:text-5xl lg:text-6xl font-bold mb-6 text-foreground leading-tight">
-            Something Amazing
-            <br />
-            <span className="text-3xl md:text-5xl lg:text-6xl">is Coming Soon</span>
+          <h1 ref={titleRef} className="font-satoshi text-3xl md:text-5xl lg:text-9xl font-bold mb-6 text-foreground leading-tight">
+            SofiSwap
           </h1>
 
-          <p className="text-sm md:text-base text-muted-foreground mb-12 max-w-md md:max-w-2xl mx-auto leading-relaxed">
+          <p className="font-satoshi text-sm md:text-base text-muted-foreground mb-12 max-w-md md:max-w-lg mx-auto leading-relaxed">
             We&apos;re crafting an extraordinary experience that will revolutionize the way you think about digital innovation.
           </p>
 
           {/* Countdown Timer */}
-          <div className="mb-12">
+          {/* <div className="mb-12">
             <CountdownTimer targetDate={launchDate} />
-          </div>
+          </div> */}
 
           {/* Email Signup */}
           <div className="mb-[25vh]">
