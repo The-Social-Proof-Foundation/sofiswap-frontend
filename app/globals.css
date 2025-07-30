@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Font imports - easily add/remove fonts here */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;200;300;400;500;600;700;800&display=swap');
+
+/* Add custom fonts here:
+@import url('https://fonts.googleapis.com/css2?family=YourFont:wght@400;500;600;700&display=swap');
+*/
+
+:root {
+  --foreground-rgb: 44, 48, 46;
+  --background-start-rgb: 154, 225, 157;
+  --background-end-rgb: 83, 122, 90;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 154, 225, 157;
+    --background-start-rgb: 44, 48, 46;
+    --background-end-rgb: 71, 74, 72;
+  }
+}
+
+@layer base {
+  :root {
+    --background: #9AE19D;
+    --foreground: #2C302E;
+    --card: #9AE19D;
+    --card-foreground: #2C302E;
+    --popover: #9AE19D;
+    --popover-foreground: #2C302E;
+    --primary: #537A5A;
+    --primary-foreground: #9AE19D;
+    --secondary: #909590;
+    --secondary-foreground: #2C302E;
+    --muted: #909590;
+    --muted-foreground: #474A48;
+    --accent: #537A5A;
+    --accent-foreground: #9AE19D;
+    --destructive: #DC2626; /* red for destructive */
+    --destructive-foreground: #FFFFFF;
+    --border: #909590;
+    --input: #909590;
+    --ring: #2C302E;
+    --chart-1: #537A5A;
+    --chart-2: #9AE19D;
+    --chart-3: #909590;
+    --chart-4: #474A48;
+    --chart-5: #2C302E;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: #2C302E;
+    --foreground: #9AE19D;
+    --card: #303330;
+    --card-foreground: #9AE19D;
+    --popover: #2C302E;
+    --popover-foreground: #9AE19D;
+    --primary: #9AE19D;
+    --primary-foreground: #303330;
+    --secondary: #474A48;
+    --secondary-foreground: #9AE19D;
+    --muted: #474A48;
+    --muted-foreground: #909590;
+    --accent: #537A5A;
+    --accent-foreground: #9AE19D;
+    --destructive: #B91C1C;
+    --destructive-foreground: #FFFFFF;
+    --border: #474A48;
+    --input: #474A48;
+    --ring: #9AE19D;
+    --chart-1: #9AE19D;
+    --chart-2: #537A5A;
+    --chart-3: #909590;
+    --chart-4: #474A48;
+    --chart-5: #303330;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
