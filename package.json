@@ -83,6 +83,7 @@
     "@types/node": "24.1.0",
     "@types/react": "18.3.23",
     "nodemon": "^3.1.10",
+    "serve": "^14.2.4",
     "typescript": "5.8.3"
   }
 }
