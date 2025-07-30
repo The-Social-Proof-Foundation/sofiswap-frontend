@@ -6,9 +6,7 @@
     "dev": "next dev",
     "dev:watch": "nodemon",
     "build": "next build",
-    "start": "npx serve@latest out",
-    "build:start": "npm run build && npm run start",
-    "preview": "npx serve@latest out",
+    "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
