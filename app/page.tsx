@@ -49,7 +49,7 @@ export default function Home() {
             {/* Coming Soon Badge */}
             <div className="mb-8">
               <HeroBadge
-                href="https://www.mysocial.network/MySocial.pdf"
+                href=""
                 text="Coming Soon"
                 endIcon={<Sparkle className="ml-2 w-4 h-4 arrow-icon text-[var(--foreground)]" />}
                 variant="default"
