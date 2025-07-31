@@ -50,7 +50,7 @@ export function HeroBadge({
   const wrapperProps = href ? { href, target: "_blank", rel: "noopener noreferrer" } : { onClick };
 
   const baseClassName = cn(
-    "inline-flex items-center rounded-full border border-white/10 text-white transition-colors shadow-[0_8px_30px_rgb(0,0,0,0.3)]",
+    "inline-flex items-center rounded-full border border-white/10 text-[var(--foreground)] transition-colors shadow-[0_8px_30px_rgb(0,0,0,0.3)]",
     badgeVariants[variant],
     sizeVariants[size],
     className

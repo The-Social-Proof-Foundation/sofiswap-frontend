@@ -50,12 +50,12 @@ export function AnimatedThemeToggle() {
           id={id}
           checked={isLight}
           onCheckedChange={handleToggle}
-          className="peer data-[state=unchecked]:bg-input/50 absolute inset-0 h-[inherit] w-auto rounded-lg [&_span]:z-10 [&_span]:h-full [&_span]:w-1/2 [&_span]:rounded-md [&_span]:transition-transform [&_span]:duration-300 [&_span]:ease-out [&_span]:data-[state=checked]:translate-x-full [&_span]:data-[state=checked]:rtl:-translate-x-full"
+          className="peer data-[state=unchecked]:bg-[var(--foreground)] data-[state=checked]:bg-[var(--foreground)] absolute inset-0 h-[inherit] w-auto rounded-lg [&>*]:z-10 [&>*]:h-full [&>*]:w-1/2 [&>*]:rounded-md [&>*]:!bg-[var(--background)] [&>*]:transition-transform [&>*]:duration-300 [&>*]:ease-out [&>*]:data-[state=checked]:translate-x-full [&>*]:data-[state=checked]:rtl:-translate-x-full"
         />
-        <span className="pointer-events-none relative ms-0.5 flex min-w-12 items-center justify-center text-center transition-transform duration-300 ease-out peer-data-[state=checked]:invisible peer-data-[state=unchecked]:translate-x-full peer-data-[state=unchecked]:rtl:-translate-x-full">
+        <span className="pointer-events-none relative ms-0.5 flex min-w-12 items-center justify-center text-center transition-transform duration-300 ease-out peer-data-[state=checked]:invisible peer-data-[state=unchecked]:translate-x-full peer-data-[state=unchecked]:rtl:-translate-x-full text-slate-900">
           <MoonIcon size={16} aria-hidden="true" />
         </span>
-        <span className="peer-data-[state=checked]:text-background pointer-events-none relative px-2 me-0.5 flex min-w-2 items-center justify-center text-center transition-transform duration-300 ease-out peer-data-[state=checked]:-translate-x-full peer-data-[state=unchecked]:invisible peer-data-[state=checked]:rtl:translate-x-full">
+        <span className="pointer-events-none relative px-2 me-0.5 flex min-w-2 items-center justify-center text-center transition-transform duration-300 ease-out peer-data-[state=checked]:-translate-x-full peer-data-[state=unchecked]:invisible peer-data-[state=checked]:rtl:translate-x-full text-white">
           <SunIcon size={16} aria-hidden="true" />
         </span>
       </div>

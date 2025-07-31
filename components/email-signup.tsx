@@ -79,7 +79,7 @@ export function EmailSignup() {
               setEmail(e.target.value)
               setIsValid(true)
             }}
-            className={`pl-10 ${
+            className={`pl-10 placeholder:text-[var(--muted-foreground)] ${
               !isValid ? "border-red-500 focus:border-red-500" : ""
             }`}
             required
@@ -88,7 +88,7 @@ export function EmailSignup() {
         <Button
           type="submit"
           disabled={isLoading}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground"
+          className="bg-[var(--foreground)] hover:bg-[var(--foreground)]/50 text-[var(--background)]"
         >
           {isLoading ? (
             <>
@@ -100,7 +100,7 @@ export function EmailSignup() {
           )}
         </Button>
       </div>
-      <div className="text-xs text-muted-foreground text-center">Enter your email to get notified when we launch</div>
+      <div className="text-xs text-[var(--muted-foreground)] text-center">Enter your email to get notified when we launch</div>
       {!isValid && (
         <p className="text-red-500 text-sm mt-1">
           {message || "Please enter a valid email address"}
