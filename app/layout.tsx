@@ -10,8 +10,8 @@ import ThemeFavicon from '@/components/theme-favicon';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Coming Soon - Revolutionary Experience Awaits',
-  description: 'Something amazing is coming. Be the first to know when we launch.',
+  title: 'SofiSwap - Coming Soon',
+  description: 'SofiSwap is a decentralized exchange on MySocial. Be the first to know when we launch.',
 };
 
 export default function RootLayout({
