@@ -43,78 +43,98 @@ export async function POST(request: NextRequest) {
     const { data, error } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'brandon@sofiswap.xyz',
       to: email,
-      subject: 'Welcome to MySocial - Get Started Today!',
+      subject: 'Thanks for joining SofiSwap!',
       html: `
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Welcome to MySocial</title>
+          <title>Welcome to SofiSwap</title>
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+          <style>
+            @font-face {
+              font-family: 'Satoshi';
+              src: url('https://fonts.cdnfonts.com/css/satoshi') format('woff2');
+              font-weight: 300 900;
+              font-display: swap;
+            }
+          </style>
         </head>
-        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; color: white; border-radius: 10px 10px 0 0;">
-            <h1 style="margin: 0; font-size: 28px;">Welcome to MySocial!</h1>
+        <body style="font-family: 'Satoshi', 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6; color: #2C302E; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fffe;">
+          <!-- Header with SofiSwap Brand Colors -->
+          <div style="background: linear-gradient(135deg, #9AE19D 0%, #537A5A 100%); padding: 40px 30px; text-align: center; color: #2C302E; border-radius: 12px 12px 0 0;">
+            <h1 style="margin: 0; font-size: 28px; font-weight: 700; font-family: 'Satoshi', 'Inter', sans-serif;">Welcome to SofiSwap!</h1>
+            <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.8; font-weight: 500;">The future of SocialFi + InfoFi is here</p>
           </div>
           
-          <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
-            <h2 style="color: #333; margin-top: 0;">Hello ${firstName || 'there'}!</h2>
+          <!-- Main Content -->
+          <div style="background: #ffffff; padding: 40px 30px; border-radius: 0 0 12px 12px;">
+            <h2 style="color: #2C302E; margin-top: 0; font-size: 20px; font-weight: 600; font-family: 'Satoshi', 'Inter', sans-serif;">Hello ${firstName || 'there'}!</h2>
             
-            <p>Thank you for joining MySocial. We're thrilled to have you as part of our growing community!</p>
+            <p style="color: #2C302E; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">Thank you for joining SofiSwap. We're thrilled to have you as part of our growing community!</p>
             
-            <p><strong>What's next?</strong></p>
-            <ul>
-              <li>Complete your profile to connect with others</li>
-              <li>Explore the MySocial ecosystem</li>
-              <li>Start building your decentralized social presence</li>
-            </ul>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://mysocial.network'}/wallet" 
-                 style="background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                Get Started Now
-              </a>
+            <!-- What's Next Section -->
+            <div style="background: #f0fdf4; padding: 24px; border-radius: 8px; border-left: 4px solid #9AE19D; margin: 24px 0;">
+              <h3 style="color: #537A5A; margin-top: 0; margin-bottom: 12px; font-size: 16px; font-weight: 600; font-family: 'Satoshi', 'Inter', sans-serif;">What's next?</h3>
+              <p style="color: #2C302E; margin-bottom: 12px; font-size: 13px; line-height: 1.4;">We're working hard to launch SofiSwap and we'll be in touch with you soon with more details about:</p>
+              <ul style="color: #2C302E; margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.4;">
+                <li style="margin-bottom: 6px;">Social Proof Token trading</li>
+                <li style="margin-bottom: 6px;">Decentralized SocialFi features</li>
+                <li style="margin-bottom: 6px;">Early access opportunities</li>
+              </ul>
             </div>
             
-            <p>If you have any questions, feel free to reach out to our support team.</p>
+            <!-- CTA Section -->
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="https://t.me/sofiswap_xyz" style="display: inline-block; background: #537A5A; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; font-family: 'Satoshi', 'Inter', sans-serif;">Join our Telegram</a>
+            </div>
             
-            <p>Best regards,<br>
-            <strong>The MySocial Team</strong></p>
+            <p style="color: #2C302E; font-size: 14px; line-height: 1.5;">If you have any questions, feel free to reach out to our team on Telegram or follow us on X (Twitter) for the latest updates.</p>
             
-            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+            <p style="color: #2C302E; font-size: 14px; margin-bottom: 32px; line-height: 1.5;">Best regards,<br>
+            <strong style="color: #537A5A; font-family: 'Satoshi', 'Inter', sans-serif;">The SofiSwap Team</strong></p>
             
-            <p style="font-size: 12px; color: #666;">
-              This email was sent to ${email} because you signed up for MySocial.<br>
-              <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://mysocial.network'}/unsubscribe?email=${encodeURIComponent(email)}" 
-                 style="color: #667eea;">Unsubscribe</a> | 
-              <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://mysocial.network'}/privacy" 
-                 style="color: #667eea;">Privacy Policy</a>
-            </p>
+            <!-- Footer -->
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
+            
+            <div style="text-align: center; font-size: 12px; color: #909590; line-height: 1.4;">
+              <p style="margin: 0 0 8px 0;">This email was sent to ${email} because you signed up for SofiSwap.</p>
+              <p style="margin: 0;">
+                <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'}/unsubscribe?email=${encodeURIComponent(email)}" 
+                   style="color: #537A5A; text-decoration: none;">Unsubscribe</a> | 
+                <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'}/privacy" 
+                   style="color: #537A5A; text-decoration: none;">Privacy Policy</a>
+              </p>
+              <p style="margin: 16px 0 0 0; font-size: 11px;">
+                <strong style="color: #2C302E;">The Social Proof Foundation, LLC.</strong><br>
+                © ${new Date().getFullYear()} SofiSwap. All Rights Reserved.
+              </p>
+            </div>
           </div>
         </body>
         </html>
       `,
       text: `
-Welcome to MySocial, ${firstName || 'there'}!
+Welcome to SofiSwap, ${firstName || 'there'}!
 
-Thank you for joining MySocial. We're thrilled to have you as part of our growing community!
+Thank you for joining SofiSwap. We're thrilled to have you as part of our growing community!
+We're working hard to launch SofiSwap and we'll be in touch with you soon with more details.  
 
-What's next?
-- Complete your profile to connect with others
-- Explore the MySocial ecosystem  
-- Start building your decentralized social presence
+Join our community: https://t.me/sofiswap_xyz
 
-Get started: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://mysocial.network'}/wallet
-
-If you have any questions, feel free to reach out to our support team.
+If you have any questions, feel free to reach out to our team on Telegram or follow us on X (Twitter) for the latest updates.
 
 Best regards,
-The MySocial Team
+The SofiSwap Team
 
 ---
-This email was sent to ${email} because you signed up for MySocial.
-Unsubscribe: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://mysocial.network'}/unsubscribe?email=${encodeURIComponent(email)}
-Privacy Policy: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://mysocial.network'}/privacy
+This email was sent to ${email} because you signed up for SofiSwap.
+Unsubscribe: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'}/unsubscribe?email=${encodeURIComponent(email)}
+Privacy Policy: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'}/privacy
+
+The Social Proof Foundation, LLC.
+© ${new Date().getFullYear()} SofiSwap. All Rights Reserved.
       `
     })
 

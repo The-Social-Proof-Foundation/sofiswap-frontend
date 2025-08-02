@@ -40,8 +40,8 @@ export function Footer() {
                 SofiSwap
               </span>
             </Link>
-            <p className="text-sm font-satoshi font-medium text-[var(--foreground)] max-w-[340px] text-center lg:text-left">
-              We&apos;re creating the leading SocialFi swap platform. Swap Influence. Own the Internet.
+            <p className="text-xs font-satoshi text-[var(--secondary-foreground)] max-w-[340px] text-center lg:text-left">
+              We&apos;re creating the leading SocialFi + InfoFi decentralized exchange for Social Proof Tokens.
             </p>
           </div>
 
@@ -99,35 +99,43 @@ export function Footer() {
           </div>
         </div>
 
-        <div className="mt-5">
-          <div className="flex flex-col sm:flex-row sm:justify-between items-center">
+        <div className="mt-4">
+          <div className="relative flex flex-col sm:flex-row sm:justify-between items-center">
              {/* Left side - Theme Toggle */}
-             <div className="pb-4 sm:pb-0">
+             <div className="pb-6 sm:pb-0 order-1 sm:order-1">
                <AnimatedThemeToggle />
              </div>
 
+             {/* Center - Terms and Privacy - Mobile: centered, Desktop: absolutely centered */}
+             <div className="flex flex-col items-center sm:absolute sm:left-1/2 sm:transform sm:-translate-x-1/2 order-2 sm:order-2">
+               <div className="flex gap-4 text-xs mb-2 md:mb-0 translate-y-0 md:translate-y-2">
+                 <Link href="https://docs.google.com/document/d/1qxKECZAOfgaZxl49Y3PhP9oAxB1yOsKJLasPEU-b6GY/" className="hover:underline text-[var(--secondary)] transition-colors duration-300 font-medium hover:font-semibold">
+                   Terms of Service
+                 </Link>
+                 <Link href="https://docs.google.com/document/d/1_lFu0GsqmcsyiuKrlGF-RBz6nd4Gm3vGluxhALiXYQA/" className="hover:underline text-[var(--secondary)] transition-colors duration-300 font-medium hover:font-semibold">
+                   Privacy Policy
+                 </Link>
+               </div>
+
                {/* Mobile: Show copyright info centered below terms */}
                <div className="text-center sm:hidden">
-                 <Link href="https://socialproof.foundation" target="_blank" rel="noopener noreferrer" className="text-xs font-satoshi font-medium text-[var(--muted-foreground)] hover:underline hover:font-medium block">
+                 <Link href="https://socialproof.foundation" target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--secondary)] hover:underline hover:font-medium block">
                    The Social Proof Foundation, LLC.
                  </Link>
-                 <p className="text-xs font-satoshi font-medium text-[var(--muted-foreground)]">
+                 <p className="text-xs text-[var(--secondary)]">
                    © Copyright {new Date().getFullYear()}. All Rights Reserved.
                  </p>
                </div>
+             </div>
 
              {/* Right side - Copyright info (Desktop only) */}
              <div className="hidden sm:flex sm:flex-col sm:items-end order-3 sm:order-3">
-               <Link href="https://socialproof.foundation" target="_blank" rel="noopener noreferrer" className="text-xs font-satoshi font-medium text-[var(--muted-foreground)] hover:underline hover:font-medium block">
+               <Link href="https://socialproof.foundation" target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--secondary)] hover:underline hover:font-medium block">
                  The Social Proof Foundation, LLC.
                </Link>
-               <p className="text-xs font-satoshi font-medium text-[var(--muted-foreground)]">
+               <p className="text-xs text-[var(--secondary)]">
                  © Copyright {new Date().getFullYear()}. All Rights Reserved.
                </p>
-             </div>
-
-             {/* Right side - Empty space for balance */}
-             <div className="w-10 h-10 invisible sm:visible">
              </div>
           </div>
         </div>

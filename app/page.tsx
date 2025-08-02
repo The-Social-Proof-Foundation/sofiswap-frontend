@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react"
 import { gsap } from "gsap"
 import { ScrollSmootherWrapper } from "@/components/scroll-smoother"
 import { Footer } from "@/components/footer"
-import { CountdownTimer } from "@/components/countdown-timer"
 import { EmailSignup } from "@/components/email-signup"
 import { HeroBadge } from "@/components/ui/hero-badge"
 import { Sparkle } from "lucide-react"
@@ -54,17 +53,17 @@ export default function Home() {
                 endIcon={<Sparkle className="ml-2 w-4 h-4 arrow-icon text-[var(--foreground)]" />}
                 variant="default"
                 size="md"
-                className="shadow-lg shadow-black/20 hero-badge"
+                className="shadow-lg shadow-black/20 hero-badge text-[var(--foreground)]"
             />
             </div>
 
             {/* Hero Text */}
-            <h1 ref={titleRef} className="font-satoshi text-3xl md:text-5xl lg:text-9xl font-bold mb-6 text-foreground leading-tight">
+            <h1 ref={titleRef} className="font-satoshi text-6xl md:text-7xl lg:text-9xl font-bold mb-2 md:mb-6 text-foreground leading-tight">
               SofiSwap
             </h1>
 
-            <p className="font-satoshi text-sm md:text-base font-medium text-[var(--foreground)] mb-12 max-w-md md:max-w-lg mx-auto leading-relaxed">
-              We&apos;re crafting an extraordinary experience that will revolutionize the way you think about digital innovation.
+            <p className="font-satoshi text-sm md:text-base font-medium text-[var(--secondary-foreground)] mb-12 mt-2 max-w-md md:max-w-lg mx-auto leading-relaxed">
+              We&apos;re building the fastest and most fun SocialFi + InfoFi decentralized exchange for Social Proof Tokens.
             </p>
 
             {/* Countdown Timer */}
