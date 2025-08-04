@@ -41,7 +41,7 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-xs font-satoshi text-[var(--secondary-foreground)] max-w-[340px] text-center lg:text-left">
-              We&apos;re creating the leading SocialFi + InfoFi decentralized exchange for Social Proof Tokens.
+              We&apos;re creating the leading SocialFi + InfoFi decentralized exchange for Social Proof Tokens and MyIP.
             </p>
           </div>
 
