@@ -63,14 +63,14 @@ export async function POST(request: NextRequest) {
         </head>
         <body style="font-family: 'Satoshi', 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6; color: #2C302E; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fffe;">
           <!-- Header with SofiSwap Brand Colors -->
-          <div style="padding: 40px 30px; text-align: center; color: #2C302E; border-radius: 12px 12px 0 0;">
-            <h1 style="margin: 0; font-size: 28px; font-weight: 700; font-family: 'Satoshi', 'Inter', sans-serif;">Welcome to SofiSwap!</h1>
+          <div style="padding: 40px 30px; text-align: center; border-radius: 12px 12px 0 0;">
+            <h1 style="margin: 0; font-size: 28px; font-weight: 700; font-family: 'Satoshi', 'Inter', sans-serif;">SofiSwap</h1>
             <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.8; font-weight: 500;">The future of SocialFi + InfoFi is here</p>
           </div>
           
           <!-- Main Content -->
           <div style="background: #ffffff; padding: 40px 30px; border-radius: 0 0 12px 12px;">
-            <h2 style="color: #2C302E; margin-top: 0; font-size: 20px; font-weight: 600; font-family: 'Satoshi', 'Inter', sans-serif;">Hello ${firstName || 'there'}!</h2>
+            <h2 style="color: #2C302E; margin-top: 0; font-size: 20px; font-weight: 600; font-family: 'Satoshi', 'Inter', sans-serif;">Hello ${firstName || ''}!</h2>
             
             <p style="color: #2C302E; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">Thank you for joining SofiSwap. We're thrilled to have you as part of our growing community!</p>
             <p style="color: #2C302E; font-size: 14px; line-height: 1.5;">If you have any questions, feel free to reach out to our team on Telegram or follow us on X (Twitter) for the latest updates.</p>

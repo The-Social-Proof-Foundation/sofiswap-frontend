@@ -9,22 +9,36 @@ import { HeroBadge } from "@/components/ui/hero-badge"
 import { Sparkle } from "lucide-react"
 
 export default function Home() {
-  const titleRef = useRef<HTMLHeadingElement>(null)
+  const sofiRef = useRef<HTMLSpanElement>(null)
+  const swapRef = useRef<HTMLSpanElement>(null)
 
   // Set launch date (30 days from now for demo)
   const launchDate = new Date()
   launchDate.setDate(launchDate.getDate() + 30)
 
   useEffect(() => {
-    // Initial hero animation
-    if (titleRef.current) {
-      gsap.set(titleRef.current, { y: 100, opacity: 0 })
-      gsap.to(titleRef.current, {
-        y: 0,
+    // Crossing animation for Sofi and Swap
+    if (sofiRef.current && swapRef.current) {
+      // Set initial positions: Sofi starts from right, Swap starts from left (they cross over)
+      gsap.set(sofiRef.current, { x: 150, opacity: 0 })
+      gsap.set(swapRef.current, { x: -150, opacity: 0 })
+
+      // Create timeline for synchronized animation
+      const tl = gsap.timeline()
+
+      // Animate both words crossing each other to their final positions
+      tl.to(sofiRef.current, {
+        x: 0,
         opacity: 1,
-        duration: 1.2,
+        duration: 0.65,
         ease: "power3.out"
       })
+      .to(swapRef.current, {
+        x: 0,
+        opacity: 1,
+        duration: 0.65,
+        ease: "power3.out"
+      }, "<") // Start at the same time as the previous animation
     }
   }, [])
 
@@ -58,8 +72,9 @@ export default function Home() {
             </div>
 
             {/* Hero Text */}
-            <h1 ref={titleRef} className="font-satoshi text-7xl md:text-8xl lg:text-9xl font-bold mb-2 md:mb-6 text-foreground leading-tight">
-              SofiSwap
+            <h1 className="font-satoshi text-7xl md:text-8xl lg:text-9xl font-bold mb-2 md:mb-6 text-foreground leading-tight">
+              <span ref={sofiRef} className="inline-block">Sofi</span>
+              <span ref={swapRef} className="inline-block">Swap</span>
             </h1>
 
             <p className="font-satoshi text-sm md:text-base font-medium text-[var(--secondary-foreground)] mb-12 mt-2 max-w-md md:max-w-lg mx-auto leading-relaxed">
