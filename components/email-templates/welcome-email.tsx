@@ -135,7 +135,7 @@ import {
   
   const header = {
     backgroundColor: '#9AE19D',
-    padding: '40px 40px 20px 0px',
+    padding: '20px',
     textAlign: 'center' as const,
   }
   
