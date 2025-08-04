@@ -27,7 +27,7 @@ import {
     return (
       <Html>
         <Head />
-        <Preview>Welcome to SofiSwap - The fastest and most reliable SocialFi + InfoFi DEX</Preview>
+        <Preview style={preview}>Welcome to SofiSwap - The fastest and most reliable SocialFi + InfoFi DEX</Preview>
         <Body style={main}>
           <Container style={container}>
             {/* Header Section */}
@@ -120,6 +120,12 @@ import {
   }
   
   // Styles
+  const preview = {
+    backgroundColor: '#9AE19D',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif',
+    padding: '20px',
+  }
+
   const main = {
     backgroundColor: '#9AE19D',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif',
