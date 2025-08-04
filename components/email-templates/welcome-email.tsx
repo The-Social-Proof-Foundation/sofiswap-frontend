@@ -27,7 +27,7 @@ import {
     return (
       <Html>
         <Head />
-        <Preview>Welcome to SofiSwap - A decentralized SocialFi + InfoFi DEX</Preview>
+        <Preview>Welcome to SofiSwap - The fastest and most reliable SocialFi + InfoFi DEX</Preview>
         <Body style={main}>
           <Container style={container}>
             {/* Header Section */}
