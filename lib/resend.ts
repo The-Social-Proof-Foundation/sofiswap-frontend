@@ -15,12 +15,13 @@ export interface ResendContactResponse {
   contactId?: string
 }
 
-// Welcome email interfaces
+// Welcome email interfaces (aligned with WelcomeEmailProps from React Email template)
 export interface WelcomeEmailData {
   email: string
   firstName?: string
   lastName?: string
   fullName?: string
+  baseUrl?: string
 }
 
 export interface ResendEmailResponse {
@@ -196,7 +197,8 @@ export async function sendWelcomeEmail(
       body: JSON.stringify({
         email: emailData.email,
         firstName: emailData.firstName,
-        lastName: emailData.lastName
+        lastName: emailData.lastName,
+        baseUrl: emailData.baseUrl
       })
     })
 
@@ -236,7 +238,8 @@ export async function addContactAndSendWelcomeEmail(
     email,
     firstName,
     lastName,
-    fullName: `${firstName || ''} ${lastName || ''}`.trim() || undefined
+    fullName: `${firstName || ''} ${lastName || ''}`.trim() || undefined,
+    baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'
   }
 
   // Use environment variables for audience ID if available

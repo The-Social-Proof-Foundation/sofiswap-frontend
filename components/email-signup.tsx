@@ -8,10 +8,10 @@ import { addContactAndSendWelcomeEmail } from "@/lib/resend"
 import Link from "next/link"
 import Image from "next/image"
 import { useTheme } from "next-themes"
+import { toast } from "sonner"
 
 export function EmailSignup() {
   const [email, setEmail] = useState("")
-  const [isSubmitted, setIsSubmitted] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isValid, setIsValid] = useState(true)
   const [message, setMessage] = useState("")
@@ -39,14 +39,28 @@ export function EmailSignup() {
     setIsValid(true)
     setIsLoading(true)
     
+    // Test toast to verify toast system is working
+    toast.info("Processing your request...", {
+      duration: 2000,
+    })
+    
     try {
       const result = await addContactAndSendWelcomeEmail(email)
       
       if (result.overallSuccess) {
-        setIsSubmitted(true)
-        setMessage("Successfully subscribed!")
+        toast.success("🎉 You're all set!", {
+          description: "Welcome to SofiSwap! Check your email for updates.",
+          duration: 4000,
+        })
+
+        setMessage("")
         setEmail("")
       } else {
+        console.log('❌ Toast not showing because overallSuccess is false')
+        toast.error("Something went wrong", {
+          description: "Please try again or contact support.",
+          duration: 4000,
+        })
         setMessage("Something went wrong. Please try again.")
         setIsValid(false)
       }
@@ -57,23 +71,6 @@ export function EmailSignup() {
     } finally {
       setIsLoading(false)
     }
-    
-    // Reset success message after 5 seconds
-    if (isSubmitted) {
-      setTimeout(() => {
-        setIsSubmitted(false)
-        setMessage("")
-      }, 5000)
-    }
-  }
-
-  if (isSubmitted) {
-    return (
-      <div className="flex items-center gap-2 p-2 text-sm bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg border border-green-200 dark:border-green-800">
-        <Check className="w-5 h-5" />
-        <span>{message}</span>
-      </div>
-    )
   }
 
   // Determine MySo logo based on theme with proper fallback
