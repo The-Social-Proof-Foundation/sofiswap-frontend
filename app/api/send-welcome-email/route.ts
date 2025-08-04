@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         </head>
         <body style="font-family: 'Satoshi', 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.6; color: #2C302E; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8fffe;">
           <!-- Header with SofiSwap Brand Colors -->
-          <div style="background: linear-gradient(135deg, #9AE19D 0%, #537A5A 100%); padding: 40px 30px; text-align: center; color: #2C302E; border-radius: 12px 12px 0 0;">
+          <div style="padding: 40px 30px; text-align: center; color: #2C302E; border-radius: 12px 12px 0 0;">
             <h1 style="margin: 0; font-size: 28px; font-weight: 700; font-family: 'Satoshi', 'Inter', sans-serif;">Welcome to SofiSwap!</h1>
             <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.8; font-weight: 500;">The future of SocialFi + InfoFi is here</p>
           </div>
@@ -73,23 +73,6 @@ export async function POST(request: NextRequest) {
             <h2 style="color: #2C302E; margin-top: 0; font-size: 20px; font-weight: 600; font-family: 'Satoshi', 'Inter', sans-serif;">Hello ${firstName || 'there'}!</h2>
             
             <p style="color: #2C302E; font-size: 14px; margin-bottom: 20px; line-height: 1.5;">Thank you for joining SofiSwap. We're thrilled to have you as part of our growing community!</p>
-            
-            <!-- What's Next Section -->
-            <div style="background: #f0fdf4; padding: 24px; border-radius: 8px; border-left: 4px solid #9AE19D; margin: 24px 0;">
-              <h3 style="color: #537A5A; margin-top: 0; margin-bottom: 12px; font-size: 16px; font-weight: 600; font-family: 'Satoshi', 'Inter', sans-serif;">What's next?</h3>
-              <p style="color: #2C302E; margin-bottom: 12px; font-size: 13px; line-height: 1.4;">We're working hard to launch SofiSwap and we'll be in touch with you soon with more details about:</p>
-              <ul style="color: #2C302E; margin: 0; padding-left: 20px; font-size: 13px; line-height: 1.4;">
-                <li style="margin-bottom: 6px;">Social Proof Token trading</li>
-                <li style="margin-bottom: 6px;">Decentralized SocialFi features</li>
-                <li style="margin-bottom: 6px;">Early access opportunities</li>
-              </ul>
-            </div>
-            
-            <!-- CTA Section -->
-            <div style="text-align: center; margin: 32px 0;">
-              <a href="https://t.me/sofiswap_xyz" style="display: inline-block; background: #537A5A; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; font-family: 'Satoshi', 'Inter', sans-serif;">Join our Telegram</a>
-            </div>
-            
             <p style="color: #2C302E; font-size: 14px; line-height: 1.5;">If you have any questions, feel free to reach out to our team on Telegram or follow us on X (Twitter) for the latest updates.</p>
             
             <p style="color: #2C302E; font-size: 14px; margin-bottom: 32px; line-height: 1.5;">Best regards,<br>
@@ -116,25 +99,25 @@ export async function POST(request: NextRequest) {
         </html>
       `,
       text: `
-Welcome to SofiSwap, ${firstName || 'there'}!
+        Welcome to SofiSwap, ${firstName || 'there'}!
 
-Thank you for joining SofiSwap. We're thrilled to have you as part of our growing community!
-We're working hard to launch SofiSwap and we'll be in touch with you soon with more details.  
+        Thank you for joining SofiSwap. We're thrilled to have you as part of our growing community!
+        We're working hard to launch SofiSwap and we'll be in touch with you soon with more details.  
 
-Join our community: https://t.me/sofiswap_xyz
+        Join our community: https://t.me/sofiswap_xyz
 
-If you have any questions, feel free to reach out to our team on Telegram or follow us on X (Twitter) for the latest updates.
+        If you have any questions, feel free to reach out to our team on Telegram or follow us on X (Twitter) for the latest updates.
 
-Best regards,
-The SofiSwap Team
+        Best regards,
+        The SofiSwap Team
 
----
-This email was sent to ${email} because you signed up for SofiSwap.
-Unsubscribe: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'}/unsubscribe?email=${encodeURIComponent(email)}
-Privacy Policy: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'}/privacy
+        ---
+        This email was sent to ${email} because you signed up for SofiSwap.
+        Unsubscribe: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'}/unsubscribe?email=${encodeURIComponent(email)}
+        Privacy Policy: ${process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'}/privacy
 
-The Social Proof Foundation, LLC.
-© ${new Date().getFullYear()} SofiSwap. All Rights Reserved.
+        The Social Proof Foundation, LLC.
+        © ${new Date().getFullYear()} SofiSwap. All Rights Reserved.
       `
     })
 

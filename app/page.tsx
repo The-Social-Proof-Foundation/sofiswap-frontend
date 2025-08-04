@@ -50,15 +50,15 @@ export default function Home() {
               <HeroBadge
                 href=""
                 text="Coming Soon"
-                endIcon={<Sparkle className="ml-2 w-4 h-4 arrow-icon text-[var(--foreground)]" />}
+                endIcon={<Sparkle className="ml-2 w-4 h-4 arrow-icon text-[var(--badge)]" />}
                 variant="default"
                 size="md"
-                className="shadow-lg shadow-black/20 hero-badge text-[var(--foreground)]"
+                className="shadow-lg shadow-black/20 hero-badge text-[var(--badge)]"
             />
             </div>
 
             {/* Hero Text */}
-            <h1 ref={titleRef} className="font-satoshi text-6xl md:text-7xl lg:text-9xl font-bold mb-2 md:mb-6 text-foreground leading-tight">
+            <h1 ref={titleRef} className="font-satoshi text-7xl md:text-8xl lg:text-9xl font-bold mb-2 md:mb-6 text-foreground leading-tight">
               SofiSwap
             </h1>
 

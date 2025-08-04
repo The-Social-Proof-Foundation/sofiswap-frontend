@@ -88,6 +88,7 @@
     --muted-foreground: #474A48;
     --accent: #537A5A;
     --accent-foreground: #9AE19D;
+    --badge: #ffffff;
     --destructive: #DC2626; /* red for destructive */
     --destructive-foreground: #FFFFFF;
     --border: #909590;
@@ -116,6 +117,7 @@
     --muted-foreground: #909590;
     --accent: #537A5A;
     --accent-foreground: #9AE19D;
+    --badge: #9AE19D;
     --destructive: #B91C1C;
     --destructive-foreground: #FFFFFF;
     --border: #474A48;
