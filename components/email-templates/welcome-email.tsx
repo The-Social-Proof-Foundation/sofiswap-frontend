@@ -34,8 +34,8 @@ import {
             <Section style={header}>
               <Img
                 src={`${baseUrl}/sofiswap-logo.png`}
-                width="160"
-                height="160"
+                width="120"
+                height="120"
                 alt="SofiSwap"
                 style={logo}
               />
@@ -46,8 +46,8 @@ import {
                 alt="SofiSwap"
                 style={logo}
               />
-              <Text style={headerText} className="text-plus-jakarta-sans">
-                We&apos;re building the best decentralized SocialFi + InfoFi DEX for Social Proof Tokens.
+              <Text style={headerText} className="text-plus-jakarta-sans font-medium">
+                We&apos;re building the best decentralized SocialFi + InfoFi DEX for Social Proof Tokens and MyIP.
               </Text>
             </Section>
   
@@ -135,7 +135,7 @@ import {
   
   const header = {
     backgroundColor: '#9AE19D',
-    padding: '20px',
+    padding: '40px 40px 20px 0px',
     textAlign: 'center' as const,
   }
   

@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     const emailText = `
 Welcome to SofiSwap, ${firstName || 'there'}!
 
-Thank you for joining SofiSwap! We're thrilled to have you as part of our growing community building the future of free speech on the blockchain.
+Thank you for joining SofiSwap! We're thrilled to have you as part of our growing community.
 
 We're working hard to launch and can't wait to share this revolutionary platform with you. Stay tuned for exclusive updates!
 
