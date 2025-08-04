@@ -27,7 +27,7 @@ import {
     return (
       <Html>
         <Head />
-        <Preview style={preview}>Welcome to SofiSwap - The fastest and most reliable SocialFi + InfoFi DEX</Preview>
+        <Preview>Welcome to SofiSwap - The fastest SocialFi + InfoFi DEX</Preview>
         <Body style={main}>
           <Container style={container}>
             {/* Header Section */}
@@ -47,7 +47,7 @@ import {
                 style={logo}
               />
               <Text style={headerText} className="text-plus-jakarta-sans">
-                We&apos;re building the best decentralized SocialFi + InfoFi DEX for Social Proof Tokens & MyIP.
+                We&apos;re building the best decentralized SocialFi + InfoFi DEX for Social Proof Tokens.
               </Text>
             </Section>
   
@@ -120,12 +120,6 @@ import {
   }
   
   // Styles
-  const preview = {
-    backgroundColor: '#9AE19D',
-    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif',
-    padding: '20px',
-  }
-
   const main = {
     backgroundColor: '#9AE19D',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif',
@@ -141,7 +135,7 @@ import {
   
   const header = {
     backgroundColor: '#9AE19D',
-    padding: '0px 0px',
+    padding: '20px',
     textAlign: 'center' as const,
   }
   
