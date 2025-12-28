@@ -1,9 +1,53 @@
+// Route configuration
+export const runtime = 'nodejs'
+export const maxDuration = 60 // 60 seconds timeout for blockchain requests
+
 export async function POST(request: Request) {
     try {
-      const body = await request.json()
+      // Parse request body with error handling
+      let body;
+      try {
+        body = await request.json()
+      } catch (parseError) {
+        console.error('❌ [Fullnode Proxy] Failed to parse request body:', parseError)
+        return Response.json(
+          { 
+            error: 'Invalid request body',
+            code: -32700,
+            message: 'Parse error'
+          },
+          { 
+            status: 400,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            }
+          }
+        )
+      }
+
+      // Validate body structure
+      if (!body || typeof body !== 'object') {
+        return Response.json(
+          { 
+            error: 'Invalid request format',
+            code: -32600,
+            message: 'Invalid Request'
+          },
+          { 
+            status: 400,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            }
+          }
+        )
+      }
       
       // Use HTTP for MySocial testnet to avoid SSL issues
-      const mysocialFullnode = process.env.NEXT_PUBLIC_MYS_FULLNODE || 'http://fullnode.testnet.mysocial.network:9000'
+      const mysocialFullnode = process.env.NEXT_PUBLIC_MYSO_FULLNODE || 'http://fullnode.testnet.mysocial.network:9000'
       
       console.log('🔍 [Fullnode Proxy] Request Details:')
       console.log('  Target:', mysocialFullnode)
@@ -45,7 +89,33 @@ export async function POST(request: Request) {
         throw new Error(`HTTP error! status: ${response.status}, response: ${errorText}`)
       }
       
-      const data = await response.json()
+      // Parse response JSON with error handling
+      let data;
+      try {
+        const responseText = await response.text()
+        if (!responseText) {
+          throw new Error('Empty response body')
+        }
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error('❌ [Fullnode Proxy] Failed to parse response JSON:', parseError)
+        return Response.json(
+          { 
+            error: 'Invalid JSON response from fullnode',
+            code: -32700,
+            message: 'Parse error'
+          },
+          { 
+            status: 502,
+            headers: {
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Allow-Methods': 'POST, OPTIONS',
+              'Access-Control-Allow-Headers': 'Content-Type',
+            }
+          }
+        )
+      }
+      
       console.log('✅ [Fullnode Proxy] Success response data:', JSON.stringify(data, null, 2))
       
       // Check for JSON-RPC errors in successful HTTP responses

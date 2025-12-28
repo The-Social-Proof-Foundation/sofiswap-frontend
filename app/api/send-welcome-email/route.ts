@@ -4,6 +4,10 @@ import { render } from '@react-email/render'
 import { addContactToResend, type ResendContact } from '@/lib/resend'
 import { WelcomeEmail } from '@/components/email-templates'
 
+// Route configuration
+export const runtime = 'nodejs'
+export const maxDuration = 30 // 30 seconds timeout
+
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 // Environment variables needed:
@@ -13,9 +17,21 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, firstName, lastName, baseUrl } = await request.json()
+    // Parse request body with error handling
+    let body;
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError)
+      return NextResponse.json(
+        { success: false, message: 'Invalid request body' },
+        { status: 400 }
+      )
+    }
 
-    if (!email) {
+    const { email, firstName, lastName, baseUrl } = body || {}
+
+    if (!email || typeof email !== 'string') {
       return NextResponse.json(
         { success: false, message: 'Email is required' },
         { status: 400 }
@@ -106,8 +122,13 @@ Terms of Service: ${emailBaseUrl}/terms
 
   } catch (error) {
     console.error('Welcome email API error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return NextResponse.json(
-      { success: false, message: 'Failed to send welcome email' },
+      { 
+        success: false, 
+        message: 'Failed to send welcome email',
+        error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
       { status: 500 }
     )
   }

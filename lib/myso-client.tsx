@@ -5,7 +5,11 @@ let mysClient: MysClient | null = null
 
 export function getMysClient(): MysClient {
   if (!mysClient) {
-    const fullnodeUrl = 'http://localhost:3000/api/fullnode/'
+    // Use relative URL for production, fallback to localhost for development
+    const fullnodeUrl = process.env.NEXT_PUBLIC_MYSO_FULLNODE_URL || 
+                       (typeof window !== 'undefined' 
+                         ? '/api/fullnode/' 
+                         : 'http://localhost:3000/api/fullnode/')
     
     console.log('Creating MySocial client with URL:', fullnodeUrl)
     mysClient = new MysClient({ url: fullnodeUrl })
