@@ -4,8 +4,9 @@ import GoogleAnalytics from '@/lib/googleAnalytics'
 import { Inter } from 'next/font/google';
 import { Toaster } from "@/components/ui/sonner"
 import { ThemeProvider } from '@/components/theme-provider';
-import { ApolloWrapper } from '@/lib/apollo-provider';
+import { NetworkProvider } from '@/lib/network-provider';
 import { CookieConsent } from '@/components/cookie-consent';
+import { MySocialAuthBroadcastListener } from '@/components/providers/mysocial-auth-broadcast-listener';
 import ThemeFavicon from '@/components/theme-favicon';
 const inter = Inter({ subsets: ['latin'] });
 
@@ -22,20 +23,21 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        {/* <ApolloWrapper> */}
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="dark"
-              enableSystem
-              disableTransitionOnChange={false}
-            >
-              {children}
-              <Toaster />
-              <CookieConsent/>
-              <ThemeFavicon/>
-            </ThemeProvider>
-          <GoogleAnalytics />
-        {/* </ApolloWrapper> */}
+        <NetworkProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange={false}
+          >
+            <MySocialAuthBroadcastListener />
+            {children}
+            <Toaster />
+            <CookieConsent />
+            <ThemeFavicon />
+          </ThemeProvider>
+        </NetworkProvider>
+        <GoogleAnalytics />
       </body>
     </html>
   );

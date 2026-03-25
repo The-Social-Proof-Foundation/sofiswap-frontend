@@ -1,6 +1,11 @@
+import {
+  getCurrentNetworkFromCookies,
+  getFullnodeJsonRpcUrl,
+} from '@/lib/network-utils';
+
 // Route configuration
-export const runtime = 'nodejs'
-export const maxDuration = 60 // 60 seconds timeout for blockchain requests
+export const runtime = 'nodejs';
+export const maxDuration = 60; // 60 seconds timeout for blockchain requests
 
 export async function POST(request: Request) {
     try {
@@ -46,10 +51,14 @@ export async function POST(request: Request) {
         )
       }
       
-      // Use HTTP for MySocial testnet to avoid SSL issues
-      const mysocialFullnode = process.env.NEXT_PUBLIC_MYSO_FULLNODE || 'http://fullnode.testnet.mysocial.network:9000'
-      
+      const cookieHeader = request.headers.get('cookie')
+      const network = getCurrentNetworkFromCookies(cookieHeader)
+      const mysocialFullnode =
+        process.env.NEXT_PUBLIC_MYSO_FULLNODE?.trim() ||
+        getFullnodeJsonRpcUrl(network)
+
       console.log('🔍 [Fullnode Proxy] Request Details:')
+      console.log('  Network:', network)
       console.log('  Target:', mysocialFullnode)
       console.log('  Method:', body.method)
       console.log('  Params count:', body.params?.length || 0)

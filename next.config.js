@@ -10,6 +10,23 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
+  /**
+   * OAuth popups (e.g. @socialproof/mysocial-auth) read `popup.closed` from the opener.
+   * `COOP: same-origin` breaks that; `same-origin-allow-popups` keeps popups usable.
+   */
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin-allow-popups',
+          },
+        ],
+      },
+    ];
+  },
 }
 
 module.exports = nextConfig

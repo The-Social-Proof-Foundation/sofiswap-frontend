@@ -10,7 +10,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@apollo/client": "^3.13.8",
     "@hookform/resolvers": "^3.9.0",
     "@next/swc-wasm-nodejs": "13.5.1",
     "@radix-ui/react-accordion": "^1.2.0",
@@ -42,7 +41,10 @@
     "@radix-ui/react-tooltip": "^1.1.2",
     "@react-email/components": "^0.4.0",
     "@react-email/render": "^1.1.4",
-    "@socialproof/mys": "^0.0.1",
+    "@socialproof/dapp-kit-react": "^0.0.4",
+    "@socialproof/myso": "^0.0.4",
+    "@socialproof/mysocial-auth": "^0.12.0",
+    "@socialproof/orderbook": "^0.0.4",
     "@splinetool/runtime": "^1.10.37",
     "@types/react-dom": "18.2.7",
     "autoprefixer": "10.4.15",

@@ -197,7 +197,7 @@ export default function Home() {
             </h1>
 
             <p className="relative z-10 font-satoshi text-sm md:text-base font-medium text-[var(--secondary-foreground)] mb-12 mt-2 max-w-md md:max-w-lg mx-auto leading-relaxed">
-              We&apos;re building the fastest and most fun SocialFi + InfoFi decentralized exchange for Social Proof Tokens and MyIP.
+              We&apos;re building the fastest and most fun SocialFi + DataFi decentralized exchange for Social Proof Tokens and MyData.
             </p>
 
             {/* Countdown Timer */}
