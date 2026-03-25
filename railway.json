@@ -1,0 +1,9 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "deploy": {
+    "startCommand": "node node_modules/next/dist/bin/next start -p ${PORT:-3000} -H 0.0.0.0",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 100,
+    "overlapSeconds": "60"
+  }
+}
