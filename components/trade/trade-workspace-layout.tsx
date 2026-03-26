@@ -23,7 +23,7 @@ const ORDERBOOK_FLEX_BASIS_PCT_OF_WORKSPACE = (100 / 6) / (100 - 100 / 6);
 /** Cap order book + swapping column width on very wide monitors. */
 const MAX_ORDERBOOK_SWAP_PX = 480;
 /** Open trades height bounds (% of vertical split to the left of the swap column). */
-const OPEN_TRADES_MIN_PCT = 6;
+const OPEN_TRADES_MIN_PCT = 4.25;
 const OPEN_TRADES_MAX_PCT = 32;
 
 const railSegmentListClass = cn(
