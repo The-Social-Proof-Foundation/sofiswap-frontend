@@ -52,7 +52,12 @@ const TabsContent = React.forwardRef<
 ));
 TabsContent.displayName = TabsPrimitive.Content.displayName;
 
-export type UnderlineTabItem = { id: string; label: string };
+export type UnderlineTabItem = {
+  id: string;
+  label: string;
+  /** Badge, count, or extra chrome after the label (e.g. beta pill). */
+  suffix?: React.ReactNode;
+};
 
 export type UnderlineTabsProps = {
   tabs: UnderlineTabItem[];
@@ -163,7 +168,10 @@ function Tabs({
               )}
               onClick={() => setActive(tab.id)}
             >
-              <span className="whitespace-nowrap">{tab.label}</span>
+              <span className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap">
+                <span>{tab.label}</span>
+                {tab.suffix}
+              </span>
             </button>
           );
         })}

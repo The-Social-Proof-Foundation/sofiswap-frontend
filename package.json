@@ -10,7 +10,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@hookform/resolvers": "^3.9.0",
+    "@mui/icons-material": "^5.18.0",
+    "@mui/material": "^5.18.0",
     "@next/swc-wasm-nodejs": "13.5.1",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -41,6 +45,7 @@
     "@radix-ui/react-tooltip": "^1.1.2",
     "@react-email/components": "^0.4.0",
     "@react-email/render": "^1.1.4",
+    "@sehaj23/react-spotlight-search": "^1.0.2",
     "@socialproof/dapp-kit-react": "^0.0.4",
     "@socialproof/myso": "^0.0.4",
     "@socialproof/mysocial-auth": "^0.12.0",
@@ -80,6 +85,7 @@
     "tailwind-merge": "^2.5.2",
     "tailwindcss": "3.3.3",
     "tailwindcss-animate": "^1.0.7",
+    "torph": "^0.0.9",
     "vaul": "^0.9.9",
     "zod": "^3.23.8"
   },

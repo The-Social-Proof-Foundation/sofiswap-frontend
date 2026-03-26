@@ -5,12 +5,22 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
+import { TradeActivityEmptyState } from '@/components/trade/trade-activity-empty-state';
+import { TradeHistoryPanel } from '@/components/trade/trade-history-panel';
+import { TradeOpenOrdersTable } from '@/components/trade/trade-open-orders-table';
+import { TradeOrderBookPanel } from '@/components/trade/trade-order-book-panel';
+import { TradeOrderPanel } from '@/components/trade/trade-order-panel';
+import { TradeUserTradeHistoryTable } from '@/components/trade/trade-user-trade-history-table';
 import { SlidingSegmentTabs } from '@/components/ui/sliding-segment-tabs';
-import { Tabs } from '@/components/ui/tabs';
+import { Tabs, type UnderlineTabItem } from '@/components/ui/tabs';
+import { usePoolOrderBook } from '@/hooks/usePoolOrderBook';
+import { usePoolTrades } from '@/hooks/usePoolTrades';
+import { useMySocialAuth } from '@/hooks/useMySocialAuth';
+import type { OpenOrderRow, UserTradeHistoryRow } from '@/lib/trade/activity-tables';
 import { cn } from '@/lib/utils';
 import { ArrowRightToLine, Menu } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const MD_QUERY = '(min-width: 768px)';
 /** Swap-only column on very large viewports (Tailwind 2xl). */
@@ -31,16 +41,60 @@ const railSegmentListClass = cn(
   'dark:bg-muted/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
 );
 
-const openTradesUnderlineTabs = [
-  { id: 'positions', label: 'Positions' },
-  { id: 'open-orders', label: 'Open Orders' },
-  { id: 'trade-history', label: 'Trade History' },
-] as const;
+function OpenTradesSection({
+  className,
+  poolName: _poolName,
+}: {
+  className?: string;
+  /** Reserved for future per-pool order/history fetching. */
+  poolName: string;
+}) {
+  const { isAuthenticated, isLoading: authLoading, signIn } = useMySocialAuth();
+  const [segment, setSegment] = useState<string>('open-orders');
 
-type OpenTradesUnderlineId = (typeof openTradesUnderlineTabs)[number]['id'];
+  const openOrderRows = useMemo<OpenOrderRow[]>(() => [], []);
+  const tradeHistoryRows = useMemo<UserTradeHistoryRow[]>(() => [], []);
 
-function OpenTradesSection({ className }: { className?: string }) {
-  const [segment, setSegment] = useState<OpenTradesUnderlineId>('positions');
+  const tradeHistoryCount = tradeHistoryRows.length;
+
+  const tabs = useMemo((): UnderlineTabItem[] => {
+    const tradeHistorySuffix =
+      tradeHistoryCount > 0 ? (
+        <span className="text-[10px] font-normal tabular-nums text-muted-foreground">
+          ({tradeHistoryCount})
+        </span>
+      ) : undefined;
+
+    return [
+      { id: 'open-orders', label: 'Open Orders' },
+      {
+        id: 'trade-history',
+        label: 'Trade History',
+        suffix: tradeHistorySuffix,
+      },
+    ];
+  }, [tradeHistoryCount]);
+
+  useEffect(() => {
+    const ids = tabs.map((t) => t.id);
+    if (!ids.includes(segment)) {
+      setSegment(ids[0] ?? 'open-orders');
+    }
+  }, [tabs, segment]);
+
+  const onGetStarted = useCallback(() => {
+    void signIn('none');
+  }, [signIn]);
+
+  /** Sign-in CTA only for guests; hide while auth is still resolving to avoid flashing the wrong state. */
+  const showSignInOnEmpty = !authLoading && !isAuthenticated;
+
+  const renderEmptyState = () => (
+    <TradeActivityEmptyState
+      showGetStarted={showSignInOnEmpty}
+      onGetStarted={onGetStarted}
+    />
+  );
 
   return (
     <section
@@ -48,26 +102,34 @@ function OpenTradesSection({ className }: { className?: string }) {
         'flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-trade-shell bg-background',
         className
       )}
-      aria-label="Positions, open orders, and trade history"
+      aria-label="Open orders and trade history"
     >
       <div className="shrink-0 px-2 pt-1 md:px-3 md:pt-1.5">
         <Tabs
-          tabs={[...openTradesUnderlineTabs]}
+          tabs={tabs}
           activeTab={segment}
-          onTabChange={(id) => setSegment(id as OpenTradesUnderlineId)}
+          onTabChange={(id) => setSegment(id)}
           aria-label="Panel view"
           listClassName="gap-3"
           triggerClassName="px-1.5 py-1 font-medium"
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4 text-left text-sm text-muted-foreground">
-        {segment === 'positions' ? (
-          <span>Positions placeholder</span>
-        ) : segment === 'open-orders' ? (
-          <span>Open orders placeholder</span>
-        ) : (
-          <span>Trade history placeholder</span>
-        )}
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 py-2 md:px-3">
+        {segment === 'open-orders' ? (
+          openOrderRows.length > 0 ? (
+            <TradeOpenOrdersTable rows={openOrderRows} />
+          ) : (
+            renderEmptyState()
+          )
+        ) : null}
+
+        {segment === 'trade-history' ? (
+          tradeHistoryRows.length > 0 ? (
+            <TradeUserTradeHistoryTable rows={tradeHistoryRows} />
+          ) : (
+            renderEmptyState()
+          )
+        ) : null}
       </div>
     </section>
   );
@@ -91,12 +153,36 @@ const orderBookRailSegmentItems = [
 function OrderBookSection({
   className,
   onClosePanel,
+  poolName,
 }: {
   className?: string;
   /** Desktop rail: leave button to the left of the Orderbook / History segment switch. */
   onClosePanel?: () => void;
+  poolName: string;
 }) {
   const [segment, setSegment] = useState<OrderBookRailSegment>('orderbook');
+
+  const { baseSymbol, quoteSymbol } = useMemo(() => {
+    const parts = poolName.split('_').filter(Boolean);
+    return {
+      baseSymbol: parts[0] ?? poolName,
+      quoteSymbol: parts[1] ?? '—',
+    };
+  }, [poolName]);
+
+  const {
+    data: orderBook,
+    error: orderBookError,
+    isLoading: orderBookLoading,
+  } = usePoolOrderBook({ poolName, pollIntervalMs: 12_000 });
+
+  const {
+    data: tradesRaw,
+    error: tradesError,
+    isLoading: tradesLoading,
+  } = usePoolTrades({ poolName, pollIntervalMs: 12_000 });
+
+  const trades = useMemo(() => [...tradesRaw].reverse(), [tradesRaw]);
 
   return (
     <div
@@ -133,13 +219,16 @@ function OrderBookSection({
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {segment === 'orderbook' ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4 text-center text-sm text-muted-foreground">
-            Orderbook placeholder
-          </div>
+          <TradeOrderBookPanel
+            baseSymbol={baseSymbol}
+            quoteSymbol={quoteSymbol}
+            snapshot={orderBook}
+            isLoading={orderBookLoading}
+            error={orderBookError}
+            maxLevelsPerSide={14}
+          />
         ) : (
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4 text-center text-sm text-muted-foreground">
-            Trade history placeholder
-          </div>
+          <TradeHistoryPanel trades={trades} isLoading={tradesLoading} error={tradesError} />
         )}
       </div>
     </div>
@@ -158,33 +247,38 @@ const swapSideSegmentItems = [
   {
     value: 'buy',
     label: 'Buy',
-    triggerClassName: 'px-2 py-0 text-[13px] leading-tight',
+    triggerClassName: cn(
+      'px-2 py-0 text-[13px] leading-tight',
+      'data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400'
+    ),
   },
   {
     value: 'sell',
     label: 'Sell',
-    triggerClassName: 'px-2 py-0 text-[13px] leading-tight',
+    triggerClassName: cn(
+      'px-2 py-0 text-[13px] leading-tight',
+      'data-[state=active]:text-rose-600 dark:data-[state=active]:text-rose-400'
+    ),
   },
 ] as const;
 
 function SwappingInputsSection({
   className,
   style,
+  poolName,
   orderBookCollapsed,
   onToggleOrderBook,
   showOrderBookToggle,
 }: {
   className?: string;
   style?: CSSProperties;
+  poolName: string;
   orderBookCollapsed?: boolean;
   onToggleOrderBook?: () => void;
   showOrderBookToggle?: boolean;
 }) {
   const [side, setSide] = useState<SwapSideSegment>('buy');
   const [orderType, setOrderType] = useState<SwapOrderTypeSegment>('market');
-
-  const sideLabel = side === 'buy' ? 'Buy' : 'Sell';
-  const typeLabel = orderType === 'market' ? 'Market' : 'Limit';
 
   return (
     <aside
@@ -233,9 +327,7 @@ function SwappingInputsSection({
           />
         </div>
       </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-4 text-center text-sm text-muted-foreground">
-        {sideLabel} · {typeLabel} panel placeholder
-      </div>
+      <TradeOrderPanel poolName={poolName} side={side} orderType={orderType} className="text-left" />
     </aside>
   );
 }
@@ -268,7 +360,13 @@ function useIsViewport2xl() {
   return is2xl;
 }
 
-export function TradeWorkspaceLayout({ chart }: { chart: ReactNode }) {
+export function TradeWorkspaceLayout({
+  chart,
+  poolName = 'MYSO_MYUSD',
+}: {
+  chart: ReactNode;
+  poolName?: string;
+}) {
   const isMd = useIsMd();
   const isViewport2xl = useIsViewport2xl();
   const [orderBookCollapsed, setOrderBookCollapsed] = useState(false);
@@ -297,12 +395,18 @@ export function TradeWorkspaceLayout({ chart }: { chart: ReactNode }) {
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
         aria-label="Trading workspace"
       >
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,3fr)_minmax(0,1fr)] overflow-hidden">
-          <div className="flex h-full min-h-0 min-w-0 overflow-hidden">{chart}</div>
-          <OpenTradesSection />
+        {/* Mobile stack: chart (capped) → order book → swap → open activity (flexes). */}
+        <div className="flex h-[min(42vh,22rem)] min-h-[11.5rem] max-h-[26rem] shrink-0 flex-col overflow-hidden border-b border-trade-shell">
+          {chart}
         </div>
-        <OrderBookSection />
-        <SwappingInputsSection />
+        <div className="flex h-[min(30vh,17.5rem)] min-h-[10rem] max-h-[21rem] shrink-0 flex-col overflow-hidden">
+          <OrderBookSection
+            poolName={poolName}
+            className="h-full min-h-0 flex-1 border-t-0"
+          />
+        </div>
+        <SwappingInputsSection poolName={poolName} className="shrink-0" />
+        <OpenTradesSection poolName={poolName} className="min-h-0 flex-1" />
       </div>
     );
   }
@@ -341,6 +445,7 @@ export function TradeWorkspaceLayout({ chart }: { chart: ReactNode }) {
                   <OrderBookSection
                     className="h-full flex-1 border-t-0"
                     onClosePanel={closeOrderBookPanel}
+                    poolName={poolName}
                   />
                 </div>
               </div>
@@ -355,12 +460,13 @@ export function TradeWorkspaceLayout({ chart }: { chart: ReactNode }) {
             maxSize={OPEN_TRADES_MAX_PCT}
             className="min-h-0 min-w-0"
           >
-            <OpenTradesSection className="border-t-0" />
+            <OpenTradesSection className="border-t-0" poolName={poolName} />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
 
       <SwappingInputsSection
+        poolName={poolName}
         className={cn(
           'box-border h-full shrink-0 border-t-0 md:border-l md:border-trade-shell',
           swapColumnClass

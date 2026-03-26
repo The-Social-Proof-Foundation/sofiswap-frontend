@@ -1,19 +1,31 @@
 'use client';
 
+import '@sehaj23/react-spotlight-search/dist/index.css';
+
 import { TradeChartPoolHeader } from '@/components/trade/trade-chart-pool-header';
 import { TradePlatformAccessGate } from '@/components/trade/trade-platform-access-gate';
 import { TradeTopNav } from '@/components/trade/trade-top-nav';
 import { TradeWorkspaceLayout } from '@/components/trade/trade-workspace-layout';
 import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
+import { TRADE_POOL_SPOTLIGHT_ITEMS } from '@/lib/trade/pool-spotlight-items';
+import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Suspense, useEffect, useMemo } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 const TradeCandlestickChart = dynamic(
   () =>
     import('@/components/trade/trade-candlestick-chart').then((m) => ({
       default: m.TradeCandlestickChart,
+    })),
+  { ssr: false }
+);
+
+const Spotlight = dynamic(
+  () =>
+    import('@sehaj23/react-spotlight-search/dist/index.esm.js').then((m) => ({
+      default: m.Spotlight,
     })),
   { ssr: false }
 );
@@ -58,9 +70,15 @@ function TradeAuthMessage() {
   return null;
 }
 
-function TradeChartWorkspace() {
+function TradeChartWorkspace({
+  poolName,
+  onOpenPoolSpotlight,
+}: {
+  poolName: string;
+  onOpenPoolSpotlight: () => void;
+}) {
   const { data, error, isLoading } = usePoolOhlcv({
-    poolName: DEFAULT_POOL_NAME,
+    poolName,
     interval: DEFAULT_INTERVAL,
     limit: DEFAULT_LIMIT,
     enabled: true,
@@ -75,19 +93,66 @@ function TradeChartWorkspace() {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden">
-      <TradeChartPoolHeader className="shrink-0" poolName={DEFAULT_POOL_NAME} />
+      <TradeChartPoolHeader
+        className="shrink-0"
+        poolName={poolName}
+        onPoolPickerOpen={onOpenPoolSpotlight}
+      />
       <TradeCandlestickChart
         className="flex-1"
         data={data}
         status={chartStatus}
         errorMessage={error}
-        aria-label={`${DEFAULT_POOL_NAME} candlestick chart`}
+        aria-label={`${poolName} candlestick chart`}
       />
     </div>
   );
 }
 
 export default function TradePage() {
+  const [poolName, setPoolName] = useState(DEFAULT_POOL_NAME);
+  const [poolSpotlightOpen, setPoolSpotlightOpen] = useState(false);
+
+  const onPoolSpotlightSelect = useCallback((item: SpotlightItem) => {
+    setPoolName(item.id);
+    setPoolSpotlightOpen(false);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== 'k') return;
+      e.preventDefault();
+      setPoolSpotlightOpen((open) => !open);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!poolSpotlightOpen) return;
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = 40;
+
+    const tryFocus = () => {
+      if (cancelled) return;
+      const input = document.querySelector<HTMLInputElement>(
+        '.spotlight-overlay .spotlight-input input, .spotlight-overlay .MuiInputBase-input'
+      );
+      if (input) {
+        input.focus({ preventScroll: true });
+        return;
+      }
+      attempts += 1;
+      if (attempts < maxAttempts) requestAnimationFrame(tryFocus);
+    };
+
+    tryFocus();
+    return () => {
+      cancelled = true;
+    };
+  }, [poolSpotlightOpen]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden font-sans text-foreground">
       <TradeTopNav />
@@ -96,8 +161,25 @@ export default function TradePage() {
         <Suspense fallback={null}>
           <TradeAuthMessage />
         </Suspense>
-        <TradeWorkspaceLayout chart={<TradeChartWorkspace />} />
+        <TradeWorkspaceLayout
+          chart={
+            <TradeChartWorkspace
+              poolName={poolName}
+              onOpenPoolSpotlight={() => setPoolSpotlightOpen(true)}
+            />
+          }
+          poolName={poolName}
+        />
       </div>
+
+      <Spotlight
+        items={TRADE_POOL_SPOTLIGHT_ITEMS}
+        onSelect={onPoolSpotlightSelect}
+        isOpen={poolSpotlightOpen}
+        onClose={() => setPoolSpotlightOpen(false)}
+        placeholder="Search any trading pool..."
+        showInitialResults
+      />
     </div>
   );
 }

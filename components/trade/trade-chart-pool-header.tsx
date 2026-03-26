@@ -2,7 +2,7 @@
 
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback, useMemo, type KeyboardEvent, type MouseEvent } from 'react';
+import { useMemo, type MouseEvent } from 'react';
 
 import { ProfileMenuWalletCopyRow } from '@/components/trade/trade-nav-profile-menu';
 import { cn } from '@/lib/utils';
@@ -68,16 +68,6 @@ export function TradeChartPoolHeader({
     };
   }, [poolName]);
 
-  const onPoolRowKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        onPoolPickerOpen?.();
-      }
-    },
-    [onPoolPickerOpen]
-  );
-
   return (
     <div
       className={cn(
@@ -88,18 +78,11 @@ export function TradeChartPoolHeader({
       <span className="sr-only">{`${base} and ${quote} pool`}</span>
 
       <div
-        role="button"
-        tabIndex={0}
         className={cn(
-          'flex w-full min-w-0 cursor-pointer justify-start rounded-lg px-2 py-1.5 text-left -mx-2',
-          'hover:bg-muted/35 dark:hover:bg-muted/25',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+          'flex w-full min-w-0 items-center gap-3 rounded-lg px-2 py-1.5 text-left -mx-2'
         )}
-        onClick={() => onPoolPickerOpen?.()}
-        onKeyDown={onPoolRowKeyDown}
-        aria-label={`Pool: ${pairLabel}. Choose pool or pair.`}
       >
-        <div className="inline-flex min-w-0 max-w-full items-center gap-3">
+        <div className="inline-flex min-w-0 max-w-full flex-1 items-center gap-3">
           <OverlappingPairArt quoteSymbol={quote} className="pointer-events-none shrink-0" />
 
           <div className="min-w-0 shrink">
@@ -118,17 +101,24 @@ export function TradeChartPoolHeader({
               />
             </div>
           </div>
-
-          <span
-            className={cn(
-              'pointer-events-none inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-              'border border-trade-shell bg-muted/70 dark:bg-muted/45'
-            )}
-            aria-hidden
-          >
-            <ChevronDown className="h-4 w-4 text-muted-foreground opacity-90" strokeWidth={2} />
-          </span>
         </div>
+
+        <button
+          type="button"
+          onClick={() => onPoolPickerOpen?.()}
+          disabled={!onPoolPickerOpen}
+          aria-label={`Search pools. Current pool: ${pairLabel}.`}
+          className={cn(
+            'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+            'border border-trade-shell bg-muted/70 dark:bg-muted/45',
+            'text-muted-foreground transition-colors',
+            'hover:bg-muted/90 dark:hover:bg-muted/55',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+            'disabled:pointer-events-none disabled:opacity-50'
+          )}
+        >
+          <ChevronDown className="h-4 w-4 opacity-90" strokeWidth={2} />
+        </button>
       </div>
     </div>
   );

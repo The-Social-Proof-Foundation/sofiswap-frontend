@@ -37,7 +37,7 @@ export function readOrderbookIndexerBaseUrl(): string {
 }
 
 /** Ensures `new URL(relative, base)` resolves under the indexer root (handles `base` with or without trailing slash). */
-function indexerOriginPathPrefix(baseRaw: string): string {
+export function indexerOriginPathPrefix(baseRaw: string): string {
   const trimmed = baseRaw.trim();
   if (!trimmed) return '';
   try {
