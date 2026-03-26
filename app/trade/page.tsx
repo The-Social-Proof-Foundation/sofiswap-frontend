@@ -8,11 +8,19 @@ import { TradeTopNav } from '@/components/trade/trade-top-nav';
 import { TradeWorkspaceLayout } from '@/components/trade/trade-workspace-layout';
 import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
+import type { TradeNavSegment } from '@/lib/trade-nav-segment-storage';
 import { TRADE_POOL_SPOTLIGHT_ITEMS } from '@/lib/trade/pool-spotlight-items';
 import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 const TradeCandlestickChart = dynamic(
   () =>
@@ -112,6 +120,8 @@ function TradeChartWorkspace({
 export default function TradePage() {
   const [poolName, setPoolName] = useState(DEFAULT_POOL_NAME);
   const [poolSpotlightOpen, setPoolSpotlightOpen] = useState(false);
+  const [tradeNavSegment, setTradeNavSegment] = useState<TradeNavSegment>('orderbook');
+  const showOrderbookWorkspace = tradeNavSegment === 'orderbook';
 
   const onPoolSpotlightSelect = useCallback((item: SpotlightItem) => {
     setPoolName(item.id);
@@ -119,6 +129,13 @@ export default function TradePage() {
   }, []);
 
   useEffect(() => {
+    if (!showOrderbookWorkspace) {
+      setPoolSpotlightOpen(false);
+    }
+  }, [showOrderbookWorkspace]);
+
+  useEffect(() => {
+    if (!showOrderbookWorkspace) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.key !== 'k') return;
       e.preventDefault();
@@ -126,10 +143,10 @@ export default function TradePage() {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [showOrderbookWorkspace]);
 
   useLayoutEffect(() => {
-    if (!poolSpotlightOpen) return;
+    if (!showOrderbookWorkspace || !poolSpotlightOpen) return;
     let cancelled = false;
     let attempts = 0;
     const maxAttempts = 40;
@@ -151,35 +168,41 @@ export default function TradePage() {
     return () => {
       cancelled = true;
     };
-  }, [poolSpotlightOpen]);
+  }, [showOrderbookWorkspace, poolSpotlightOpen]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden font-sans text-foreground">
-      <TradeTopNav />
-      <TradePlatformAccessGate />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <Suspense fallback={null}>
-          <TradeAuthMessage />
-        </Suspense>
-        <TradeWorkspaceLayout
-          chart={
-            <TradeChartWorkspace
+      <TradeTopNav onTradeNavSegmentChange={setTradeNavSegment} />
+      {showOrderbookWorkspace ? (
+        <>
+          <TradePlatformAccessGate />
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <Suspense fallback={null}>
+              <TradeAuthMessage />
+            </Suspense>
+            <TradeWorkspaceLayout
+              chart={
+                <TradeChartWorkspace
+                  poolName={poolName}
+                  onOpenPoolSpotlight={() => setPoolSpotlightOpen(true)}
+                />
+              }
               poolName={poolName}
-              onOpenPoolSpotlight={() => setPoolSpotlightOpen(true)}
             />
-          }
-          poolName={poolName}
-        />
-      </div>
+          </div>
 
-      <Spotlight
-        items={TRADE_POOL_SPOTLIGHT_ITEMS}
-        onSelect={onPoolSpotlightSelect}
-        isOpen={poolSpotlightOpen}
-        onClose={() => setPoolSpotlightOpen(false)}
-        placeholder="Search any trading pool..."
-        showInitialResults
-      />
+          <Spotlight
+            items={TRADE_POOL_SPOTLIGHT_ITEMS}
+            onSelect={onPoolSpotlightSelect}
+            isOpen={poolSpotlightOpen}
+            onClose={() => setPoolSpotlightOpen(false)}
+            placeholder="Search any trading pool..."
+            showInitialResults
+          />
+        </>
+      ) : (
+        <div className="min-h-0 flex-1 bg-background" aria-hidden />
+      )}
     </div>
   );
 }

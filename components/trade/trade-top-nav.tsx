@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { TradeNavFundsBar } from '@/components/trade/trade-nav-funds-bar';
 import { TradeNavProfileMenu } from '@/components/trade/trade-nav-profile-menu';
@@ -14,9 +14,15 @@ import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import type { ProfilePortfolioOverviewProfile } from '@/lib/graphql/profile-portfolio-overview';
 import { useNetwork } from '@/lib/network-provider';
 import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
+import {
+  readTradeNavSegment,
+  tradeNavSegmentStorageKey,
+  writeTradeNavSegment,
+  type TradeNavSegment,
+} from '@/lib/trade-nav-segment-storage';
 import { cn } from '@/lib/utils';
 
-export type TradeNavSegment = 'orderbook' | 'social-proof-tokens';
+export type { TradeNavSegment };
 
 const tradeNavSegmentItems = [
   {
@@ -165,16 +171,19 @@ export function TradeTopNav({
   className,
   tradeSegment = 'orderbook',
   onTradeSegmentChange,
+  onTradeNavSegmentChange,
 }: {
   className?: string;
   tradeSegment?: TradeNavSegment;
   onTradeSegmentChange?: (segment: TradeNavSegment) => void;
+  /** Fires when the active trading view changes (including after localStorage hydrate). */
+  onTradeNavSegmentChange?: (segment: TradeNavSegment) => void;
 }) {
   const {
     isConfigured,
     isAuthenticated,
     displayAddress,
-    isLoading,
+    isLoading: authLoading,
     isSigningIn,
     signIn,
     signOut,
@@ -183,7 +192,7 @@ export function TradeTopNav({
 
   const { currentNetwork } = useNetwork();
   const platformId = useMemo(() => getSofiSwapPlatformConfig()?.platformGraphqlId ?? null, []);
-  const profileQueryAddress = isAuthenticated && !isLoading ? displayAddress : null;
+  const profileQueryAddress = isAuthenticated && !authLoading ? displayAddress : null;
   const { data: profileOverview } = useGraphqlProfileOverviewSWR(
     profileQueryAddress,
     platformId,
@@ -200,15 +209,43 @@ export function TradeTopNav({
   const logoSrc = theme !== 'dark' ? '/logo_dark.svg' : '/logo_light.svg';
 
   const [innerSegment, setInnerSegment] = useState<TradeNavSegment>(tradeSegment);
+  const innerSegmentRef = useRef(innerSegment);
+  innerSegmentRef.current = innerSegment;
+  const prevStorageKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     setInnerSegment(tradeSegment);
   }, [tradeSegment]);
 
+  useEffect(() => {
+    if (onTradeSegmentChange || authLoading) return;
+    const key = tradeNavSegmentStorageKey(displayAddress, isAuthenticated);
+    const prevKey = prevStorageKeyRef.current;
+    const stored = readTradeNavSegment(key);
+    if (stored) {
+      setInnerSegment(stored);
+    } else if (prevKey !== key) {
+      writeTradeNavSegment(key, innerSegmentRef.current);
+    }
+    prevStorageKeyRef.current = key;
+  }, [onTradeSegmentChange, authLoading, isAuthenticated, displayAddress]);
+
   const segment = onTradeSegmentChange ? tradeSegment : innerSegment;
+
+  useEffect(() => {
+    onTradeNavSegmentChange?.(segment);
+  }, [segment, onTradeNavSegmentChange]);
+
   const setSegment = (v: string) => {
     const next = v as TradeNavSegment;
-    if (onTradeSegmentChange) onTradeSegmentChange(next);
-    else setInnerSegment(next);
+    if (onTradeSegmentChange) {
+      onTradeSegmentChange(next);
+      return;
+    }
+    setInnerSegment(next);
+    if (authLoading) return;
+    const key = tradeNavSegmentStorageKey(displayAddress, isAuthenticated);
+    writeTradeNavSegment(key, next);
   };
 
   const onSignIn = () => {
@@ -221,7 +258,7 @@ export function TradeTopNav({
     isConfigured,
     isAuthenticated,
     displayAddress,
-    isLoading,
+    isLoading: authLoading,
     isSigningIn,
     rateLimited,
     onSignIn,

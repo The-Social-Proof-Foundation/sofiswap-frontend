@@ -1,10 +1,11 @@
 'use client';
 
-import { Check, ChevronDown, HelpCircle } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import Marquee from 'react-fast-marquee';
 import { useMemo, useState } from 'react';
 
+import { TradeOrderbookStatusIndicator } from '@/components/trade/trade-orderbook-status-indicator';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -205,22 +206,7 @@ export function TradeMarketTicker({ className }: { className?: string }) {
             <span className="sr-only md:not-sr-only md:inline">Join Telegram</span>
           </Link>
         </Button>
-        <Button
-          variant="ghost"
-          className={cn(
-            'h-full min-h-9 gap-1 rounded-none px-4 text-[11px] font-normal shadow-none md:px-6',
-            bar.triggerBg,
-            bar.muted,
-            bar.triggerHover,
-            bar.mutedHover
-          )}
-          asChild
-        >
-          <Link href="/#" className="inline-flex items-center justify-center">
-            <HelpCircle className="h-3 w-3 shrink-0" aria-hidden />
-            Help
-          </Link>
-        </Button>
+        <TradeOrderbookStatusIndicator />
       </div>
     </footer>
   );
