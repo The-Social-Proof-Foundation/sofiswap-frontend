@@ -19,7 +19,7 @@ export function Footer() {
 
   return (
     <footer className="bg-card border-t border-border">
-      <div className="w-full pt-8 pb-4 px-8">
+      <div className="mx-auto w-full px-8 pt-8 pb-4">
         <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-8 lg:mb-12">
           {/* Left side - Logo and subtitle */}
           <div className="flex flex-col space-y-4 mb-12 lg:mb-0 items-center lg:items-start lg:flex-shrink-0">
@@ -49,7 +49,7 @@ export function Footer() {
           {/* Right side — Resources (flush right on lg, same edge as copyright block) */}
           <div className="w-full lg:w-auto lg:ml-auto lg:shrink-0 pt-5 sm:pt-0 text-[var(--foreground)]">
             <div className="mb-6 sm:mb-12 lg:mb-0 w-full lg:w-max flex flex-col items-center lg:items-end">
-               <p className="text-xs text-muted-foreground text-center lg:text-right mb-3 lg:mb-5 pb-2 border-b border-muted w-1/2 sm:w-full lg:w-full">Resources</p>
+               <p className="mb-3 w-1/2 border-b border-muted pb-2 text-center text-xs text-[var(--secondary-foreground)] sm:w-full md:max-w-[320px] lg:mb-5 lg:w-full lg:max-w-none lg:text-right">Resources</p>
                <div className="grid grid-cols-2 sm:grid-cols-1 gap-2 sm:space-y-2 text-sm justify-items-center lg:justify-items-end w-full">
                 <Link 
                    href="https://www.mysocial.network/ecosystem/sofiswap"

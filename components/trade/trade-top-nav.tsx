@@ -1,17 +1,189 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
+import { useTheme } from 'next-themes';
+import { useEffect, useMemo, useState } from 'react';
 
+import { TradeNavFundsBar } from '@/components/trade/trade-nav-funds-bar';
+import { TradeNavProfileMenu } from '@/components/trade/trade-nav-profile-menu';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useGraphqlProfileOverviewSWR } from '@/hooks/useGraphqlProfileOverviewSWR';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
+import type { ProfilePortfolioOverviewProfile } from '@/lib/graphql/profile-portfolio-overview';
+import { useNetwork } from '@/lib/network-provider';
+import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
 import { cn } from '@/lib/utils';
 
-function truncateAddress(addr: string, head = 6, tail = 4): string {
-  if (addr.length <= head + tail + 1) return addr;
-  return `${addr.slice(0, head)}…${addr.slice(-tail)}`;
+export type TradeNavSegment = 'orderbook' | 'social-proof-tokens';
+
+const segmentTriggerBase = cn(
+  'h-full min-w-0 rounded-[7px] font-semibold shadow-none transition-[color,background-color,box-shadow] duration-200',
+  'text-muted-foreground',
+  'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+  'data-[state=inactive]:bg-transparent data-[state=inactive]:hover:text-foreground/90',
+  'data-[state=active]:bg-background data-[state=active]:text-foreground',
+  'data-[state=active]:shadow-[0_1px_3px_rgba(0,0,0,0.12),0_1px_1px_rgba(0,0,0,0.04)]',
+  'dark:data-[state=active]:bg-zinc-800/95 dark:data-[state=active]:text-foreground',
+  'dark:data-[state=active]:shadow-[0_3px_10px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)]'
+);
+
+function TradeNavSegmentTabs({
+  segment,
+  onSegmentChange,
+  className,
+  listClassName,
+}: {
+  segment: TradeNavSegment;
+  onSegmentChange: (v: string) => void;
+  className?: string;
+  listClassName?: string;
+}) {
+  return (
+    <Tabs value={segment} onValueChange={onSegmentChange} className={className}>
+      <TabsList
+        aria-label="Trading view"
+        className={cn(
+          'grid grid-cols-2 gap-0 rounded-[10px] border border-border/40 bg-muted/70 p-[3px] shadow-inner',
+          'dark:border-white/[0.08] dark:bg-muted/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
+          listClassName
+        )}
+      >
+        <TabsTrigger
+          value="orderbook"
+          className={cn(
+            segmentTriggerBase,
+            'px-2 py-0 text-[13px] leading-tight sm:px-2.5'
+          )}
+        >
+          Orderbook
+        </TabsTrigger>
+        <TabsTrigger
+          value="social-proof-tokens"
+          className={cn(
+            segmentTriggerBase,
+            'px-2 py-0 text-[12px] leading-snug sm:px-2.5 sm:text-[13px] sm:leading-tight'
+          )}
+        >
+          Social Proof Tokens
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
 }
 
-export function TradeTopNav({ className }: { className?: string }) {
+function TradeNavBrand({
+  mounted,
+  logoSrc,
+  linkClassName,
+}: {
+  mounted: boolean;
+  logoSrc: string;
+  linkClassName?: string;
+}) {
+  return (
+    <Link
+      href="/"
+      className={cn(
+        'group flex shrink-0 items-center gap-2 font-satoshi text-xl font-semibold tracking-tight transition-opacity hover:opacity-90 sm:gap-3',
+        linkClassName
+      )}
+    >
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+        {mounted ? (
+          <Image
+            src={logoSrc}
+            alt="SofiSwap Logo"
+            width={32}
+            height={32}
+            className="h-8 w-8"
+          />
+        ) : (
+          <div className="h-8 w-8" aria-hidden />
+        )}
+      </div>
+      <span className="inline-flex items-baseline">
+        <span className="text-primary">Sofi</span>
+        <span className="text-foreground">Swap</span>
+      </span>
+    </Link>
+  );
+}
+
+function TradeNavAuthActions({
+  isConfigured,
+  isAuthenticated,
+  displayAddress,
+  isLoading,
+  isSigningIn,
+  rateLimited,
+  onSignIn,
+  signOut,
+  profile,
+}: {
+  isConfigured: boolean;
+  isAuthenticated: boolean;
+  displayAddress: string | null | undefined;
+  isLoading: boolean;
+  isSigningIn: boolean;
+  rateLimited: boolean;
+  onSignIn: () => void;
+  signOut: () => void;
+  profile: ProfilePortfolioOverviewProfile | null | undefined;
+}) {
+  const wallet = displayAddress?.trim() ?? '';
+
+  return (
+    <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+      {!isConfigured ? (
+        <span className="hidden text-xs text-muted-foreground sm:inline">
+          Set env to enable login
+        </span>
+      ) : null}
+      {isAuthenticated && wallet ? (
+        <>
+          <TradeNavFundsBar />
+          <TradeNavProfileMenu walletAddress={wallet} profile={profile} signOut={signOut} />
+        </>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="default"
+          className="font-medium"
+          disabled={!isConfigured || isLoading || isSigningIn}
+          onClick={onSignIn}
+        >
+          {!isConfigured
+            ? 'Login unavailable'
+            : isLoading
+              ? '…'
+              : rateLimited
+                ? 'Retry later'
+                : isSigningIn
+                  ? 'Connecting…'
+                  : (
+                      <>
+                        <span className="sm:hidden">Log In</span>
+                        <span className="hidden sm:inline">Get started</span>
+                      </>
+                    )}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function TradeTopNav({
+  className,
+  tradeSegment = 'orderbook',
+  onTradeSegmentChange,
+}: {
+  className?: string;
+  tradeSegment?: TradeNavSegment;
+  onTradeSegmentChange?: (segment: TradeNavSegment) => void;
+}) {
   const {
     isConfigured,
     isAuthenticated,
@@ -23,14 +195,52 @@ export function TradeTopNav({ className }: { className?: string }) {
     rateLimited,
   } = useMySocialAuth();
 
-  const onPrimaryClick = () => {
-    if (isAuthenticated) {
-      void signOut();
-      return;
-    }
+  const { currentNetwork } = useNetwork();
+  const platformId = useMemo(() => getSofiSwapPlatformConfig()?.platformGraphqlId ?? null, []);
+  const profileQueryAddress = isAuthenticated && !isLoading ? displayAddress : null;
+  const { data: profileOverview } = useGraphqlProfileOverviewSWR(
+    profileQueryAddress,
+    platformId,
+    currentNetwork
+  );
+
+  const [mounted, setMounted] = useState(false);
+  const { theme } = useTheme();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const logoSrc = theme !== 'dark' ? '/logo_dark.svg' : '/logo_light.svg';
+
+  const [innerSegment, setInnerSegment] = useState<TradeNavSegment>(tradeSegment);
+  useEffect(() => {
+    setInnerSegment(tradeSegment);
+  }, [tradeSegment]);
+
+  const segment = onTradeSegmentChange ? tradeSegment : innerSegment;
+  const setSegment = (v: string) => {
+    const next = v as TradeNavSegment;
+    if (onTradeSegmentChange) onTradeSegmentChange(next);
+    else setInnerSegment(next);
+  };
+
+  const onSignIn = () => {
     void signIn('none').catch((e) => {
       console.error('[TradeTopNav] signIn', e);
     });
+  };
+
+  const authProps = {
+    isConfigured,
+    isAuthenticated,
+    displayAddress,
+    isLoading,
+    isSigningIn,
+    rateLimited,
+    onSignIn,
+    signOut,
+    profile: profileOverview?.profile,
   };
 
   return (
@@ -40,46 +250,40 @@ export function TradeTopNav({ className }: { className?: string }) {
         className
       )}
     >
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Link
-          href="/"
-          className="font-sans text-lg font-bold tracking-tight text-foreground transition-opacity hover:opacity-90"
-        >
-          <span className="text-primary">Sofi</span>
-          <span className="text-foreground">Swap</span>
-        </Link>
-
-        <div className="flex items-center gap-2 sm:gap-3">
-          {!isConfigured ? (
-            <span className="hidden text-xs text-muted-foreground sm:inline">
-              Set env to enable login
-            </span>
-          ) : null}
-          {isAuthenticated && displayAddress ? (
-            <span className="hidden max-w-[10rem] truncate rounded-md border border-border/80 bg-muted/40 px-2 py-1 font-mono text-xs text-muted-foreground sm:inline-block">
-              {truncateAddress(displayAddress)}
-            </span>
-          ) : null}
-          <Button
-            type="button"
-            size="sm"
-            variant={isAuthenticated ? 'outline' : 'default'}
-            className="font-medium"
-            disabled={!isConfigured || isLoading || isSigningIn}
-            onClick={onPrimaryClick}
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        {/* Mobile: brand + auth, then full-width segment bar */}
+        <div className="flex flex-col sm:hidden">
+          <div className="flex h-14 items-center justify-between gap-3">
+            <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
+            <TradeNavAuthActions {...authProps} />
+          </div>
+          <div
+            className={cn(
+              'border-t border-border/40 bg-background/50 py-2.5 backdrop-blur-xl',
+              'supports-[backdrop-filter]:bg-background/45'
+            )}
           >
-            {!isConfigured
-              ? 'Login unavailable'
-              : isLoading
-                ? '…'
-                : isAuthenticated
-                  ? 'Sign out'
-                  : rateLimited
-                    ? 'Retry later'
-                    : isSigningIn
-                      ? 'Connecting…'
-                      : 'Get started'}
-          </Button>
+            <TradeNavSegmentTabs
+              segment={segment}
+              onSegmentChange={setSegment}
+              className="w-full"
+              listClassName="h-10 w-full max-w-none"
+            />
+          </div>
+        </div>
+
+        {/* Desktop: single row */}
+        <div className="hidden h-14 items-center justify-between gap-4 sm:flex">
+          <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
+            <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
+            <TradeNavSegmentTabs
+              segment={segment}
+              onSegmentChange={setSegment}
+              className="min-w-0 flex-initial md:px-2 lg:px-4 xl:px-6 2xl:px-8"
+              listClassName="h-9 w-full max-w-[min(100%,18.5rem)] sm:max-w-[20.5rem]"
+            />
+          </div>
+          <TradeNavAuthActions {...authProps} />
         </div>
       </div>
     </header>

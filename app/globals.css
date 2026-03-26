@@ -100,6 +100,10 @@
     --chart-4: #474A48;
     --chart-5: #2C302E;
     --radius: 0.5rem;
+    /* Profile / account menu — sign out row */
+    --profile-menu-signout: #dc2626;
+    --profile-menu-signout-bg: rgba(220, 38, 38, 0.09);
+    --profile-menu-signout-bg-hover: rgba(220, 38, 38, 0.16);
   }
 
   .dark {
@@ -128,6 +132,9 @@
     --chart-3: #909590;
     --chart-4: #474A48;
     --chart-5: #303330;
+    --profile-menu-signout: #f87171;
+    --profile-menu-signout-bg: rgba(248, 113, 113, 0.12);
+    --profile-menu-signout-bg-hover: rgba(248, 113, 113, 0.2);
   }
 }
 
