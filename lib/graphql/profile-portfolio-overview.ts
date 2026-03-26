@@ -49,13 +49,15 @@ export async function fetchPlatformUserAccessGate(
 }
 
 /** Full portfolio overview (and platform access) for rich profile UIs. */
-export const PROFILE_PORTFOLIO_OVERVIEW_2_QUERY = /* GraphQL */ `
-  query ProfilePortfolioOverview2($address: MySoAddress!, $platformId: ID!) {
+export const PROFILE_PORTFOLIO_OVERVIEW_QUERY = /* GraphQL */ `
+  query ProfilePortfolioOverview($address: MySoAddress!, $platformId: ID!) {
+    # Platform relationship for this wallet (member / blocked / moderator)
     platformUserAccess(platform: $platformId, user: $address) {
       isMember
       isBlocked
       isModerator
     }
+
     address(address: $address) {
       balances(first: 10) {
         nodes {
@@ -66,6 +68,7 @@ export const PROFILE_PORTFOLIO_OVERVIEW_2_QUERY = /* GraphQL */ `
         }
       }
     }
+
     profile(address: $address) {
       address
       username
@@ -81,8 +84,6 @@ export const PROFILE_PORTFOLIO_OVERVIEW_2_QUERY = /* GraphQL */ `
       socialProofTokenAddress
       reservationPoolAddress
       blockListAddress
-      selectedBadgeId
-      selectedEcosystemBadgeId
       selectedBadge {
         badgeId
         badgeName
@@ -97,13 +98,9 @@ export const PROFILE_PORTFOLIO_OVERVIEW_2_QUERY = /* GraphQL */ `
         name
         tokenAddress
         tokenType
-        owner
         createdAt
         isActive
-        basePrice
         currentPrice
-        circulatingSupply
-        marketCap
         priceChange24H
         volume24H
         creatorEarnings
@@ -115,44 +112,163 @@ export const PROFILE_PORTFOLIO_OVERVIEW_2_QUERY = /* GraphQL */ `
         reservationStatus
         totalReserved
       }
-      vestingWallets {
-        walletId
-        totalAmount
-        duration
-        claimedAmount
-        claimedPercentage
-      }
       sptHoldings(limit: 10, offset: 0) {
+        address
+        amount
         profile {
+          address
           displayName
           username
           socialProofTokenAddress
+          profilePhoto
+          reservationPercentage
+          selectedBadge {
+            badgeId
+            badgeIconUrl
+          }
         }
-        address
-        amount
       }
       reservationHoldings(limit: 10, offset: 0) {
         profile {
+          address
           displayName
           username
           socialProofTokenAddress
+          profilePhoto
+          reservationPercentage
+          selectedBadge {
+            badgeId
+            badgeIconUrl
+          }
         }
-        amount
         poolId
+        amount
         poolStatus
-        requiredThreshold
-        reservedAt
         thresholdMet
+        requiredThreshold
         totalReserved
       }
     }
   }
 `;
 
-export interface ProfilePortfolioOverview2Result {
+/** @deprecated Use {@link PROFILE_PORTFOLIO_OVERVIEW_QUERY}. */
+export const PROFILE_PORTFOLIO_OVERVIEW_2_QUERY = PROFILE_PORTFOLIO_OVERVIEW_QUERY;
+
+/** Coin type as returned under `address.balances.nodes[].coinType`. */
+export interface ProfilePortfolioCoinType {
+  repr: string;
+}
+
+export interface ProfilePortfolioBalanceNode {
+  coinType: ProfilePortfolioCoinType;
+  totalBalance: string;
+}
+
+export interface ProfilePortfolioBalancesConnection {
+  nodes: ProfilePortfolioBalanceNode[];
+}
+
+/** Top-level `address` field (wallet balances). */
+export interface ProfilePortfolioAddressData {
+  balances: ProfilePortfolioBalancesConnection;
+}
+
+export interface ProfilePortfolioSelectedBadge {
+  badgeId: string;
+  badgeName: string;
+  badgeType: string;
+  badgeIconUrl: string | null;
+  badgeMediaUrl: string | null;
+  platformId: string;
+}
+
+export interface ProfilePortfolioSocialProofToken {
+  poolId: string;
+  symbol: string;
+  name: string;
+  tokenAddress: string;
+  tokenType: string;
+  createdAt: string;
+  isActive: boolean;
+  currentPrice: string | null;
+  priceChange24H: string | null;
+  volume24H: string | null;
+  creatorEarnings: string | null;
+  platformEarnings: string | null;
+  ecosystemEarnings: string | null;
+  requiredThreshold: string | null;
+  reservationPercentage: string | null;
+  reservationPoolId: string | null;
+  reservationStatus: string | null;
+  totalReserved: string | null;
+}
+
+export interface ProfilePortfolioHoldingBadge {
+  badgeId: string;
+  badgeIconUrl: string | null;
+}
+
+/** Nested `profile` on `sptHoldings` / `reservationHoldings` rows. */
+export interface ProfilePortfolioHoldingProfile {
+  address: string;
+  displayName: string | null;
+  username: string | null;
+  socialProofTokenAddress: string | null;
+  profilePhoto: string | null;
+  reservationPercentage: string | null;
+  selectedBadge: ProfilePortfolioHoldingBadge | null;
+}
+
+export interface ProfilePortfolioSptHolding {
+  address: string;
+  amount: string;
+  profile: ProfilePortfolioHoldingProfile;
+}
+
+export interface ProfilePortfolioReservationHolding {
+  profile: ProfilePortfolioHoldingProfile;
+  poolId: string;
+  amount: string;
+  poolStatus: string | null;
+  thresholdMet: boolean | null;
+  requiredThreshold: string | null;
+  totalReserved: string | null;
+}
+
+/** Top-level `profile` field — matches `ProfilePortfolioOverview` selection set. */
+export interface ProfilePortfolioOverviewProfile {
+  address: string;
+  username: string | null;
+  displayName: string | null;
+  profilePhoto: string | null;
+  coverPhoto: string | null;
+  bio: string | null;
+  followersCount: number | null;
+  followingCount: number | null;
+  postCount: number | null;
+  createdAt: string | null;
+  profileId: string | null;
+  socialProofTokenAddress: string | null;
+  reservationPoolAddress: string | null;
+  blockListAddress: string | null;
+  selectedBadge: ProfilePortfolioSelectedBadge | null;
+  socialProofToken: ProfilePortfolioSocialProofToken | null;
+  sptHoldings: ProfilePortfolioSptHolding[];
+  reservationHoldings: ProfilePortfolioReservationHolding[];
+}
+
+/** GraphQL `data` payload for {@link PROFILE_PORTFOLIO_OVERVIEW_QUERY}. */
+export interface ProfilePortfolioOverviewQueryData {
   platformUserAccess: PlatformUserAccess | null;
-  address?: unknown;
-  profile?: unknown;
+  address: ProfilePortfolioAddressData | null;
+  profile: ProfilePortfolioOverviewProfile | null;
+}
+
+export interface ProfilePortfolioOverviewResult {
+  platformUserAccess: PlatformUserAccess | null;
+  address?: ProfilePortfolioAddressData | null;
+  profile?: ProfilePortfolioOverviewProfile | null;
   errors?: Array<{ message: string }>;
 }
 
@@ -160,10 +276,10 @@ export async function fetchProfilePortfolioOverview(
   address: string,
   platformId: string,
   network?: NetworkType
-): Promise<ProfilePortfolioOverview2Result> {
+): Promise<ProfilePortfolioOverviewResult> {
   const client = getMySoGraphQLClient(network);
-  const res = await client.query<ProfilePortfolioOverview2Result>({
-    query: PROFILE_PORTFOLIO_OVERVIEW_2_QUERY,
+  const res = await client.query<ProfilePortfolioOverviewQueryData>({
+    query: PROFILE_PORTFOLIO_OVERVIEW_QUERY,
     variables: { address, platformId },
   });
 

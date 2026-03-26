@@ -22,6 +22,7 @@ import {
 } from '@/lib/network-utils';
 import { resetMySoGraphQLClient } from '@/lib/myso-graphql-client';
 import { resetMySoJsonRpcClients } from '@/lib/myso-client';
+import { clearAllTradingSetupCache } from '@/lib/trading-setup-cache';
 
 interface NetworkContextValue {
   currentNetwork: NetworkType;
@@ -72,6 +73,7 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
       setCurrentNetwork(network);
       resetMySoGraphQLClient();
       resetMySoJsonRpcClients();
+      clearAllTradingSetupCache();
       toast.success(`Network switched to ${NETWORK_LABELS[network]}`);
     } catch (e) {
       console.error('[NetworkProvider] changeNetwork', e);

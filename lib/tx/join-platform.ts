@@ -2,13 +2,29 @@ import type { MySoTransactionBlockResponse } from '@socialproof/myso/jsonRpc';
 import type { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 import { Transaction } from '@socialproof/myso/transactions';
 
+import { augmentRegisterBalanceManagerError } from '@/lib/orderbook/balance-manager-register-errors';
+import { resolveCreatedBalanceManagerObjectId } from '@/lib/orderbook/balance-manager-effects';
+import {
+  getResolvedOrderbookDeployment,
+  orderbookRuntimeNetwork,
+  tradingSetupBundledWithJoin,
+} from '@/lib/orderbook-config';
+import {
+  appendCreateAndShareBalanceManagerMoves,
+  appendRegisterBalanceManagerMove,
+  fetchRegisteredBalanceManagerIds,
+} from '@/lib/orderbook/runtime';
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
 import type { NetworkType } from '@/lib/network-utils';
-import { executeTransactionWithSmartGas } from '@/lib/transaction-utils';
 import {
   getJoinPlatformMoveTarget,
   type SofiSwapPlatformConfig,
 } from '@/lib/platform-config';
+import {
+  clearPendingBalanceManagerRegister,
+  writePendingBalanceManagerRegister,
+} from '@/lib/trading-setup-pending-storage';
+import { executeTransactionWithSmartGas } from '@/lib/transaction-utils';
 
 /** Append `join_platform` Move calls only — caller sets `setSender`. */
 export function appendJoinPlatformMoves(
@@ -58,6 +74,22 @@ export async function signAndExecuteJoinPlatform(input: {
 }): Promise<MySoTransactionBlockResponse> {
   const { network, signer, senderAddress, config } = input;
   const client = getMySoJsonRpcClient(network);
+  const obNet = orderbookRuntimeNetwork(network);
+  const executeOpts = { showEffects: true, showObjectChanges: true } as const;
+
+  let shouldAttachBalanceManagerCreate =
+    tradingSetupBundledWithJoin() && obNet !== null;
+  let skipBalanceManagerRegister = false;
+
+  if (shouldAttachBalanceManagerCreate && obNet) {
+    const fresh = await fetchRegisteredBalanceManagerIds(client, senderAddress);
+    if (!fresh.error && fresh.ids.length > 0) {
+      clearPendingBalanceManagerRegister(network, senderAddress);
+      shouldAttachBalanceManagerCreate = false;
+      skipBalanceManagerRegister = true;
+    }
+  }
+
   const response = await executeTransactionWithSmartGas({
     network,
     client,
@@ -65,10 +97,11 @@ export async function signAndExecuteJoinPlatform(input: {
     sender: senderAddress,
     build: (tx) => {
       appendJoinPlatformMoves(tx, config);
+      if (shouldAttachBalanceManagerCreate && obNet) {
+        appendCreateAndShareBalanceManagerMoves(tx, obNet, senderAddress);
+      }
     },
-    executeOptions: {
-      showEffects: true,
-    },
+    executeOptions: executeOpts,
   });
   assertJoinTransactionSucceeded(response);
   await client.waitForTransaction({
@@ -77,5 +110,49 @@ export async function signAndExecuteJoinPlatform(input: {
     timeout: 120_000,
     pollInterval: 1_500,
   });
+
+  if (tradingSetupBundledWithJoin() && obNet && skipBalanceManagerRegister) {
+    return response;
+  }
+
+  if (shouldAttachBalanceManagerCreate && obNet) {
+    const { orderbookPackageId, registryId } = getResolvedOrderbookDeployment(obNet);
+    const registerErrCtx = { network, orderbookPackageId, registryId } as const;
+    const managerId = await resolveCreatedBalanceManagerObjectId(
+      client,
+      response.digest,
+      orderbookPackageId,
+      response.effects
+    );
+    writePendingBalanceManagerRegister(network, senderAddress, {
+      managerObjectId: managerId,
+      createDigest: response.digest,
+    });
+    let registered: MySoTransactionBlockResponse;
+    try {
+      registered = await executeTransactionWithSmartGas({
+        network,
+        client,
+        signer,
+        sender: senderAddress,
+        build: (tx) => {
+          appendRegisterBalanceManagerMove(tx, obNet, managerId);
+        },
+        executeOptions: executeOpts,
+      });
+    } catch (e) {
+      throw augmentRegisterBalanceManagerError(e, registerErrCtx);
+    }
+    assertJoinTransactionSucceeded(registered);
+    await client.waitForTransaction({
+      digest: registered.digest,
+      options: { showEffects: true },
+      timeout: 120_000,
+      pollInterval: 1_500,
+    });
+    clearPendingBalanceManagerRegister(network, senderAddress);
+    return registered;
+  }
+
   return response;
 }

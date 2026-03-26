@@ -1,5 +1,5 @@
 import type { NetworkType } from '@/lib/network-utils';
-import type { ProfilePortfolioOverview2Result } from '@/lib/graphql/profile-portfolio-overview';
+import type { ProfilePortfolioOverviewResult } from '@/lib/graphql/profile-portfolio-overview';
 
 const PREFIX = 'sofiswap_graphql_profile_overview';
 
@@ -7,7 +7,7 @@ const PREFIX = 'sofiswap_graphql_profile_overview';
 export const SOFISWAP_PROFILE_REVALIDATE_EVENT = 'sofiswap-profile-revalidate';
 
 export interface GraphqlProfileOverviewCachePayload {
-  data: Omit<ProfilePortfolioOverview2Result, 'errors'>;
+  data: Omit<ProfilePortfolioOverviewResult, 'errors'>;
   fetchedAt: number;
 }
 
@@ -15,7 +15,7 @@ function cacheKey(network: NetworkType, platformId: string, address: string): st
   return `${PREFIX}_${network}_${platformId}_${address.toLowerCase()}`;
 }
 
-export function readCachedProfilePortfolioOverview2(
+export function readCachedProfilePortfolioOverview(
   network: NetworkType,
   platformId: string,
   address: string
@@ -39,7 +39,7 @@ export function readCachedProfilePortfolioOverview2(
   return null;
 }
 
-export function writeCachedProfilePortfolioOverview2(
+export function writeCachedProfilePortfolioOverview(
   network: NetworkType,
   platformId: string,
   address: string,
@@ -56,7 +56,7 @@ export function writeCachedProfilePortfolioOverview2(
   }
 }
 
-export function clearCachedProfilePortfolioOverview2(
+export function clearCachedProfilePortfolioOverview(
   network: NetworkType,
   platformId: string,
   address: string

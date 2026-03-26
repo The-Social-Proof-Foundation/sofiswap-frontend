@@ -4,18 +4,18 @@ import { useCallback, useEffect, useState } from 'react';
 
 import {
   fetchProfilePortfolioOverview,
-  type ProfilePortfolioOverview2Result,
+  type ProfilePortfolioOverviewResult,
 } from '@/lib/graphql/profile-portfolio-overview';
 import {
-  readCachedProfilePortfolioOverview2,
+  readCachedProfilePortfolioOverview,
   SOFISWAP_PROFILE_REVALIDATE_EVENT,
-  clearCachedProfilePortfolioOverview2,
-  writeCachedProfilePortfolioOverview2,
+  clearCachedProfilePortfolioOverview,
+  writeCachedProfilePortfolioOverview,
 } from '@/lib/graphql-profile-cache';
 import type { NetworkType } from '@/lib/network-utils';
 
 export type GraphqlProfileOverviewData = Omit<
-  ProfilePortfolioOverview2Result,
+  ProfilePortfolioOverviewResult,
   'errors'
 >;
 
@@ -42,7 +42,7 @@ function logProfileLoad(
 }
 
 /**
- * Stale-while-revalidate GraphQL profile + platform access (ProfilePortfolioOverview2).
+ * Stale-while-revalidate GraphQL profile + platform access (ProfilePortfolioOverview).
  * Hydrates from sessionStorage, then refetches every time address/platformId/network change.
  */
 export function useGraphqlProfileOverviewSWR(
@@ -81,7 +81,7 @@ export function useGraphqlProfileOverviewSWR(
           data: next,
         });
         setData(next);
-        writeCachedProfilePortfolioOverview2(network, platformId, address, {
+        writeCachedProfilePortfolioOverview(network, platformId, address, {
           data: next,
           fetchedAt: Date.now(),
         });
@@ -102,7 +102,7 @@ export function useGraphqlProfileOverviewSWR(
       return;
     }
 
-    const stale = readCachedProfilePortfolioOverview2(network, platformId, address);
+    const stale = readCachedProfilePortfolioOverview(network, platformId, address);
     if (stale) {
       setData(stale.data);
       logProfileLoad('cache', {
@@ -120,7 +120,7 @@ export function useGraphqlProfileOverviewSWR(
   useEffect(() => {
     if (!address || !platformId || typeof window === 'undefined') return;
     const onMembershipChange = () => {
-      clearCachedProfilePortfolioOverview2(network, platformId, address);
+      clearCachedProfilePortfolioOverview(network, platformId, address);
       revalidate();
     };
     window.addEventListener(SOFISWAP_PROFILE_REVALIDATE_EVENT, onMembershipChange);

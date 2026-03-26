@@ -8,6 +8,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { fetchPlatformUserAccessGate } from '@/lib/graphql/profile-portfolio-overview';
+import { orderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import { fetchRegisteredBalanceManagerIds } from '@/lib/orderbook/runtime';
+import { getMySoJsonRpcClient } from '@/lib/myso-client';
 import { getClientSelectedNetwork } from '@/lib/network-utils';
 import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
 import {
@@ -18,6 +21,7 @@ import {
 } from '@/lib/mysocial-auth-client';
 import { resolveDisplayAddress } from '@/lib/mysocial-oauth-utils';
 import { writeCachedPlatformAccess } from '@/lib/trade-platform-gate-storage';
+import { writeTradingSetupCache } from '@/lib/trading-setup-cache';
 
 function paramFromUrl(url: URL, key: string): string | null {
   const q = url.searchParams.get(key);
@@ -152,11 +156,28 @@ function CallbackContent() {
               '[auth/callback] platform prefetch skipped — could not resolve MySo address from session'
             );
           } else {
-            const res = await fetchPlatformUserAccessGate(
-              addr,
-              cfg.platformGraphqlId,
-              network
-            );
+            const obNet = orderbookRuntimeNetwork(network);
+            const bmPromise =
+              obNet != null
+                ? fetchRegisteredBalanceManagerIds(getMySoJsonRpcClient(network), addr)
+                : Promise.resolve({ ids: [] as string[], error: null as string | null });
+
+            const [res, bm] = await Promise.all([
+              fetchPlatformUserAccessGate(addr, cfg.platformGraphqlId, network),
+              bmPromise,
+            ]);
+
+            if (obNet != null) {
+              writeTradingSetupCache(network, addr, {
+                ids: bm.ids,
+                error: bm.error,
+              });
+              console.info('[auth/callback] trading setup prefetch', {
+                balanceManagerCount: bm.ids.length,
+                error: bm.error,
+              });
+            }
+
             if (res.errors?.length) {
               console.warn('[auth/callback] platform prefetch GraphQL errors', res.errors);
             } else {

@@ -1,7 +1,9 @@
-import type { NetworkType } from '@/lib/network-utils';
 import type { PlatformUserAccess } from '@/lib/graphql/profile-portfolio-overview';
+import type { NetworkType } from '@/lib/network-utils';
+import { clearAllTradingSetupCache } from '@/lib/trading-setup-cache';
 
-const OK_PREFIX = 'sofiswap_trade_gate_ok';
+/** v2: set only when platform access and trading-setup (orderbook registry) both pass. */
+const OK_PREFIX = 'sofiswap_trade_gate_ok_v2';
 /** @deprecated Legacy prefetch keys — cleared by clearTradeGateOkForPrefix */
 const LEGACY_PREFETCH_PREFIX = 'sofiswap_trade_gate_prefetch';
 const ACCESS_CACHE_PREFIX = 'sofiswap_trade_gate_access_cache';
@@ -128,11 +130,17 @@ export function clearTradeGateOkForPrefix(): void {
   const keys: string[] = [];
   for (let i = 0; i < sessionStorage.length; i++) {
     const k = sessionStorage.key(i);
-    if (k && prefixes.some((p) => k.startsWith(p))) {
+    if (!k) continue;
+    if (prefixes.some((p) => k.startsWith(p))) {
+      keys.push(k);
+      continue;
+    }
+    if (k.startsWith('sofiswap_trade_gate_ok_') && !k.startsWith('sofiswap_trade_gate_ok_v2')) {
       keys.push(k);
     }
   }
   for (const k of keys) {
     sessionStorage.removeItem(k);
   }
+  clearAllTradingSetupCache();
 }
