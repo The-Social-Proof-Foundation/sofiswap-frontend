@@ -485,12 +485,7 @@ export function TradeNavProfileMenu({
               </div>
             </div>
           </div>
-          <div
-            className={cn(
-              'w-full px-3 text-center',
-              tokenMenuAction ? 'pb-2' : 'pb-3'
-            )}
-          >
+          <div className="w-full px-3 pb-3 text-center">
             <p className="text-sm leading-snug">
               <span className="font-bold tabular-nums">{formatSocialCount(followers)}</span>
               <span className="font-normal text-[var(--muted-foreground)]"> followers</span>
@@ -499,21 +494,6 @@ export function TradeNavProfileMenu({
               <span className="font-normal text-[var(--muted-foreground)]"> following</span>
             </p>
           </div>
-          {tokenMenuAction ? (
-            <div className="px-3 pb-3 pt-0">
-              <Button asChild variant="default" size="sm" className="h-9 w-full gap-2 font-semibold">
-                <Link
-                  href={editHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center"
-                >
-                  <Coins className="h-4 w-4 shrink-0" aria-hidden />
-                  {tokenMenuAction === 'launch' ? 'Launch token' : 'Enable token'}
-                </Link>
-              </Button>
-            </div>
-          ) : null}
         </div>
 
         <div className="space-y-0.5 px-1 py-1">
@@ -529,6 +509,22 @@ export function TradeNavProfileMenu({
               <ChevronRight className={profileMenuChevronClass} aria-hidden />
             </Link>
           </DropdownMenuItem>
+          {tokenMenuAction ? (
+            <DropdownMenuItem asChild>
+              <Link
+                href={editHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={profileMenuRowLinkClass}
+              >
+                <Coins className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 flex-1 truncate">
+                  {tokenMenuAction === 'launch' ? 'Launch token' : 'Enable token'}
+                </span>
+                <ChevronRight className={profileMenuChevronClass} aria-hidden />
+              </Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem asChild>
             <Link
               href={editHref}
