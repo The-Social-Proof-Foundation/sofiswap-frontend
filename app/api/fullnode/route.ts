@@ -64,7 +64,10 @@ export async function POST(request: Request) {
       console.log('  Params count:', body.params?.length || 0)
       
       // Log specific details for executeTransactionBlock
-      if (body.method === 'mys_executeTransactionBlock') {
+      if (
+        typeof body.method === 'string' &&
+        body.method.includes('executeTransactionBlock')
+      ) {
         console.log('🚀 [zkLogin Transaction] Execution Request:')
         console.log('  Param 1 (transactionBlock) type:', typeof body.params[0])
         console.log('  Param 1 length:', body.params[0]?.length || 'unknown')
@@ -82,7 +85,7 @@ export async function POST(request: Request) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body),
       })
       
       console.log('🔍 [Fullnode Proxy] Response status:', response.status)

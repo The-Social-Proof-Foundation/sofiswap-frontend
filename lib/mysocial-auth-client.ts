@@ -83,10 +83,19 @@ function resolveAuthOptions(): {
     'https://auth.testnet.mysocial.network'
   ).replace(/\/$/, '');
 
-  const apiBaseUrl = (
+  const remoteSaltApiBase = (
     process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_API_BASE_URL ||
     'https://salt.testnet.mysocial.network'
   ).replace(/\/$/, '');
+
+  /**
+   * The browser must not call `remoteSaltApiBase` directly (CORS). The Next.js app forwards to
+   * that **exact** host from the server (`app/api/mysocial/[...path]`).
+   */
+  const apiBaseUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin.replace(/\/$/, '')}/api/mysocial`
+      : remoteSaltApiBase;
 
   return { clientId, apiBaseUrl, authOrigin, redirectUri, baseUrl };
 }

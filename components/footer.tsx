@@ -15,6 +15,7 @@ export function Footer() {
   }, [])
   
   const logoSrc = theme !== 'dark' ? '/logo_dark.svg' : '/logo_light.svg'
+  const mysoLogoSrc = theme !== 'dark' ? '/MySo-logo-black-m.png' : '/MySo-logo-green-m.png'
 
   return (
     <footer className="bg-card border-t border-border">
@@ -40,36 +41,44 @@ export function Footer() {
                 SofiSwap
               </span>
             </Link>
-            <p className="text-xs font-satoshi text-[var(--secondary-foreground)] max-w-[340px] text-center lg:text-left">
-              We&apos;re creating the leading SocialFi + InfoFi decentralized exchange for Social Proof Tokens and MyIP.
+            <p className="text-sm font-satoshi text-[var(--secondary-foreground)] max-w-[380px] text-center lg:text-left">
+              We&apos;re creating the leading SocialFi + DataFi decentralized exchange for Social Proof Tokens & MyData.
             </p>
           </div>
 
-          {/* Right side - Link sections and Social */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 lg:gap-16 pt-5 sm:pt-0 text-[var(--foreground)]">
-            {/* Resources */}
-            <div className="mb-6 sm:mb-12 lg:mb-0">
-              <p className="text-xs text-muted-foreground text-center lg:text-left mb-3 lg:mb-5 pb-2 border-b border-muted w-1/2 sm:w-full mx-auto sm:mx-0">Resources</p>
-              <div className="grid grid-cols-2 sm:grid-cols-1 gap-3 sm:space-y-2 text-sm">
-                {['Vision', 'FAQ'].map((link) => (
-                  <Link 
-                    key={link}
-                    href={`/${link.toLowerCase()}`}
-                    className="transition-colors duration-300 hover:underline hover:text-foreground text-center lg:text-left w-full"
-                  >
-                    {link}
-                  </Link>
-                ))}
-              </div>
-            </div>
+          {/* Right side — Resources (flush right on lg, same edge as copyright block) */}
+          <div className="w-full lg:w-auto lg:ml-auto lg:shrink-0 pt-5 sm:pt-0 text-[var(--foreground)]">
+            <div className="mb-6 sm:mb-12 lg:mb-0 w-full lg:w-max flex flex-col items-center lg:items-end">
+               <p className="text-xs text-muted-foreground text-center lg:text-right mb-3 lg:mb-5 pb-2 border-b border-muted w-1/2 sm:w-full lg:w-full">Resources</p>
+               <div className="grid grid-cols-2 sm:grid-cols-1 gap-2 sm:space-y-2 text-sm justify-items-center lg:justify-items-end w-full">
+                <Link 
+                   href="https://www.mysocial.network/ecosystem/sofiswap"
+                   className="transition-colors duration-300 hover:underline hover:text-foreground flex gap-3 justify-center lg:justify-end w-full"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                 >
+                   <span className="h-[18px] w-[18px] flex-shrink-0 flex items-center justify-center">
+                     {mounted ? (
+                       <Image
+                         src={mysoLogoSrc}
+                         alt=""
+                         width={18}
+                         height={18}
+                         className="h-[18px] w-[18px] object-contain"
+                         aria-hidden
+                       />
+                     ) : (
+                       <span className="block h-[18px] w-[18px]" aria-hidden />
+                     )}
+                   </span>
+                   <span className="flex items-end gap-2">
+                     MySocial
+                   </span>
+                 </Link>
 
-            {/* Social */}
-             <div className="mb-6 sm:mb-12 lg:mb-0 text-[var(--foreground)]">
-               <p className="text-xs text-muted-foreground text-center lg:text-left mb-3 lg:mb-5 pb-2 border-b border-muted w-1/2 sm:w-full mx-auto sm:mx-0">Social</p>
-               <div className="grid grid-cols-2 sm:grid-cols-1 gap-3 sm:space-y-2 text-sm justify-items-center sm:items-center lg:items-start">
                  <Link 
-                   href="https://t.me/sofiswap_xyz"
-                   className="transition-colors duration-300 hover:underline hover:text-foreground flex gap-2 justify-center lg:justify-start w-full"
+                   href="https://t.me/sofiswap_chat"
+                   className="transition-colors duration-300 hover:underline hover:text-foreground flex gap-3 justify-center lg:justify-end w-full"
                    target="_blank"
                    rel="noopener noreferrer"
                  >
@@ -82,7 +91,7 @@ export function Footer() {
 
                  <Link 
                    href="https://x.com/sofiswap_xyz"
-                   className="transition-colors duration-300 hover:underline hover:text-foreground flex gap-2 justify-center lg:justify-start w-full"
+                   className="transition-colors duration-300 hover:underline hover:text-foreground flex gap-2.5 justify-center lg:justify-end w-full"
                    target="_blank"
                    rel="noopener noreferrer"
                  >
@@ -91,7 +100,7 @@ export function Footer() {
                      <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
                    </svg>
                    <span className="flex items-end gap-2">
-                     X <span className="text-xs text-muted-foreground">(Twitter)</span>
+                     X <span className="text-xs text-[var(--secondary-foreground)]">(Twitter)</span>
                    </span>
                  </Link>
                </div>

@@ -2,12 +2,13 @@
 
 import type { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 import {
-  isWalletOnlySession,
   PopupBlockedError,
   RateLimitError,
   SessionRevokedError,
+  WALLET_ONLY_ACCESS_TOKEN,
   type AuthProvider,
   type Session,
+  type WalletCredentials,
 } from '@socialproof/mysocial-auth';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -21,6 +22,14 @@ import {
   getSaltFromMySocialAuth,
   resolveDisplayAddress,
 } from '@/lib/mysocial-oauth-utils';
+import {
+  clearAllWalletSigningKeys,
+  loadWalletSigningKeypair,
+  storeWalletSigningKey,
+} from '@/lib/mysocial-wallet-signing-storage';
+import { clearGraphqlProfileCacheForPrefix } from '@/lib/graphql-profile-cache';
+import { clearTradeGateOkForPrefix } from '@/lib/trade-platform-gate-storage';
+import { keypairFromWalletCredentials } from '@/lib/wallet-credentials-keypair';
 
 /**
  * Mobile, tablet, and coarse-pointer environments should use full-page redirect (no OAuth popup).
@@ -93,20 +102,40 @@ export function useMySocialAuth() {
 
       const addr = resolveDisplayAddress(s);
 
-      if (isWalletOnlySession(s)) {
-        setDisplayAddress(addr);
+      if (!addr) {
+        setDisplayAddress(null);
         setKeypair(null);
         return;
       }
 
+      /**
+       * Local Create/Import wallet sessions use the sentinel access token; there is no salt API.
+       * Signing relies on `onWalletCredentials` + sessionStorage (see `signIn`).
+       */
+      if (s.access_token === WALLET_ONLY_ACCESS_TOKEN) {
+        setDisplayAddress(addr);
+        const kp = loadWalletSigningKeypair(addr);
+        setKeypair(kp);
+        if (!kp) {
+          console.warn(
+            '[useMySocialAuth] wallet-only session but no tab-stored signing key. Use Create/Import in the auth popup (same tab) so credentials can be saved for this session.'
+          );
+        }
+        return;
+      }
+
+      /**
+       * Do not use `isWalletOnlySession()` to skip salt: that only checks session_access_token +
+       * refresh_token. Many social redirects still have `id_token` / `access_token` for `POST /salt`.
+       */
       let salt = s.salt;
       if (!salt) {
         try {
           salt = await getSaltFromMySocialAuth(auth);
         } catch (e) {
-          console.warn('[useMySocialAuth] salt fetch failed:', e);
+          console.warn('[useMySocialAuth] salt fetch failed; trying stored wallet signing key:', e);
           setDisplayAddress(addr);
-          setKeypair(null);
+          setKeypair(loadWalletSigningKeypair(addr));
           return;
         }
       }
@@ -118,7 +147,10 @@ export function useMySocialAuth() {
 
       if (!sub || !salt) {
         setDisplayAddress(addr);
-        setKeypair(null);
+        setKeypair(loadWalletSigningKeypair(addr));
+        console.warn(
+          '[useMySocialAuth] missing sub or salt after fetch; keypair only if wallet storage exists'
+        );
         return;
       }
 
@@ -127,9 +159,11 @@ export function useMySocialAuth() {
 
       if (addr) {
         if (derived.toLowerCase() !== addr.toLowerCase()) {
-          console.warn('[useMySocialAuth] derived address does not match session');
-          setKeypair(null);
+          console.warn(
+            '[useMySocialAuth] derived address does not match session; trying stored wallet signing key'
+          );
           setDisplayAddress(addr);
+          setKeypair(loadWalletSigningKeypair(addr));
           return;
         }
         setDisplayAddress(addr);
@@ -173,24 +207,37 @@ export function useMySocialAuth() {
     };
   }, [syncSession]);
 
+  const onWalletCredentials = useCallback((credentials: WalletCredentials) => {
+    try {
+      const kp = keypairFromWalletCredentials(credentials);
+      storeWalletSigningKey(credentials.address, kp.getSecretKey());
+    } catch (e) {
+      console.warn('[useMySocialAuth] onWalletCredentials:', e);
+    }
+  }, []);
+
   const signIn = useCallback(
     async (provider: AuthProvider = 'none') => {
       const auth = getMySocialAuthOrNull();
       if (!auth) throw new Error('MySocial Auth is not configured');
       setIsSigningIn(true);
       setAuthError(null);
+      const signInOpts = { provider, onWalletCredentials } satisfies {
+        provider: AuthProvider;
+        onWalletCredentials: typeof onWalletCredentials;
+      };
       try {
         if (shouldUseRedirect() || mySocialAuthForceRedirect()) {
-          await auth.signIn({ provider, mode: 'redirect' });
+          await auth.signIn({ ...signInOpts, mode: 'redirect' });
           return;
         }
 
         try {
-          await auth.signIn({ provider, mode: 'popup' });
+          await auth.signIn({ ...signInOpts, mode: 'popup' });
           await syncSession();
         } catch (e) {
           if (e instanceof PopupBlockedError) {
-            await auth.signIn({ provider, mode: 'redirect' });
+            await auth.signIn({ ...signInOpts, mode: 'redirect' });
             return;
           }
           throw e;
@@ -199,19 +246,26 @@ export function useMySocialAuth() {
         setIsSigningIn(false);
       }
     },
-    [syncSession]
+    [onWalletCredentials, syncSession]
   );
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (options?: { redirectTo?: string }) => {
     const auth = getMySocialAuthOrNull();
     if (auth) {
       await auth.signOut().catch(() => {});
     }
+    clearAllWalletSigningKeys();
+    clearTradeGateOkForPrefix();
+    clearGraphqlProfileCacheForPrefix();
     setSession(null);
     setDisplayAddress(null);
     setKeypair(null);
     if (typeof window !== 'undefined') {
-      window.location.reload();
+      if (options?.redirectTo) {
+        window.location.assign(options.redirectTo);
+      } else {
+        window.location.reload();
+      }
     }
   }, []);
 

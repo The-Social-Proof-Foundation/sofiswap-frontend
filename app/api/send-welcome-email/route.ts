@@ -97,7 +97,7 @@ Terms of Service: ${emailBaseUrl}/terms
     const { data, error } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'brandon@sofiswap.xyz',
       to: email,
-      subject: 'Welcome to SofiSwap - The fastest SocialFi + InfoFi DEX',
+      subject: 'Welcome to SofiSwap - The fastest SocialFi + DataFi DEX',
       html: emailHtml,
       text: emailText
     })

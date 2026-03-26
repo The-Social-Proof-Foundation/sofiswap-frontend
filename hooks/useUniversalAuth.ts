@@ -2,12 +2,10 @@
 
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useGoogleAuth } from './useGoogleAuth'
+import { clearGraphqlProfileCacheForPrefix } from '@/lib/graphql-profile-cache'
 import { MySocialProfile, fetchMySocialProfile } from '@/lib/profile-utils'
 import { generateProfileFromGoogleData } from '@/lib/profile-utils'
-import { Ed25519Keypair } from '@socialproof/mys/keypairs/ed25519'
-import { Transaction } from '@socialproof/mys/transactions'
-import { getMysClient } from '@/lib/myso-client'
-import { fromB64 } from '@socialproof/mys/utils'
+import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519'
 import * as bip39 from 'bip39'
 import { processGoogleAuthUser } from '@/lib/resend'
 
@@ -87,7 +85,7 @@ export function useUniversalAuth(): UniversalAuthState {
           console.log('🔍 Restoring wallet from mnemonic...')
           
           const keypair = Ed25519Keypair.deriveKeypair(storedMnemonic, storedPath)
-          const derivedAddress = keypair.getPublicKey().toMysAddress()
+          const derivedAddress = keypair.getPublicKey().toMySoAddress()
           
           // Validate that the mnemonic generates the stored address
           if (derivedAddress !== storedAddress) {
@@ -119,7 +117,7 @@ export function useUniversalAuth(): UniversalAuthState {
           const keyBytes = new Uint8Array(keyArray)
           
           const keypair = Ed25519Keypair.fromSecretKey(keyBytes)
-          const derivedAddress = keypair.getPublicKey().toMysAddress()
+          const derivedAddress = keypair.getPublicKey().toMySoAddress()
           
           // Validate that the keypair matches the stored address
           if (derivedAddress !== storedAddress) {
@@ -185,34 +183,45 @@ export function useUniversalAuth(): UniversalAuthState {
   
   const isAuthenticated = !!currentAddress
 
-  // Fetch user profile from MySocial indexing server (with caching)
-  const fetchProfile = async (address: string): Promise<MySocialProfile | null> => {
+  const hydrateProfileFromCache = (
+    address: string
+  ): MySocialProfile | null => {
+    const cacheKey = `${PROFILE_CACHE_KEY}${address}`
+    const raw = localStorage.getItem(cacheKey)
+    if (!raw) return null
+    try {
+      return JSON.parse(raw) as MySocialProfile
+    } catch (parseError) {
+      console.warn('Cache parse error, fetching fresh:', parseError)
+      localStorage.removeItem(cacheKey)
+      return null
+    }
+  }
+
+  /** Indexer profile: cache-first unless `force` (always hit network). */
+  const fetchProfile = async (
+    address: string,
+    options?: { force?: boolean }
+  ): Promise<MySocialProfile | null> => {
+    const force = options?.force ?? false
     try {
       setIsLoadingProfile(true)
-      
-      // Check cache first
-      const cacheKey = `${PROFILE_CACHE_KEY}${address}`
-      const cachedProfile = localStorage.getItem(cacheKey)
-      if (cachedProfile) {
-        try {
-          const profileData = JSON.parse(cachedProfile)
-          return profileData
-        } catch (parseError) {
-          console.warn('Cache parse error, fetching fresh:', parseError)
-          localStorage.removeItem(cacheKey)
-        }
+
+      if (!force) {
+        const cached = hydrateProfileFromCache(address)
+        if (cached) return cached
       }
 
-      // Cache miss - fetch from API
       const profileData = await fetchMySocialProfile(address)
-      
+
       if (profileData) {
-        // Cache the successful result
-        localStorage.setItem(cacheKey, JSON.stringify(profileData))
+        localStorage.setItem(
+          `${PROFILE_CACHE_KEY}${address}`,
+          JSON.stringify(profileData)
+        )
       }
-      
+
       return profileData
-      
     } catch (error) {
       console.error('Error fetching MySocial profile:', error)
       return null
@@ -243,13 +252,20 @@ export function useUniversalAuth(): UniversalAuthState {
     }
   }
 
-  // Refresh current user profile
+  // Refresh current user profile (show cached UI immediately, then revalidate)
   const refreshProfile = async (): Promise<void> => {
     if (!currentAddress) return
 
-    const profileData = await fetchProfile(currentAddress)
+    const stale = hydrateProfileFromCache(currentAddress)
+    if (stale) {
+      setProfile(stale)
+      setHasProfile(true)
+      setNeedsProfileCreation(false)
+    }
+
+    const profileData = await fetchProfile(currentAddress, { force: true })
     const profileExists = !!profileData
-    
+
     setProfile(profileData)
     setHasProfile(profileExists)
     setNeedsProfileCreation(!profileExists && isAuthenticated)
@@ -267,6 +283,7 @@ export function useUniversalAuth(): UniversalAuthState {
       const cacheKey = `${PROFILE_CACHE_KEY}${currentAddress}`
       localStorage.removeItem(cacheKey)
     }
+    clearGraphqlProfileCacheForPrefix()
     
     // Clear welcome email tracking for this user
     if (authMethod === 'google' && googleUserInfo) {
@@ -404,7 +421,7 @@ export function useUniversalAuth(): UniversalAuthState {
       if (typeof Ed25519Keypair.deriveKeypair === 'function') {
         const derivationPath = "m/44'/784'/0'/0'/0'"
         const keypair = Ed25519Keypair.deriveKeypair(mnemonic, derivationPath)
-        const address = keypair.getPublicKey().toMysAddress()
+        const address = keypair.getPublicKey().toMySoAddress()
         
         // Store the mnemonic and derivation path instead of trying to extract secret key bytes
         localStorage.setItem('mysocial_mnemonic', mnemonic)
@@ -413,7 +430,7 @@ export function useUniversalAuth(): UniversalAuthState {
         
         // Verify we can restore the same address using the stored mnemonic
         const restoredKeypair = Ed25519Keypair.deriveKeypair(mnemonic, derivationPath)
-        const restoredAddress = restoredKeypair.getPublicKey().toMysAddress()
+        const restoredAddress = restoredKeypair.getPublicKey().toMySoAddress()
         if (address !== restoredAddress) {
           throw new Error('Mnemonic import validation failed: stored mnemonic cannot restore same address')
         }
@@ -456,7 +473,7 @@ export function useUniversalAuth(): UniversalAuthState {
       }
       
       const keypair = Ed25519Keypair.fromSecretKey(keyBytes)
-      const address = keypair.getPublicKey().toMysAddress()
+      const address = keypair.getPublicKey().toMySoAddress()
       
       // Store in localStorage and state (ensure exactly 32 bytes)
       let privateKeyBytes: Uint8Array
@@ -498,7 +515,7 @@ export function useUniversalAuth(): UniversalAuthState {
       // Check if Ed25519Keypair has a deriveKeypair method
       if (typeof Ed25519Keypair.deriveKeypair === 'function') {
         const keypair = Ed25519Keypair.deriveKeypair(mnemonic, "m/44'/784'/0'/0'/0'")
-        const address = keypair.getPublicKey().toMysAddress()
+        const address = keypair.getPublicKey().toMySoAddress()
         
         // Store the mnemonic and derivation path instead of trying to extract secret key bytes
         // This follows the standard Ed25519 derivation pattern from the documentation
@@ -510,7 +527,7 @@ export function useUniversalAuth(): UniversalAuthState {
         
         // Verify we can restore the same address using the stored mnemonic
         const restoredKeypair = Ed25519Keypair.deriveKeypair(mnemonic, derivationPath)
-        const restoredAddress = restoredKeypair.getPublicKey().toMysAddress()
+        const restoredAddress = restoredKeypair.getPublicKey().toMySoAddress()
         if (address !== restoredAddress) {
           throw new Error('Wallet generation validation failed: stored mnemonic cannot restore same address')
         }

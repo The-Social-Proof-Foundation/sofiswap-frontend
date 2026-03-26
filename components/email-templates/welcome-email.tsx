@@ -27,7 +27,7 @@ import {
     return (
       <Html>
         <Head />
-        <Preview>Welcome to SofiSwap - The fastest SocialFi + InfoFi DEX</Preview>
+        <Preview>Welcome to SofiSwap - The fastest SocialFi + DataFi DEX</Preview>
         <Body style={main}>
           <Container style={container}>
             {/* Header Section */}
@@ -47,14 +47,14 @@ import {
                 style={logo}
               />
               <Text style={headerText} className="text-plus-jakarta-sans font-medium">
-                We&apos;re building the best decentralized SocialFi + InfoFi DEX for Social Proof Tokens and MyIP.
+                We&apos;re building the best decentralized SocialFi + DataFi DEX for Social Proof Tokens and MyData.
               </Text>
             </Section>
   
             {/* Main Content */}
             <Section style={content}>            
               <Text style={text}>
-                Thank you for joining SofiSwap! We&apos;re thrilled to have you as part of our growing community building the future of SocialFi + InfoFi on the blockchain.
+                Thank you for joining SofiSwap! We&apos;re thrilled to have you as part of our growing community building the future of SocialFi + DataFi on the blockchain.
               </Text>
   
               <Text style={text}>

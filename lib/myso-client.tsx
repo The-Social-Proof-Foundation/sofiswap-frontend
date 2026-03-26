@@ -1,24 +1,35 @@
-import { MysClient } from '@socialproof/mys/client'
+import { MySoJsonRpcClient } from '@socialproof/myso/jsonRpc';
 
-// Shared client instance to avoid creating multiple connections
-let mysClient: MysClient | null = null
+import type { NetworkType } from '@/lib/network-utils';
 
-export function getMysClient(): MysClient {
-  if (!mysClient) {
-    // Use relative URL for production, fallback to localhost for development
-    const fullnodeUrl = process.env.NEXT_PUBLIC_MYSO_FULLNODE_URL || 
-                       (typeof window !== 'undefined' 
-                         ? '/api/fullnode/' 
-                         : 'http://localhost:3000/api/fullnode/')
-    
-    console.log('Creating MySocial client with URL:', fullnodeUrl)
-    mysClient = new MysClient({ url: fullnodeUrl })
+const clients = new Map<NetworkType, MySoJsonRpcClient>();
+
+function rpcBaseUrl(): string {
+  const env = process.env.NEXT_PUBLIC_MYSO_FULLNODE_URL?.trim();
+  if (env) {
+    return env.replace(/\/$/, '');
   }
-  
-  return mysClient
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/api/fullnode`;
+  }
+  return 'http://localhost:3000/api/fullnode';
 }
 
-// Function to reset client if needed
-export function resetMysClient(): void {
-  mysClient = null
-} 
+/**
+ * JSON-RPC client for the selected MySocial network. URL defaults to `/api/fullnode` (cookie-backed proxy) or env override.
+ */
+export function getMySoJsonRpcClient(network: NetworkType): MySoJsonRpcClient {
+  let client = clients.get(network);
+  if (!client) {
+    client = new MySoJsonRpcClient({
+      network,
+      url: rpcBaseUrl(),
+    });
+    clients.set(network, client);
+  }
+  return client;
+}
+
+export function resetMySoJsonRpcClients(): void {
+  clients.clear();
+}

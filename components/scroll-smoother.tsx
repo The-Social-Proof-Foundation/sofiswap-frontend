@@ -22,9 +22,9 @@ export function ScrollSmootherWrapper({ children }: ScrollSmootherWrapperProps) 
       smoother = ScrollSmoother.create({
         wrapper: containerRef.current,
         content: contentRef.current,
-        smooth: 1.025,
+        smooth: 0.65,
         effects: true,
-        smoothTouch: 0.1,
+        smoothTouch: 0.05,
       })
     }
 

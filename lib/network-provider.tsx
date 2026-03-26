@@ -21,7 +21,7 @@ import {
   type NetworkType,
 } from '@/lib/network-utils';
 import { resetMySoGraphQLClient } from '@/lib/myso-graphql-client';
-import { resetMysClient } from '@/lib/myso-client';
+import { resetMySoJsonRpcClients } from '@/lib/myso-client';
 
 interface NetworkContextValue {
   currentNetwork: NetworkType;
@@ -71,7 +71,7 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
       Cookies.set(NETWORK_COOKIE_NAME, network, { expires: 365 });
       setCurrentNetwork(network);
       resetMySoGraphQLClient();
-      resetMysClient();
+      resetMySoJsonRpcClients();
       toast.success(`Network switched to ${NETWORK_LABELS[network]}`);
     } catch (e) {
       console.error('[NetworkProvider] changeNetwork', e);

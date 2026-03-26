@@ -75,7 +75,7 @@ export function EmailSignup() {
 
   // Determine MySo logo based on theme with proper fallback
   const currentTheme = mounted ? (resolvedTheme || theme || 'light') : 'light'
-  const mysoLogo = currentTheme === 'light' ? '/MySo-logo-black.png' : '/MySo-logo-white.png'
+  const mysoLogo = currentTheme === 'light' ? '/MySo-logo-black-m.png' : '/MySo-logo-white.png'
 
   return (
     <div className="flex flex-col gap-4 w-full max-w-xl mx-auto">
@@ -124,7 +124,7 @@ export function EmailSignup() {
         <div className="flex justify-center items-center gap-6 mt-2">
           {/* Telegram */}
           <Link 
-            href="https://t.me/sofiswap_xyz"
+            href="https://t.me/sofiswap_chat"
             className="transition-colors duration-300 hover:text-foreground opacity-60 hover:opacity-100"
             target="_blank"
             rel="noopener noreferrer"

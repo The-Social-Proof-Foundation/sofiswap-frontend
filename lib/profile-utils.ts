@@ -1,4 +1,4 @@
-import { Ed25519Keypair } from '@socialproof/mys/keypairs/ed25519'
+import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519'
 
 // Profile creation data interface
 interface ProfileCreationData {

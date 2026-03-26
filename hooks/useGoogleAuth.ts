@@ -2,9 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react'
 import axios from 'axios'
-import { Ed25519Keypair } from '@socialproof/mys/keypairs/ed25519'
-import { Transaction } from '@socialproof/mys/transactions'
-import { getMysClient } from '@/lib/myso-client'
+import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519'
+
+import { getMySoJsonRpcClient } from '@/lib/myso-client'
+import { getMySocialAuthConfig } from '@/lib/mysocial-auth-client'
+import { getClientSelectedNetwork } from '@/lib/network-utils'
+import { executeTransactionWithSmartGas } from '@/lib/transaction-utils'
 
 // JWT Payload interface
 interface JwtPayload {
@@ -56,7 +59,7 @@ export function useGoogleAuth() {
         // Restore imported wallet with private key
         const keyBytes = new Uint8Array(importedPrivateKey.split(',').map(x => parseInt(x, 10)))
         const keypair = Ed25519Keypair.fromSecretKey(keyBytes)
-        const address = keypair.getPublicKey().toMysAddress()
+        const address = keypair.getPublicKey().toMySoAddress()
         
         setKeypair(keypair)
         setAddress(address)
@@ -76,9 +79,9 @@ export function useGoogleAuth() {
         try {
           // Restore read-only wallet with public key only
           const keyBytes = new Uint8Array(importedPublicKey.split(',').map(x => parseInt(x, 10)))
-          const { Ed25519PublicKey } = await import('@socialproof/mys/keypairs/ed25519')
+          const { Ed25519PublicKey } = await import('@socialproof/myso/keypairs/ed25519')
           const publicKey = new Ed25519PublicKey(keyBytes)
-          const address = publicKey.toMysAddress()
+          const address = publicKey.toMySoAddress()
           
           setKeypair(null) // No private key for signing
           setAddress(address)
@@ -158,7 +161,8 @@ export function useGoogleAuth() {
           try {
             console.log('Fetching salt from MySocial service...')
             
-            const saltResponse = await axios.post('https://salt.testnet.mysocial.network/salt', {
+            const saltUrl = `${getMySocialAuthConfig().apiBaseUrl}/salt`
+            const saltResponse = await axios.post(saltUrl, {
               jwt: jwt.trim()
             }, {
               headers: {
@@ -207,7 +211,7 @@ export function useGoogleAuth() {
         const keypair = Ed25519Keypair.fromSecretKey(seed)
         
         // Get MySocial address
-        const address = keypair.getPublicKey().toMysAddress()
+        const address = keypair.getPublicKey().toMySoAddress()
         
         setKeypair(keypair)
         setAddress(address)
@@ -252,21 +256,23 @@ export function useGoogleAuth() {
 
     setIsSubmittingTx(true)
     try {
-      const client = getMysClient()
-      
-      // Create a simple test transaction
-      const txb = new Transaction()
-      txb.setSender(address)
-      
-      // Split coins and transfer (test transaction)
-      const [coin] = txb.splitCoins(txb.gas, [BigInt(1000)])
-      txb.transferObjects([coin], "0x14f543ec93eb800e916bcb9a6873036707a61fc7f89e5a538295ba8e8c060d52")
+      const network = getClientSelectedNetwork()
+      const client = getMySoJsonRpcClient(network)
 
-      // Sign and execute transaction
-      const result = await client.signAndExecuteTransaction({
+      const result = await executeTransactionWithSmartGas({
+        network,
+        client,
         signer: keypair,
-        transaction: txb,
-        options: {
+        sender: address,
+        treatAsGasCoinSplit: true,
+        build: (txb) => {
+          const [coin] = txb.splitCoins(txb.gas, [BigInt(1000)])
+          txb.transferObjects(
+            [coin],
+            '0x14f543ec93eb800e916bcb9a6873036707a61fc7f89e5a538295ba8e8c060d52'
+          )
+        },
+        executeOptions: {
           showEffects: true,
           showBalanceChanges: true,
         },

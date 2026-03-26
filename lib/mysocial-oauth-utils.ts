@@ -1,11 +1,14 @@
 import type { MySocialAuth, Session } from '@socialproof/mysocial-auth';
+import { WALLET_ONLY_ACCESS_TOKEN } from '@socialproof/mysocial-auth';
 import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 
 import { getMySocialAuthConfig } from '@/lib/mysocial-auth-client';
 
+/** Salt API expects a concrete JSON variant (not `{}`); we send the provider OIDC JWT, matching `useGoogleAuth`. */
 export async function fetchSaltWithBearer(
   apiBaseUrl: string,
-  bearerToken: string
+  bearerToken: string,
+  providerJwt: string
 ): Promise<string> {
   const base = apiBaseUrl.replace(/\/$/, '');
   const res = await fetch(`${base}/salt`, {
@@ -14,7 +17,7 @@ export async function fetchSaltWithBearer(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${bearerToken}`,
     },
-    body: '{}',
+    body: JSON.stringify({ jwt: providerJwt.trim() }),
   });
   if (!res.ok) {
     const text = await res.text();
@@ -28,25 +31,55 @@ export async function fetchSaltWithBearer(
   throw new Error('Unexpected salt response shape');
 }
 
+function tokenLooksLikeJwt(token: string): boolean {
+  return token.split('.').length === 3 && token.length > 20;
+}
+
+function resolveProviderJwtForSalt(session: Session, apiBearer: string): string | undefined {
+  if (session.id_token?.trim()) return session.id_token.trim();
+  if (
+    session.access_token &&
+    session.access_token !== WALLET_ONLY_ACCESS_TOKEN &&
+    tokenLooksLikeJwt(session.access_token)
+  ) {
+    return session.access_token.trim();
+  }
+  if (tokenLooksLikeJwt(apiBearer)) return apiBearer.trim();
+  return undefined;
+}
+
 export async function getSaltFromMySocialAuth(auth: MySocialAuth): Promise<string> {
-  let bearer: string | undefined;
+  const session = await auth.getSession();
+  if (!session) {
+    throw new Error('No session for salt');
+  }
+
+  let apiBearer: string | undefined;
   try {
-    bearer = await auth.getAccessTokenForApi();
+    apiBearer = await auth.getAccessTokenForApi();
   } catch {
-    bearer = undefined;
+    apiBearer = undefined;
   }
-  if (!bearer) {
-    const session = await auth.getSession();
-    bearer =
-      session?.session_access_token ??
-      session?.access_token ??
-      session?.id_token;
+  if (!apiBearer) {
+    if (session.access_token !== WALLET_ONLY_ACCESS_TOKEN) {
+      apiBearer = session.session_access_token ?? session.access_token;
+    } else {
+      apiBearer = session.session_access_token;
+    }
   }
-  if (!bearer) {
+  if (!apiBearer) {
     throw new Error('No bearer token available for salt');
   }
+
+  const providerJwt = resolveProviderJwtForSalt(session, apiBearer);
+  if (!providerJwt) {
+    throw new Error(
+      'No JWT for salt request body (need id_token or JWT-shaped access/session token)'
+    );
+  }
+
   const { apiBaseUrl } = getMySocialAuthConfig();
-  return fetchSaltWithBearer(apiBaseUrl, bearer);
+  return fetchSaltWithBearer(apiBaseUrl, apiBearer, providerJwt);
 }
 
 /**

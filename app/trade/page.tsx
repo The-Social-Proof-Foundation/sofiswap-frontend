@@ -1,8 +1,24 @@
 'use client';
 
+import { Footer } from '@/components/footer';
+import { TradePlatformAccessGate } from '@/components/trade/trade-platform-access-gate';
 import { TradeTopNav } from '@/components/trade/trade-top-nav';
+import { useGraphqlProfileOverviewSWR } from '@/hooks/useGraphqlProfileOverviewSWR';
+import { useMySocialAuth } from '@/hooks/useMySocialAuth';
+import { useNetwork } from '@/lib/network-provider';
+import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useMemo } from 'react';
+
+/** Subscribes to profile overview SWR (cache + GraphQL); logs from the hook. Renders nothing. */
+function TradeProfileOverviewSubscription() {
+  const { currentNetwork } = useNetwork();
+  const { displayAddress, isAuthenticated, isLoading } = useMySocialAuth();
+  const platformId = useMemo(() => getSofiSwapPlatformConfig()?.platformGraphqlId ?? null, []);
+  const address = isAuthenticated && !isLoading ? displayAddress : null;
+  useGraphqlProfileOverviewSWR(address, platformId, currentNetwork);
+  return null;
+}
 
 function TradeAuthMessage() {
   const searchParams = useSearchParams();
@@ -42,20 +58,19 @@ function TradeAuthMessage() {
 
 export default function TradePage() {
   return (
-    <div className="min-h-screen bg-background font-sans text-foreground">
+    <div className="flex min-h-screen flex-col bg-background font-sans text-foreground">
       <TradeTopNav />
-      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <TradeProfileOverviewSubscription />
+      <TradePlatformAccessGate />
+      <main className="mx-auto flex w-full max-w-6xl flex-1 px-4 py-10 sm:px-6">
         <Suspense fallback={null}>
           <TradeAuthMessage />
         </Suspense>
-        <h1 className="mb-2 text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-          Trade
-        </h1>
         <p className="max-w-2xl text-muted-foreground">
-          Trading interface coming soon. Use Get started to connect with MySocial
-          auth.
+          Trading interface coming soon.
         </p>
       </main>
+      <Footer />
     </div>
   );
 }

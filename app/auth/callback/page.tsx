@@ -7,12 +7,17 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
+import { fetchPlatformUserAccessGate } from '@/lib/graphql/profile-portfolio-overview';
+import { getClientSelectedNetwork } from '@/lib/network-utils';
+import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
 import {
   getMySocialAuth,
   getMySocialAuthOrNull,
   isMySocialAuthConfigured,
   MYSOCIAL_AUTH_BROADCAST_CHANNEL,
 } from '@/lib/mysocial-auth-client';
+import { resolveDisplayAddress } from '@/lib/mysocial-oauth-utils';
+import { writeCachedPlatformAccess } from '@/lib/trade-platform-gate-storage';
 
 function paramFromUrl(url: URL, key: string): string | null {
   const q = url.searchParams.get(key);
@@ -114,6 +119,9 @@ function CallbackContent() {
         if (state) {
           const guardKey = `mysocial_cb_state_${state}`;
           if (sessionStorage.getItem(guardKey)) {
+            console.info(
+              '[auth/callback] duplicate state guard hit — navigating to /trade without re-running OAuth'
+            );
             router.replace('/trade');
             return;
           }
@@ -122,10 +130,56 @@ function CallbackContent() {
 
         const auth = getMySocialAuth();
         await auth.handleRedirectCallback(href);
+        console.info('[auth/callback] handleRedirectCallback finished');
+
+        try {
+          const cfg = getSofiSwapPlatformConfig();
+          const session = await auth.getSession();
+          const addr = session ? resolveDisplayAddress(session) : null;
+          const network = getClientSelectedNetwork();
+          console.info('[auth/callback] platform prefetch setup', {
+            hasPlatformConfig: Boolean(cfg),
+            network,
+            hasSession: Boolean(session),
+            resolvedAddress: addr ?? '(none)',
+          });
+          if (!cfg) {
+            console.warn(
+              '[auth/callback] platform prefetch skipped — SofiSwap platform env vars are incomplete (see .env.example NEXT_PUBLIC_SOFISWAP_PLATFORM_ID / registry / package IDs)'
+            );
+          } else if (!addr) {
+            console.warn(
+              '[auth/callback] platform prefetch skipped — could not resolve MySo address from session'
+            );
+          } else {
+            const res = await fetchPlatformUserAccessGate(
+              addr,
+              cfg.platformGraphqlId,
+              network
+            );
+            if (res.errors?.length) {
+              console.warn('[auth/callback] platform prefetch GraphQL errors', res.errors);
+            } else {
+              console.info('[auth/callback] platform prefetch result', {
+                platformUserAccess: res.access,
+              });
+              writeCachedPlatformAccess(network, cfg.platformGraphqlId, addr, {
+                access: res.access,
+                fetchedAt: Date.now(),
+              });
+              console.info('[auth/callback] platform prefetch stored for /trade gate');
+            }
+          }
+        } catch (prefetchErr) {
+          console.warn('[auth/callback] platform prefetch exception', prefetchErr);
+        }
+
         if (window.opener && !window.opener.closed) {
+          console.info('[auth/callback] closing OAuth popup; opener should sync session');
           window.close();
           return;
         }
+        console.info('[auth/callback] redirecting to /trade');
         router.replace('/trade');
       } catch (e) {
         console.error('[auth/callback]', e);
