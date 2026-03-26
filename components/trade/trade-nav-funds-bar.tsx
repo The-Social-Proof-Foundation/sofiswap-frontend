@@ -21,8 +21,8 @@ import { cn } from '@/lib/utils';
 
 /** Match reference: secondary controls (charcoal in dark). */
 const tradeNavWalletSecondaryClass = cn(
-  'rounded-xl border font-semibold shadow-sm',
-  'dark:border-zinc-600/80 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-800/90'
+  'rounded-xl border border-trade-shell font-semibold shadow-sm',
+  'dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-800/90'
 );
 
 function ManageFundsMenuRow({
@@ -96,13 +96,13 @@ export function TradeNavFundsBar() {
           align="end"
           sideOffset={8}
           className={cn(
-            'w-[min(calc(100vw-2rem),20rem)] rounded-xl border-border/60 bg-popover p-0 shadow-lg',
-            'dark:border-white/[0.08]'
+            'w-[min(calc(100vw-2rem),20rem)] rounded-xl border border-trade-shell bg-popover/90 p-0 shadow-lg backdrop-blur-xl',
+            'supports-[backdrop-filter]:bg-popover/78'
           )}
         >
           <div
             className={cn(
-              'border-b border-border/60 px-4 py-3',
+              'border-b border-trade-shell px-4 py-3',
               'bg-muted/40 dark:bg-zinc-800/75'
             )}
           >
@@ -165,8 +165,8 @@ export function TradeNavFundsBar() {
           align="end"
           sideOffset={8}
           className={cn(
-            'w-[min(calc(100vw-2rem),20rem)] rounded-xl border-border/60 bg-popover p-0 shadow-lg',
-            'dark:border-white/[0.08]'
+            'w-[min(calc(100vw-2rem),20rem)] rounded-xl border border-trade-shell bg-popover/90 p-0 shadow-lg backdrop-blur-xl',
+            'supports-[backdrop-filter]:bg-popover/78'
           )}
         >
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">

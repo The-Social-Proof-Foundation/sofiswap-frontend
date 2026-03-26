@@ -104,6 +104,8 @@
     --profile-menu-signout: #dc2626;
     --profile-menu-signout-bg: rgba(220, 38, 38, 0.09);
     --profile-menu-signout-bg-hover: rgba(220, 38, 38, 0.16);
+    /* Trade layout + ticker chrome (matches TradeMarketTicker dividers) */
+    --trade-shell-border: #262626;
   }
 
   .dark {
@@ -135,6 +137,7 @@
     --profile-menu-signout: #f87171;
     --profile-menu-signout-bg: rgba(248, 113, 113, 0.12);
     --profile-menu-signout-bg-hover: rgba(248, 113, 113, 0.2);
+    --trade-shell-border: #262626;
   }
 }
 
@@ -142,7 +145,58 @@
   * {
     @apply border-border;
   }
+  html {
+    height: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+    /* Tailwind 3.3 has no min-h-dvh; keep document tall enough for full-viewport routes */
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+}
+
+/* h-dvh / min-h-dvh are not in Tailwind 3.3 defaults — use plain CSS for the trade shell */
+@layer components {
+  .trade-viewport-shell {
+    height: 100vh;
+    max-height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  /** Structural borders in /trade (matches market ticker chrome) */
+  .border-trade-shell {
+    border-color: var(--trade-shell-border);
+  }
+
+  .bg-trade-shell-border {
+    background-color: var(--trade-shell-border);
+  }
+
+  /**
+   * Fade ticker text at left/right edges without a color overlay.
+   * react-fast-marquee's gradient paints a solid → transparent layer; transparency reveals bright
+   * glyphs underneath and reads as a light wash on dark themes.
+   */
+  .trade-marquee-edge-mask {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 40px,
+      black calc(100% - 40px),
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 40px,
+      black calc(100% - 40px),
+      transparent
+    );
+    mask-size: 100% 100%;
+    -webkit-mask-size: 100% 100%;
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
   }
 }

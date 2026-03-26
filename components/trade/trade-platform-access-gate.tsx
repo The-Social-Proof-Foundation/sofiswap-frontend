@@ -28,6 +28,7 @@ import { useNetwork } from '@/lib/network-provider';
 import type { NetworkType } from '@/lib/network-utils';
 import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
 import { signAndExecuteJoinPlatform } from '@/lib/tx/join-platform';
+import { cn } from '@/lib/utils';
 import { signAndExecuteTradingSetup } from '@/lib/tx/trading-setup';
 import {
   clearTradeGateOkForPrefix,
@@ -40,6 +41,12 @@ import {
 import { pollRegisteredBalanceManagerIdsAfterTx } from '@/lib/trading-setup-poll';
 
 type GateMode = 'idle' | 'blocked' | 'join' | 'repair' | 'hidden';
+
+const tradeGateDialogOverlayClassName = 'bg-black/45 backdrop-blur-md';
+const tradeGateDialogContentClassName = cn(
+  'border border-trade-shell bg-background/88 backdrop-blur-xl supports-[backdrop-filter]:bg-background/72 shadow-2xl',
+  '[&>button:last-child]:hidden'
+);
 
 function classifyMembership(access: PlatformUserAccess | null): 'join' | 'blocked' | 'member' {
   if (!access) return 'join';
@@ -487,7 +494,8 @@ export function TradePlatformAccessGate() {
         }}
       >
         <DialogContent
-          className="[&>button:last-child]:hidden"
+          overlayClassName={tradeGateDialogOverlayClassName}
+          className={tradeGateDialogContentClassName}
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
@@ -519,7 +527,8 @@ export function TradePlatformAccessGate() {
         }}
       >
         <DialogContent
-          className="[&>button:last-child]:hidden"
+          overlayClassName={tradeGateDialogOverlayClassName}
+          className={tradeGateDialogContentClassName}
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
@@ -570,7 +579,8 @@ export function TradePlatformAccessGate() {
       }}
     >
       <DialogContent
-        className="[&>button:last-child]:hidden"
+        overlayClassName={tradeGateDialogOverlayClassName}
+        className={tradeGateDialogContentClassName}
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >

@@ -57,7 +57,7 @@ function shouldForceSponsoredForGasCoinSplit(params: {
 }
 
 type ExecutePayload = ExecuteTransactionResponse & {
-  /** Some gas-pool deployments return Suix-style effects at the top level. */
+  /** Some gas-pool deployments return MySox-style effects at the top level. */
   effects?: {
     transactionDigest?: string;
     status?: unknown;

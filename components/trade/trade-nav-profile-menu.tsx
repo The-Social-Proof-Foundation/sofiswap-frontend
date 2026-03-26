@@ -11,7 +11,8 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type PointerEvent } from 'react';
+import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -48,7 +49,7 @@ function resolveProfilePhotoUrl(url: string | null | undefined): string | null {
   return t;
 }
 
-function formatWalletAddressForDisplay(address: string, head = 10, tail = 10): string {
+export function formatWalletAddressForDisplay(address: string, head = 10, tail = 10): string {
   const t = address.trim();
   if (t.length <= head + tail + 3) return t;
   return `${t.slice(0, head)}…${t.slice(-tail)}`;
@@ -78,7 +79,15 @@ export function formatSocialCount(value: number | null | undefined): string {
   return `${str}M`;
 }
 
-function ProfileMenuWalletCopyRow({ address }: { address: string }) {
+export function ProfileMenuWalletCopyRow({
+  address,
+  addressHead = 10,
+  addressTail = 10,
+}: {
+  address: string;
+  addressHead?: number;
+  addressTail?: number;
+}) {
   const [copied, setCopied] = useState(false);
 
   const onCopy = useCallback(() => {
@@ -87,8 +96,15 @@ function ProfileMenuWalletCopyRow({ address }: { address: string }) {
     void navigator.clipboard.writeText(t).then(() => {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+      toast.success('Address copied to clipboard', {
+        description: formatWalletAddressForDisplay(t, addressHead, addressTail),
+      });
     });
-  }, [address]);
+  }, [address, addressHead, addressTail]);
+
+  const stopDropdownPointer = useCallback((e: PointerEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+  }, []);
 
   return (
     <div
@@ -100,31 +116,37 @@ function ProfileMenuWalletCopyRow({ address }: { address: string }) {
     >
       <button
         type="button"
-        onPointerDown={(e) => e.preventDefault()}
+        onPointerDown={stopDropdownPointer}
         onClick={onCopy}
         className={cn(
-          'flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
-          'text-[var(--muted-foreground)] transition-colors hover:text-[var(--primary)]',
-          'group-hover/wallet:text-[var(--muted-foreground)] dark:group-hover/wallet:text-[var(--muted-foreground)]',
+          'flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition-colors',
+          copied
+            ? 'text-green-500'
+            : 'text-[var(--muted-foreground)] hover:text-secondary-foreground group-hover/wallet:text-secondary-foreground',
           'disabled:cursor-not-allowed disabled:opacity-50'
         )}
         aria-label={copied ? 'Copied' : 'Copy wallet address'}
       >
         {copied ? (
-          <Check className="h-3 w-3 shrink-0 text-green-500" aria-hidden />
+          <Check className="h-2.5 w-2.5 shrink-0" aria-hidden />
         ) : (
-          <Copy className="h-3 w-3 shrink-0" aria-hidden />
+          <Copy className="h-2.5 w-2.5 shrink-0" aria-hidden />
         )}
       </button>
-      <span
+      <button
+        type="button"
+        onPointerDown={stopDropdownPointer}
+        onClick={onCopy}
+        title="Copy wallet address"
         className={cn(
-          'min-w-0 flex-1 truncate font-mono text-[11px] leading-snug tracking-tight text-[var(--muted-foreground)]',
-          'transition-colors duration-150 dark:text-[var(--muted-foreground)]',
-          'group-hover/wallet:text-[var(--muted-foreground)] group-hover/wallet:dark:text-[var(--muted-foreground)]'
+          'min-w-0 flex-1 cursor-pointer truncate rounded-sm px-0.5 py-0.5 text-left font-mono text-xs leading-none tracking-tight outline-none',
+          'text-[var(--muted-foreground)] transition-colors',
+          'hover:text-secondary-foreground group-hover/wallet:text-secondary-foreground',
+          'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-popover'
         )}
       >
-        {formatWalletAddressForDisplay(address)}
-      </span>
+        {formatWalletAddressForDisplay(address, addressHead, addressTail)}
+      </button>
     </div>
   );
 }
@@ -145,6 +167,14 @@ function mysocialEditProfileHref(profile: ProfilePortfolioOverviewProfile | null
   const u = profile?.username?.replace(/^@/, '').trim();
   if (u) return `${MYSOCIAL_ORIGIN}/@${u}/edit`;
   return `${MYSOCIAL_ORIGIN}/settings/profile`;
+}
+
+function mysocialWalletExplorerHref(address: string): string {
+  const a = address.trim();
+  if (!a) return `${MYSOCIAL_ORIGIN}/ecosystem/sofiswap`;
+  const url = new URL('/wallet', MYSOCIAL_ORIGIN);
+  url.searchParams.set('address', a);
+  return url.toString();
 }
 
 /** Matches how sofi logo is shown in {@link TradeTopNav} (`h-8 w-8`). */
@@ -397,9 +427,15 @@ export function TradeNavProfileMenu({
   signOut: () => void;
 }) {
   const photo = resolveProfilePhotoUrl(profile?.profilePhoto ?? null);
-  const displayName = profile?.displayName?.trim() || 'MySocial profile';
-  const username = profile?.username?.trim();
+  const hasProfile = profile != null;
+  const usernameClean = profile?.username?.replace(/^@/, '').trim() ?? '';
+  const profileHeadline = !hasProfile
+    ? 'anonymous'
+    : usernameClean
+      ? `@${usernameClean}`
+      : 'MySocial profile';
   const profileHref = mysocialProfileHref(profile ?? null);
+  const walletExplorerHref = mysocialWalletExplorerHref(walletAddress);
   const editHref = mysocialEditProfileHref(profile ?? null);
 
   const ringLabel = profileInitial(profile ?? null);
@@ -428,10 +464,10 @@ export function TradeNavProfileMenu({
       <DropdownMenuContent
         align="end"
         sideOffset={8}
-        className="w-[min(calc(100vw-2rem),19rem)] rounded-xl border-border/60 bg-popover p-0 shadow-lg"
+        className="w-[min(calc(100vw-2rem),19rem)] rounded-xl border border-trade-shell bg-popover/90 p-0 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-popover/78"
       >
-        <div className="space-y-0 border-b border-border/60">
-          <div className="flex items-start gap-1 px-3 pb-2 pt-2">
+        <div className="space-y-0 border-b border-trade-shell">
+          <div className="flex items-start gap-1 px-3 pb-2 pt-1.5">
             <Link
               href={profileHref}
               target="_blank"
@@ -455,51 +491,44 @@ export function TradeNavProfileMenu({
                 target="_blank"
                 rel="noopener noreferrer"
                 className={cn(
-                  'group/profile-head block rounded-md px-1.5 pb-1 pt-1.5 -mx-0.5 -mt-0.5 outline-none transition-colors',
-                  'dark:hover:bg-accent/35 dark:hover:text-primary',
+                  'group/profile-head block rounded-md px-1 py-0.5 -mx-0.5 -mt-px outline-none transition-colors',
+                  'text-primary hover:text-primary dark:hover:text-primary',
+                  'dark:hover:bg-accent/35',
                   'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-popover'
                 )}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-base font-semibold leading-tight text-primary">
-                    {displayName}
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="min-w-0 truncate text-sm leading-tight text-primary">
+                    {profileHeadline}
                   </span>
                   <ChevronRight
-                    className="h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-colors group-hover/profile-head:text-[var(--primary)]"
+                    className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]"
                     aria-hidden
                   />
                 </div>
-                {username ? (
-                  <span
-                    className={cn(
-                      'mt-0.5 block truncate text-sm text-muted-foreground transition-colors',
-                      'group-hover/profile-head:text-[var(--muted-foreground)] dark:group-hover/profile-head:text-[var(--muted-foreground)]'
-                    )}
-                  >
-                    @{username.replace(/^@/, '')}
-                  </span>
-                ) : null}
               </Link>
-              <div className="-mt-px pl-0.5">
-                <ProfileMenuWalletCopyRow address={walletAddress} />
+              <div className="-mt-px pl-px">
+                <ProfileMenuWalletCopyRow address={walletAddress} addressHead={10} addressTail={10} />
               </div>
+              {hasProfile ? (
+                <p className="mt-0.5 pl-px text-sm leading-tight">
+                  <span className="font-bold tabular-nums">{formatSocialCount(followers)}</span>
+                  <span className="font-normal text-[var(--muted-foreground)]"> followers</span>
+                  <span className="text-[var(--muted-foreground)] px-2" aria-hidden>
+                    {' '}
+                  </span>
+                  <span className="font-bold tabular-nums">{formatSocialCount(following)}</span>
+                  <span className="font-normal text-[var(--muted-foreground)]"> following</span>
+                </p>
+              ) : null}
             </div>
-          </div>
-          <div className="w-full px-3 pb-3 text-center">
-            <p className="text-sm leading-snug">
-              <span className="font-bold tabular-nums">{formatSocialCount(followers)}</span>
-              <span className="font-normal text-[var(--muted-foreground)]"> followers</span>
-              <span className="text-[var(--muted-foreground)] px-2"> </span>
-              <span className="font-bold tabular-nums">{formatSocialCount(following)}</span>
-              <span className="font-normal text-[var(--muted-foreground)]"> following</span>
-            </p>
           </div>
         </div>
 
         <div className="space-y-0.5 px-1 py-1">
           <DropdownMenuItem asChild>
             <Link
-              href={profileHref}
+              href={walletExplorerHref}
               target="_blank"
               rel="noopener noreferrer"
               className={profileMenuRowLinkClass}
@@ -539,7 +568,7 @@ export function TradeNavProfileMenu({
           </DropdownMenuItem>
         </div>
 
-        <DropdownMenuSeparator className="my-0 bg-border/60" />
+        <DropdownMenuSeparator className="my-0 bg-trade-shell-border opacity-70" />
 
         <div className="px-1 pb-1 pt-0">
           <DropdownMenuItem

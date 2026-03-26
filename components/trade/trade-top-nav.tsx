@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { TradeNavFundsBar } from '@/components/trade/trade-nav-funds-bar';
 import { TradeNavProfileMenu } from '@/components/trade/trade-nav-profile-menu';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SlidingSegmentTabs } from '@/components/ui/sliding-segment-tabs';
 import { useGraphqlProfileOverviewSWR } from '@/hooks/useGraphqlProfileOverviewSWR';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import type { ProfilePortfolioOverviewProfile } from '@/lib/graphql/profile-portfolio-overview';
@@ -18,16 +18,19 @@ import { cn } from '@/lib/utils';
 
 export type TradeNavSegment = 'orderbook' | 'social-proof-tokens';
 
-const segmentTriggerBase = cn(
-  'h-full min-w-0 rounded-[7px] font-semibold shadow-none transition-[color,background-color,box-shadow] duration-200',
-  'text-muted-foreground',
-  'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-  'data-[state=inactive]:bg-transparent data-[state=inactive]:hover:text-foreground/90',
-  'data-[state=active]:bg-background data-[state=active]:text-foreground',
-  'data-[state=active]:shadow-[0_1px_3px_rgba(0,0,0,0.12),0_1px_1px_rgba(0,0,0,0.04)]',
-  'dark:data-[state=active]:bg-zinc-800/95 dark:data-[state=active]:text-foreground',
-  'dark:data-[state=active]:shadow-[0_3px_10px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)]'
-);
+const tradeNavSegmentItems = [
+  {
+    value: 'orderbook',
+    label: 'Orderbook',
+    triggerClassName: 'px-2 py-0 text-[13px] leading-tight sm:px-2.5',
+  },
+  {
+    value: 'social-proof-tokens',
+    label: 'Social Proof Tokens',
+    triggerClassName:
+      'px-2 py-0 text-[12px] leading-snug sm:px-2.5 sm:text-[13px] sm:leading-tight',
+  },
+] as const;
 
 function TradeNavSegmentTabs({
   segment,
@@ -41,35 +44,18 @@ function TradeNavSegmentTabs({
   listClassName?: string;
 }) {
   return (
-    <Tabs value={segment} onValueChange={onSegmentChange} className={className}>
-      <TabsList
-        aria-label="Trading view"
-        className={cn(
-          'grid grid-cols-2 gap-0 rounded-[10px] border border-border/40 bg-muted/70 p-[3px] shadow-inner',
-          'dark:border-white/[0.08] dark:bg-muted/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
-          listClassName
-        )}
-      >
-        <TabsTrigger
-          value="orderbook"
-          className={cn(
-            segmentTriggerBase,
-            'px-2 py-0 text-[13px] leading-tight sm:px-2.5'
-          )}
-        >
-          Orderbook
-        </TabsTrigger>
-        <TabsTrigger
-          value="social-proof-tokens"
-          className={cn(
-            segmentTriggerBase,
-            'px-2 py-0 text-[12px] leading-snug sm:px-2.5 sm:text-[13px] sm:leading-tight'
-          )}
-        >
-          Social Proof Tokens
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
+    <SlidingSegmentTabs
+      value={segment}
+      onValueChange={onSegmentChange}
+      className={className}
+      listClassName={cn(
+        'grid grid-cols-2 gap-0 rounded-[10px] border border-trade-shell bg-muted/70 p-[3px] shadow-inner',
+        'dark:bg-muted/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
+        listClassName
+      )}
+      aria-label="Trading view"
+      items={tradeNavSegmentItems}
+    />
   );
 }
 
@@ -246,11 +232,11 @@ export function TradeTopNav({
   return (
     <header
       className={cn(
-        'sticky top-0 z-50 border-b border-border/60 bg-background/65 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55',
+        'sticky top-0 z-50 border-b border-trade-shell bg-background/65 backdrop-blur-xl supports-[backdrop-filter]:bg-background/55',
         className
       )}
     >
-      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+      <div className="w-full px-4 sm:px-6">
         {/* Mobile: brand + auth, then full-width segment bar */}
         <div className="flex flex-col sm:hidden">
           <div className="flex h-14 items-center justify-between gap-3">
@@ -259,7 +245,7 @@ export function TradeTopNav({
           </div>
           <div
             className={cn(
-              'border-t border-border/40 bg-background/50 py-2.5 backdrop-blur-xl',
+              'border-t border-trade-shell bg-background/50 py-2.5 backdrop-blur-xl',
               'supports-[backdrop-filter]:bg-background/45'
             )}
           >
