@@ -7,9 +7,16 @@ import { TradePlatformAccessGate } from '@/components/trade/trade-platform-acces
 import { TradeTopNav } from '@/components/trade/trade-top-nav';
 import { TradeWorkspaceLayout } from '@/components/trade/trade-workspace-layout';
 import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
+import { useTradeChartOhlcvEnabled } from '@/hooks/useTradeChartOhlcvEnabled';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
+import { useNetwork } from '@/lib/network-provider';
+import { getDefaultNetwork } from '@/lib/network-utils';
 import type { TradeNavSegment } from '@/lib/trade-nav-segment-storage';
-import { TRADE_POOL_SPOTLIGHT_ITEMS } from '@/lib/trade/pool-spotlight-items';
+import {
+  buildTradePoolSpotlightItems,
+  getDefaultTradePoolKey,
+  tradePoolKeysForNetwork,
+} from '@/lib/trade/pool-spotlight-items';
 import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -20,6 +27,7 @@ import {
   useLayoutEffect,
   useMemo,
   useState,
+  type RefCallback,
 } from 'react';
 
 const TradeCandlestickChart = dynamic(
@@ -38,7 +46,6 @@ const Spotlight = dynamic(
   { ssr: false }
 );
 
-const DEFAULT_POOL_NAME = 'MYSO_MYUSD';
 const DEFAULT_INTERVAL: OhlcvInterval = '1h';
 const DEFAULT_LIMIT = 200;
 
@@ -81,26 +88,34 @@ function TradeAuthMessage() {
 function TradeChartWorkspace({
   poolName,
   onOpenPoolSpotlight,
+  ohlcvEnabled,
+  chartContainerRef,
 }: {
   poolName: string;
   onOpenPoolSpotlight: () => void;
+  ohlcvEnabled: boolean;
+  chartContainerRef: RefCallback<HTMLDivElement>;
 }) {
   const { data, error, isLoading } = usePoolOhlcv({
     poolName,
     interval: DEFAULT_INTERVAL,
     limit: DEFAULT_LIMIT,
-    enabled: true,
+    enabled: ohlcvEnabled,
   });
 
   const chartStatus = useMemo(() => {
+    if (!ohlcvEnabled) return 'empty' as const;
     if (isLoading) return 'loading' as const;
     if (error) return 'error' as const;
     if (!data?.length) return 'empty' as const;
     return null;
-  }, [isLoading, error, data]);
+  }, [ohlcvEnabled, isLoading, error, data]);
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden">
+    <div
+      ref={chartContainerRef}
+      className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
+    >
       <TradeChartPoolHeader
         className="shrink-0"
         poolName={poolName}
@@ -118,10 +133,30 @@ function TradeChartWorkspace({
 }
 
 export default function TradePage() {
-  const [poolName, setPoolName] = useState(DEFAULT_POOL_NAME);
+  const { currentNetwork } = useNetwork();
+  const [poolName, setPoolName] = useState(() =>
+    getDefaultTradePoolKey(getDefaultNetwork())
+  );
   const [poolSpotlightOpen, setPoolSpotlightOpen] = useState(false);
   const [tradeNavSegment, setTradeNavSegment] = useState<TradeNavSegment>('orderbook');
   const showOrderbookWorkspace = tradeNavSegment === 'orderbook';
+  const { enabled: ohlcvEnabled, setChartContainerRef } = useTradeChartOhlcvEnabled(
+    showOrderbookWorkspace
+  );
+
+  const spotlightItems = useMemo(
+    () => buildTradePoolSpotlightItems(currentNetwork),
+    [currentNetwork]
+  );
+
+  useEffect(() => {
+    const keys = tradePoolKeysForNetwork(currentNetwork);
+    const fallback = getDefaultTradePoolKey(currentNetwork);
+    const valid = new Set(keys.length > 0 ? keys : [fallback]);
+    if (!valid.has(poolName)) {
+      setPoolName(keys[0] ?? fallback);
+    }
+  }, [currentNetwork, poolName]);
 
   const onPoolSpotlightSelect = useCallback((item: SpotlightItem) => {
     setPoolName(item.id);
@@ -185,6 +220,8 @@ export default function TradePage() {
                 <TradeChartWorkspace
                   poolName={poolName}
                   onOpenPoolSpotlight={() => setPoolSpotlightOpen(true)}
+                  ohlcvEnabled={ohlcvEnabled}
+                  chartContainerRef={setChartContainerRef}
                 />
               }
               poolName={poolName}
@@ -192,7 +229,7 @@ export default function TradePage() {
           </div>
 
           <Spotlight
-            items={TRADE_POOL_SPOTLIGHT_ITEMS}
+            items={spotlightItems}
             onSelect={onPoolSpotlightSelect}
             isOpen={poolSpotlightOpen}
             onClose={() => setPoolSpotlightOpen(false)}

@@ -52,7 +52,7 @@ function ManageFundsMenuRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold leading-tight text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{subtitle}</p>
+        <p className="mt-0.5 text-xs leading-snug text-[var(--muted-foreground)]">{subtitle}</p>
       </div>
     </DropdownMenuItem>
   );
@@ -64,12 +64,17 @@ export function TradeNavFundsBar() {
       <Button
         type="button"
         size="sm"
+        aria-label="Deposit"
         className={cn(
-          'h-9 shrink-0 gap-3 rounded-xl px-3.5 font-semibold shadow-sm',
+          'h-9 shrink-0 gap-2 rounded-xl px-3.5 font-semibold shadow-sm md:gap-3',
           'dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-zinc-300'
         )}
       >
-        <ArrowDownToLine className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
+        <ArrowDownToLine
+          className="hidden h-4 w-4 shrink-0 md:block"
+          strokeWidth={2}
+          aria-hidden
+        />
         Deposit
       </Button>
 
@@ -79,13 +84,14 @@ export function TradeNavFundsBar() {
             type="button"
             variant="secondary"
             size="sm"
+            aria-label="Manage funds"
             className={cn(
-              'h-9 shrink-0 gap-3 px-3.5 whitespace-nowrap',
+              'h-9 shrink-0 gap-2 px-2.5 sm:gap-3 sm:px-3 lg:gap-3 lg:px-3.5',
               tradeNavWalletSecondaryClass
             )}
           >
             <Wallet className="h-4 w-4 shrink-0 text-foreground/90" strokeWidth={2} aria-hidden />
-            <span>Manage funds</span>
+            <span className="hidden whitespace-nowrap lg:inline">Manage funds</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -102,7 +108,7 @@ export function TradeNavFundsBar() {
               'bg-muted/40 dark:bg-zinc-800/75'
             )}
           >
-            <p className="text-xs font-medium text-muted-foreground">Total balance</p>
+            <p className="text-xs font-medium text-[var(--muted-foreground)]">Total balance</p>
             <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <span className="text-2xl font-bold tabular-nums tracking-tight text-foreground">
                 $83.14
@@ -165,7 +171,7 @@ export function TradeNavFundsBar() {
             'supports-[backdrop-filter]:bg-popover/78'
           )}
         >
-          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
+          <div className="px-4 py-10 text-center text-sm text-[var(--muted-foreground)]">
             No notifications yet
           </div>
         </DropdownMenuContent>

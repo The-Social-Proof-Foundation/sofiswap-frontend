@@ -2,14 +2,16 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { Book, Coins } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { TradeNavFundsBar } from '@/components/trade/trade-nav-funds-bar';
 import { TradeNavProfileMenu } from '@/components/trade/trade-nav-profile-menu';
 import { Button } from '@/components/ui/button';
-import { SlidingSegmentTabs } from '@/components/ui/sliding-segment-tabs';
+import {
+  SlidingSegmentTabs,
+  type SlidingSegmentItem,
+} from '@/components/ui/sliding-segment-tabs';
 import { useGraphqlProfileOverviewSWR } from '@/hooks/useGraphqlProfileOverviewSWR';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import type { ProfilePortfolioOverviewProfile } from '@/lib/graphql/profile-portfolio-overview';
@@ -25,33 +27,28 @@ import { cn } from '@/lib/utils';
 
 export type { TradeNavSegment };
 
-const tradeNavSegmentItems = [
-  {
-    value: 'orderbook',
-    label: 'Orderbook',
-    triggerClassName: 'px-2 py-0 text-[13px] leading-tight sm:px-2.5',
-  },
-  {
-    value: 'social-proof-tokens',
-    label: 'Social Proof Tokens',
-    triggerClassName:
-      'px-2 py-0 text-[12px] leading-snug sm:px-2.5 sm:text-[13px] sm:leading-tight',
-  },
-] as const;
+/** Matches order book rail / buy–sell segment triggers; active color comes from sliding-segment-tabs. */
+const tradeNavSegmentTriggerBase = 'px-2 py-0 text-[13px] leading-tight';
 
-function TradeNavSegmentLeadingIcons({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(
-        'flex shrink-0 items-center gap-1 text-muted-foreground',
-        className
-      )}
-      aria-hidden
-    >
-      <Book className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-      <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
-    </span>
-  );
+function tradeNavSegmentItems(): SlidingSegmentItem[] {
+  return [
+    {
+      value: 'orderbook',
+      label: (
+        <span className="block min-w-0 max-w-full truncate text-inherit">Orderbook</span>
+      ),
+      triggerClassName: cn(tradeNavSegmentTriggerBase),
+    },
+    {
+      value: 'social-proof-tokens',
+      label: (
+        <span className="block min-w-0 max-w-full truncate text-inherit">
+          Social Proof Tokens
+        </span>
+      ),
+      triggerClassName: cn(tradeNavSegmentTriggerBase),
+    },
+  ];
 }
 
 function TradeNavSegmentTabs({
@@ -65,6 +62,8 @@ function TradeNavSegmentTabs({
   className?: string;
   listClassName?: string;
 }) {
+  const items = useMemo(() => tradeNavSegmentItems(), []);
+
   return (
     <SlidingSegmentTabs
       value={segment}
@@ -76,7 +75,7 @@ function TradeNavSegmentTabs({
         listClassName
       )}
       aria-label="Trading view"
-      items={tradeNavSegmentItems}
+      items={items}
     />
   );
 }
@@ -145,7 +144,7 @@ function TradeNavAuthActions({
   return (
     <div className="flex shrink-0 items-center gap-2 sm:gap-3">
       {!isConfigured ? (
-        <span className="hidden text-xs text-muted-foreground sm:inline">
+        <span className="hidden text-xs text-[var(--muted-foreground)] sm:inline">
           Set env to enable login
         </span>
       ) : null}
@@ -298,19 +297,16 @@ export function TradeTopNav({
           </div>
           <div
             className={cn(
-              'border-t border-trade-shell bg-background/50 py-2.5 backdrop-blur-xl',
+              'border-t border-trade-shell bg-background/50 py-2 backdrop-blur-xl',
               'supports-[backdrop-filter]:bg-background/45'
             )}
           >
-            <div className="flex w-full items-center gap-2">
-              <TradeNavSegmentLeadingIcons />
-              <TradeNavSegmentTabs
-                segment={segment}
-                onSegmentChange={setSegment}
-                className="min-w-0 flex-1"
-                listClassName="h-10 w-full max-w-none"
-              />
-            </div>
+            <TradeNavSegmentTabs
+              segment={segment}
+              onSegmentChange={setSegment}
+              className="w-full min-w-0"
+              listClassName="h-9 w-full max-w-none"
+            />
           </div>
         </div>
 
@@ -318,12 +314,11 @@ export function TradeTopNav({
         <div className="hidden h-14 items-center justify-between gap-4 sm:flex">
           <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3 lg:gap-4">
             <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
-            <TradeNavSegmentLeadingIcons />
             <TradeNavSegmentTabs
               segment={segment}
               onSegmentChange={setSegment}
               className="min-w-0 flex-initial md:px-2 lg:px-4 xl:px-6 2xl:px-8"
-              listClassName="h-9 w-full max-w-[min(100%,18.5rem)] sm:max-w-[20.5rem]"
+              listClassName="h-9 w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]"
             />
           </div>
           <TradeNavAuthActions {...authProps} />

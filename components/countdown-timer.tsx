@@ -48,7 +48,7 @@ export function CountdownTimer({ targetDate }: { targetDate: Date }) {
             <div className="font-display text-xl md:text-2xl font-semibold text-foreground">
               {unit.value.toString().padStart(2, "0")}
             </div>
-            <div className="text-xs md:text-xs text-muted-foreground">
+            <div className="text-xs md:text-xs text-[var(--muted-foreground)]">
               {unit.label}
             </div>
           </div>

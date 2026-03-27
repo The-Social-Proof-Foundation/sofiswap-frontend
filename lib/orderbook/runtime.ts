@@ -62,7 +62,7 @@ export function pickPrimaryBalanceManagerId(ids: string[]): string | null {
 }
 
 /** Coin keys to sample for dev console logging (both networks define these in the SDK). */
-const BALANCE_LOG_COIN_KEYS = ['MYSO', 'DEEP'] as const;
+const BALANCE_LOG_COIN_KEYS = ['MYSO', 'MYUSD'] as const;
 
 /**
  * Dev-friendly log of the primary balance manager object id and sampled on-chain balances.

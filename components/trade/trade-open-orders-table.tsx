@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils';
 import type { OpenOrderRow } from '@/lib/trade/activity-tables';
 
-const th = 'text-left text-[10px] font-medium text-muted-foreground whitespace-nowrap';
+const th = 'text-left text-[10px] font-medium text-[var(--muted-foreground)] whitespace-nowrap';
 const td = 'py-2 text-xs tabular-nums text-foreground';
 
 export function TradeOpenOrdersTable({
@@ -45,7 +45,7 @@ export function TradeOpenOrdersTable({
               <td className={cn(td, 'pr-3 text-right')}>{row.price}</td>
               <td className={cn(td, 'pr-3 text-right')}>{row.quantity}</td>
               <td className={cn(td, 'pr-3 text-right')}>{row.filled}</td>
-              <td className={cn(td, 'text-right text-muted-foreground')}>—</td>
+              <td className={cn(td, 'text-right text-[var(--muted-foreground)]')}>—</td>
             </tr>
           ))}
         </tbody>

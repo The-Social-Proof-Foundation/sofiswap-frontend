@@ -193,7 +193,7 @@ export function TradeMarketTicker({ className }: { className?: string }) {
             href="https://t.me/sofiswap_chat"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center justify-center"
+            className="inline-flex items-center justify-center gap-1.5"
           >
             <svg
               viewBox="0 0 24 24"

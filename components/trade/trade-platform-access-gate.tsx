@@ -536,7 +536,7 @@ export function TradePlatformAccessGate() {
             type="button"
             variant="ghost"
             size="icon"
-            className="absolute right-4 top-4 z-10 text-muted-foreground hover:bg-transparent hover:text-foreground"
+            className="absolute right-4 top-4 z-10 text-[var(--muted-foreground)] hover:bg-transparent hover:text-foreground"
             aria-label="Close"
             disabled={repairPending}
             onClick={onRepairDismiss}
@@ -551,7 +551,7 @@ export function TradePlatformAccessGate() {
             </DialogDescription>
           </DialogHeader>
           {!keypair ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-[var(--muted-foreground)]">
               Signing is unavailable for this session. Use full MySocial sign-in (not wallet-only) so your
               keys can sign this transaction.
             </p>
@@ -588,7 +588,7 @@ export function TradePlatformAccessGate() {
           type="button"
           variant="ghost"
           size="icon"
-          className="absolute right-4 top-4 z-10 text-muted-foreground hover:bg-transparent hover:text-foreground"
+          className="absolute right-4 top-4 z-10 text-[var(--muted-foreground)] hover:bg-transparent hover:text-foreground"
           aria-label="Sign out and return home"
           disabled={joinPending}
           onClick={() => void onJoinDismissSignOut()}
@@ -604,7 +604,7 @@ export function TradePlatformAccessGate() {
           </DialogDescription>
         </DialogHeader>
         {!keypair ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-[var(--muted-foreground)]">
             Signing is unavailable for this session. Use full MySocial sign-in (not wallet-only) so your
             keys can sign the join transaction.
           </p>

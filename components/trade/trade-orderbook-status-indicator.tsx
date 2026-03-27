@@ -68,8 +68,12 @@ export function TradeOrderbookStatusIndicator() {
 
     const url = statusUrl;
     let cancelled = false;
+    let intervalId: number | null = null;
 
     async function load() {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
       try {
         const next = await fetchOrderbookStatus(url);
         if (cancelled) return;
@@ -82,11 +86,36 @@ export function TradeOrderbookStatusIndicator() {
       }
     }
 
-    load();
-    const id = window.setInterval(load, POLL_MS);
+    function armInterval() {
+      if (intervalId != null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      void load();
+      intervalId = window.setInterval(() => {
+        void load();
+      }, POLL_MS);
+    }
+
+    function onVisibilityChange() {
+      if (typeof document === 'undefined') return;
+      if (document.visibilityState === 'visible') {
+        armInterval();
+      } else if (intervalId != null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    }
+
+    armInterval();
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      if (intervalId != null) window.clearInterval(intervalId);
     };
   }, [statusUrl]);
 

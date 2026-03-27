@@ -111,6 +111,33 @@ export function getFullnodeJsonRpcUrl(network: NetworkType): string {
   return getNetworkEndpoints(network).fullnodeJsonRpcUrl;
 }
 
+/** gRPC-web base URL for `MySoGrpcClient` from `@socialproof/myso/grpc` (HTTPS :443 on hosted networks). */
+const DEFAULT_MAINNET_GRPC = 'http://fullnode.mainnet.mysocial.network:9000';
+const DEFAULT_TESTNET_GRPC = 'http://fullnode.testnet.mysocial.network:9000';
+const DEFAULT_LOCALNET_GRPC = 'http://127.0.0.1:9000';
+
+/**
+ * Resolves MySo gRPC-web endpoint for simulations / orderbook reads.
+ * Override per tier with `NEXT_PUBLIC_MYSO_GRPC_*_URL` when needed.
+ */
+export function getMySoGrpcBaseUrl(network: NetworkType): string {
+  const trimmed = (v: string | undefined) =>
+    typeof v === 'string' ? v.trim().replace(/\/$/, '') : '';
+
+  const override =
+    network === 'mainnet'
+      ? trimmed(process.env.NEXT_PUBLIC_MYSO_GRPC_MAINNET_URL)
+      : network === 'testnet'
+        ? trimmed(process.env.NEXT_PUBLIC_MYSO_GRPC_TESTNET_URL)
+        : trimmed(process.env.NEXT_PUBLIC_MYSO_GRPC_LOCALNET_URL);
+
+  if (override) return override;
+
+  if (network === 'mainnet') return DEFAULT_MAINNET_GRPC;
+  if (network === 'testnet') return DEFAULT_TESTNET_GRPC;
+  return DEFAULT_LOCALNET_GRPC;
+}
+
 /**
  * Selected network in the browser from the `selectedNetwork` cookie.
  */

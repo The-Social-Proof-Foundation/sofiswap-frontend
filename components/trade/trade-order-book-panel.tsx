@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  TradePanelCenteredState,
+  TradePanelCenteredStateFrame,
+} from '@/components/trade/trade-panel-centered-state';
 import { cn } from '@/lib/utils';
 import {
   formatChangePercent,
@@ -85,13 +89,31 @@ export function TradeOrderBookPanel({
 
   const busy = Boolean(isLoading);
 
+  if (error) {
+    return (
+      <div
+        className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', className)}
+        aria-busy={busy}
+        aria-label="Order book"
+      >
+        <TradePanelCenteredStateFrame>
+          <TradePanelCenteredState
+            headline="Unable to load the order book"
+            message={error}
+            headlineClassName="text-primary"
+          />
+        </TradePanelCenteredStateFrame>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', className)}
       aria-busy={busy}
       aria-label="Order book"
     >
-      <div className={cn(rowClass, 'shrink-0 text-muted-foreground')} role="row">
+      <div className={cn(rowClass, 'shrink-0 text-[var(--muted-foreground)]')} role="row">
         <span role="columnheader" className="text-left font-sans text-[10px] font-medium">
           Price
         </span>
@@ -103,51 +125,45 @@ export function TradeOrderBookPanel({
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-        {error ? (
-          <p className="px-2 py-3 text-center text-[11px] text-destructive" role="status">
-            {error}
-          </p>
-        ) : (
-          <>
-            <div role="rowgroup" aria-label="Ask orders">
-              {asks.map((row, i) => (
-                <div key={`ask-${row.price}-${i}`} className={rowClass} role="row">
-                  <span className="text-left text-rose-500 dark:text-rose-400">
-                    {formatOrderPrice(row.price)}
-                  </span>
-                  <span className="text-right text-foreground/85">{formatCompactDecimal(row.size)}</span>
-                  <span className="text-right text-foreground/85">
-                    {formatCompactDecimal(askTotals[i] ?? 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div
-              className="sticky top-0 z-[1] flex shrink-0 items-baseline justify-center gap-2 border-y border-trade-shell bg-background/95 px-2 py-1.5 backdrop-blur-sm"
-              role="status"
-            >
-              <span className="text-sm font-semibold tabular-nums text-foreground">
-                {mid != null && Number.isFinite(mid) ? formatOrderPrice(mid) : '—'}
-              </span>
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {formatChangePercent(changeFraction)}
-              </span>
-            </div>
-            <div role="rowgroup" aria-label="Bid orders">
-              {bids.map((row, i) => (
-                <div key={`bid-${row.price}-${i}`} className={rowClass} role="row">
-                  <span className="text-left text-emerald-600 dark:text-emerald-400">
-                    {formatOrderPrice(row.price)}
-                  </span>
-                  <span className="text-right text-foreground/85">{formatCompactDecimal(row.size)}</span>
-                  <span className="text-right text-foreground/85">
-                    {formatCompactDecimal(bidTotals[i] ?? 0)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+        <>
+          <div role="rowgroup" aria-label="Ask orders">
+            {asks.map((row, i) => (
+              <div key={`ask-${row.price}-${i}`} className={rowClass} role="row">
+                <span className="text-left text-rose-500 dark:text-rose-400">
+                  {formatOrderPrice(row.price)}
+                </span>
+                <span className="text-right text-foreground/85">{formatCompactDecimal(row.size)}</span>
+                <span className="text-right text-foreground/85">
+                  {formatCompactDecimal(askTotals[i] ?? 0)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div
+            className="sticky top-0 z-[1] flex shrink-0 items-baseline justify-center gap-2 border-y border-trade-shell bg-background/95 px-2 py-1.5 backdrop-blur-sm"
+            role="status"
+          >
+            <span className="text-sm font-semibold tabular-nums text-foreground">
+              {mid != null && Number.isFinite(mid) ? formatOrderPrice(mid) : '—'}
+            </span>
+            <span className="text-[11px] tabular-nums text-[var(--muted-foreground)]">
+              {formatChangePercent(changeFraction)}
+            </span>
+          </div>
+          <div role="rowgroup" aria-label="Bid orders">
+            {bids.map((row, i) => (
+              <div key={`bid-${row.price}-${i}`} className={rowClass} role="row">
+                <span className="text-left text-emerald-600 dark:text-emerald-400">
+                  {formatOrderPrice(row.price)}
+                </span>
+                <span className="text-right text-foreground/85">{formatCompactDecimal(row.size)}</span>
+                <span className="text-right text-foreground/85">
+                  {formatCompactDecimal(bidTotals[i] ?? 0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
       </div>
     </div>
   );

@@ -6,6 +6,10 @@ import {
   ResizablePanelGroup,
 } from '@/components/ui/resizable';
 import { TradeActivityEmptyState } from '@/components/trade/trade-activity-empty-state';
+import {
+  TradePanelCenteredState,
+  TradePanelCenteredStateFrame,
+} from '@/components/trade/trade-panel-centered-state';
 import { TradeHistoryPanel } from '@/components/trade/trade-history-panel';
 import { TradeOpenOrdersTable } from '@/components/trade/trade-open-orders-table';
 import { TradeOrderBookPanel } from '@/components/trade/trade-order-book-panel';
@@ -13,10 +17,15 @@ import { TradeOrderPanel } from '@/components/trade/trade-order-panel';
 import { TradeUserTradeHistoryTable } from '@/components/trade/trade-user-trade-history-table';
 import { SlidingSegmentTabs } from '@/components/ui/sliding-segment-tabs';
 import { Tabs, type UnderlineTabItem } from '@/components/ui/tabs';
+import { useAccountOpenOrders } from '@/hooks/useAccountOpenOrders';
+import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { usePoolOrderBook } from '@/hooks/usePoolOrderBook';
 import { usePoolTrades } from '@/hooks/usePoolTrades';
-import { useMySocialAuth } from '@/hooks/useMySocialAuth';
-import type { OpenOrderRow, UserTradeHistoryRow } from '@/lib/trade/activity-tables';
+import { useTradingSetupStatus } from '@/hooks/useTradingSetupStatus';
+import { orderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import { useNetwork } from '@/lib/network-provider';
+import { poolTickerForKey } from '@/lib/trade/trade-pool-catalog';
+import type { UserTradeHistoryRow } from '@/lib/trade/activity-tables';
 import { cn } from '@/lib/utils';
 import { ArrowRightToLine, Menu } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -43,16 +52,42 @@ const railSegmentListClass = cn(
 
 function OpenTradesSection({
   className,
-  poolName: _poolName,
+  poolName,
 }: {
   className?: string;
-  /** Reserved for future per-pool order/history fetching. */
   poolName: string;
 }) {
-  const { isAuthenticated, isLoading: authLoading, signIn } = useMySocialAuth();
+  const { currentNetwork } = useNetwork();
+  const obNet = orderbookRuntimeNetwork(currentNetwork);
+  const { isAuthenticated, isLoading: authLoading, displayAddress, signIn } =
+    useMySocialAuth();
   const [segment, setSegment] = useState<string>('open-orders');
 
-  const openOrderRows = useMemo<OpenOrderRow[]>(() => [], []);
+  const openOrdersTabActive = segment === 'open-orders';
+  const tradingForOpenOrders = useTradingSetupStatus({
+    isAuthenticated,
+    displayAddress,
+    authLoading,
+    network: currentNetwork,
+    enabled: openOrdersTabActive,
+  });
+
+  const {
+    rows: openOrderRows,
+    error: openOrdersError,
+    isLoading: openOrdersLoading,
+  } = useAccountOpenOrders({
+    poolName,
+    obNet,
+    primaryBalanceManagerId: tradingForOpenOrders.primaryBalanceManagerId,
+    enabled:
+      openOrdersTabActive &&
+      isAuthenticated &&
+      !authLoading &&
+      Boolean(obNet) &&
+      Boolean(tradingForOpenOrders.primaryBalanceManagerId),
+  });
+
   const tradeHistoryRows = useMemo<UserTradeHistoryRow[]>(() => [], []);
 
   const tradeHistoryCount = tradeHistoryRows.length;
@@ -60,7 +95,7 @@ function OpenTradesSection({
   const tabs = useMemo((): UnderlineTabItem[] => {
     const tradeHistorySuffix =
       tradeHistoryCount > 0 ? (
-        <span className="text-[10px] font-normal tabular-nums text-muted-foreground">
+        <span className="text-[10px] font-normal tabular-nums text-[var(--muted-foreground)]">
           ({tradeHistoryCount})
         </span>
       ) : undefined;
@@ -116,7 +151,39 @@ function OpenTradesSection({
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 py-2 md:px-3">
         {segment === 'open-orders' ? (
-          openOrderRows.length > 0 ? (
+          openOrdersTabActive &&
+          isAuthenticated &&
+          !authLoading &&
+          obNet &&
+          tradingForOpenOrders.isLoading ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState
+                variant="muted"
+                headline="Loading wallet setup…"
+                message=""
+              />
+            </TradePanelCenteredStateFrame>
+          ) : openOrdersTabActive && isAuthenticated && !authLoading && obNet && tradingForOpenOrders.error ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState
+                headline="Trading setup unavailable"
+                message={tradingForOpenOrders.error}
+                headlineClassName="text-primary"
+              />
+            </TradePanelCenteredStateFrame>
+          ) : openOrdersLoading ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState
+                variant="muted"
+                headline="Loading open orders…"
+                message=""
+              />
+            </TradePanelCenteredStateFrame>
+          ) : openOrdersError ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState headline="Unable to load open orders" message={openOrdersError} />
+            </TradePanelCenteredStateFrame>
+          ) : openOrderRows.length > 0 ? (
             <TradeOpenOrdersTable rows={openOrderRows} />
           ) : (
             renderEmptyState()
@@ -160,27 +227,28 @@ function OrderBookSection({
   onClosePanel?: () => void;
   poolName: string;
 }) {
+  const { currentNetwork } = useNetwork();
   const [segment, setSegment] = useState<OrderBookRailSegment>('orderbook');
 
   const { baseSymbol, quoteSymbol } = useMemo(() => {
-    const parts = poolName.split('_').filter(Boolean);
-    return {
-      baseSymbol: parts[0] ?? poolName,
-      quoteSymbol: parts[1] ?? '—',
-    };
-  }, [poolName]);
+    const { base, quote } = poolTickerForKey(currentNetwork, poolName);
+    return { baseSymbol: base, quoteSymbol: quote };
+  }, [currentNetwork, poolName]);
+
+  const showOrderbookLadder = segment === 'orderbook';
+  const showTradeTape = segment === 'trade-history';
 
   const {
     data: orderBook,
     error: orderBookError,
     isLoading: orderBookLoading,
-  } = usePoolOrderBook({ poolName, pollIntervalMs: 12_000 });
+  } = usePoolOrderBook({ poolName, enabled: showOrderbookLadder });
 
   const {
     data: tradesRaw,
     error: tradesError,
     isLoading: tradesLoading,
-  } = usePoolTrades({ poolName, pollIntervalMs: 12_000 });
+  } = usePoolTrades({ poolName, enabled: showTradeTape });
 
   const trades = useMemo(() => [...tradesRaw].reverse(), [tradesRaw]);
 
@@ -199,7 +267,7 @@ function OrderBookSection({
             onClick={onClosePanel}
             className={cn(
               'inline-flex size-6 shrink-0 items-center justify-center rounded-md p-0',
-              'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+              'text-[var(--muted-foreground)] hover:bg-muted/80 hover:text-foreground',
               'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
             )}
             aria-label="Leave order book and history panel"
@@ -249,7 +317,7 @@ const swapSideSegmentItems = [
     label: 'Buy',
     triggerClassName: cn(
       'px-2 py-0 text-[13px] leading-tight',
-      'data-[state=active]:text-emerald-600 dark:data-[state=active]:text-emerald-400'
+      'data-[state=active]:text-[var(--primary)] dark:data-[state=active]:text-[var(--primary)]'
     ),
   },
   {
@@ -257,7 +325,7 @@ const swapSideSegmentItems = [
     label: 'Sell',
     triggerClassName: cn(
       'px-2 py-0 text-[13px] leading-tight',
-      'data-[state=active]:text-rose-600 dark:data-[state=active]:text-rose-400'
+      'data-[state=active]:text-[var(--destructive)] dark:data-[state=active]:text-[var(--destructive)]'
     ),
   },
 ] as const;
@@ -297,7 +365,7 @@ function SwappingInputsSection({
               onClick={onToggleOrderBook}
               className={cn(
                 'inline-flex size-6 shrink-0 items-center justify-center rounded-md p-0',
-                'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+                'text-[var(--muted-foreground)] hover:bg-muted/80 hover:text-foreground',
                 'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
               )}
               aria-label="Show order book and history panel"

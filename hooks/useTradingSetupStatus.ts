@@ -21,6 +21,8 @@ export interface UseTradingSetupStatusArgs {
   displayAddress: string | null;
   authLoading: boolean;
   network: NetworkType;
+  /** When false, skips registry fetch (e.g. inactive trade tabs). */
+  enabled?: boolean;
 }
 
 export interface TradingSetupStatus {
@@ -42,6 +44,7 @@ export function useTradingSetupStatus({
   displayAddress,
   authLoading,
   network,
+  enabled = true,
 }: UseTradingSetupStatusArgs): TradingSetupStatus {
   const [balanceManagerIds, setBalanceManagerIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +60,12 @@ export function useTradingSetupStatus({
 
   const refresh = useCallback(
     async (opts?: { force?: boolean }) => {
+      if (!enabled) {
+        setBalanceManagerIds([]);
+        setError(null);
+        setIsLoading(false);
+        return;
+      }
       if (!displayAddress || !isAuthenticated || authLoading) {
         setBalanceManagerIds([]);
         setError(null);
@@ -103,7 +112,7 @@ export function useTradingSetupStatus({
         inFlight.current = false;
       }
     },
-    [displayAddress, isAuthenticated, authLoading, network, orderbookSkipped]
+    [displayAddress, isAuthenticated, authLoading, network, orderbookSkipped, enabled]
   );
 
   useEffect(() => {
@@ -113,7 +122,13 @@ export function useTradingSetupStatus({
   const primaryBalanceManagerId = pickPrimaryBalanceManagerId(balanceManagerIds);
 
   useEffect(() => {
-    if (orderbookSkipped || !displayAddress || !primaryBalanceManagerId || error) {
+    if (
+      !enabled ||
+      orderbookSkipped ||
+      !displayAddress ||
+      !primaryBalanceManagerId ||
+      error
+    ) {
       return;
     }
     const net = obNet as OrderbookRuntimeNetwork;
@@ -148,6 +163,7 @@ export function useTradingSetupStatus({
     error,
     network,
     obNet,
+    enabled,
     orderbookSkipped,
     primaryBalanceManagerId,
   ]);

@@ -1,19 +1,10 @@
 'use client';
 
+import { useAdaptiveTradePollMs } from '@/hooks/useAdaptiveTradePollMs';
 import { readOrderbookIndexerBaseUrl } from '@/lib/orderbook-indexer/ohlcv';
 import { fetchPoolTrades } from '@/lib/orderbook-indexer/trades';
-import { mockTradeHistory } from '@/lib/trade/mock-orderbook-data';
 import type { TradePrint } from '@/lib/trade/orderbook-types';
 import { useCallback, useEffect, useState } from 'react';
-
-function useMockTradesData(): boolean {
-  const base = readOrderbookIndexerBaseUrl();
-  if (!base) return true;
-  if (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_TRADE_MOCK_DATA === 'true') {
-    return true;
-  }
-  return false;
-}
 
 export type UsePoolTradesArgs = {
   poolName: string;
@@ -24,8 +15,7 @@ export type UsePoolTradesArgs = {
 
 export function usePoolTrades({
   poolName,
-  tradeRows = 48,
-  pollIntervalMs,
+  pollIntervalMs: pollIntervalMsProp,
   enabled = true,
 }: UsePoolTradesArgs): {
   data: TradePrint[];
@@ -33,6 +23,8 @@ export function usePoolTrades({
   isLoading: boolean;
   refresh: () => void;
 } {
+  const adaptiveMs = useAdaptiveTradePollMs(3000);
+  const pollIntervalMs = pollIntervalMsProp ?? adaptiveMs;
   const [data, setData] = useState<TradePrint[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,20 +42,19 @@ export function usePoolTrades({
       return;
     }
 
-    const mock = useMockTradesData();
+    const indexerBase = readOrderbookIndexerBaseUrl();
+    if (!indexerBase) {
+      setData([]);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+
     const ac = new AbortController();
     setIsLoading(true);
     setError(null);
 
     const run = () => {
-      if (mock) {
-        if (ac.signal.aborted) return;
-        setIsLoading(false);
-        setData(mockTradeHistory(poolName.trim(), tradeRows));
-        setError(null);
-        return;
-      }
-
       void fetchPoolTrades({ poolName: poolName.trim(), signal: ac.signal })
         .then((res) => {
           if (ac.signal.aborted) return;
@@ -86,7 +77,7 @@ export function usePoolTrades({
 
     run();
 
-    const useInterval = !mock && pollIntervalMs != null && pollIntervalMs > 0;
+    const useInterval = pollIntervalMs != null && pollIntervalMs > 0;
     const interval = useInterval
       ? window.setInterval(() => {
           void fetchPoolTrades({ poolName: poolName.trim(), signal: ac.signal })
@@ -112,7 +103,7 @@ export function usePoolTrades({
       ac.abort();
       if (interval != null) window.clearInterval(interval);
     };
-  }, [enabled, poolName, tradeRows, pollIntervalMs, refreshNonce]);
+  }, [enabled, poolName, pollIntervalMs, refreshNonce]);
 
   return { data, error, isLoading, refresh };
 }

@@ -105,7 +105,7 @@ export function TradeCandlestickChart({
 
   const overlay =
     status === 'loading' ? (
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/50 text-sm text-muted-foreground">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/50 text-sm text-[var(--muted-foreground)]">
         Loading chart…
       </div>
     ) : status === 'error' ? (
@@ -113,7 +113,7 @@ export function TradeCandlestickChart({
         {errorMessage ?? 'Could not load candles.'}
       </div>
     ) : status === 'empty' ? (
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/50 text-sm text-muted-foreground">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/50 text-sm text-[var(--muted-foreground)]">
         No candle data for this range.
       </div>
     ) : null;

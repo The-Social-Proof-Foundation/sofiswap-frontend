@@ -6,6 +6,8 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { useNetwork } from '@/lib/network-provider';
+import { poolTickerForKey } from '@/lib/trade/trade-pool-catalog';
 import { cn } from '@/lib/utils';
 import { TextMorph } from 'torph/react';
 import { useCallback, useId, useMemo, useState } from 'react';
@@ -17,14 +19,6 @@ const MOCK_PRICE_QUOTE_PER_BASE = 1.25;
 /** Mock balances so % shortcuts are usable before wallet/indexer wiring. */
 const AVAILABLE_QUOTE_MOCK = 10_000;
 const AVAILABLE_BASE_MOCK = 50_000;
-
-function parsePoolSymbols(poolName: string) {
-  const parts = poolName.split('_').filter(Boolean);
-  return {
-    baseSymbol: parts[0] ?? poolName,
-    quoteSymbol: parts[1] ?? '—',
-  };
-}
 
 function sanitizeDecimalInput(raw: string): string {
   let s = raw.replace(/[^0-9.]/g, '');
@@ -78,7 +72,7 @@ function BigMorphNumericInput({
 }: BigMorphNumericInputProps) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+      <label htmlFor={id} className="block text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">
         {label}
       </label>
       <div
@@ -108,7 +102,7 @@ function BigMorphNumericInput({
           )}
           onChange={(e) => onChange(sanitizeDecimalInput(e.target.value))}
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 z-[2] -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+        <span className="pointer-events-none absolute right-3 top-1/2 z-[2] -translate-y-1/2 text-sm font-semibold text-[var(--muted-foreground)]">
           {symbol}
         </span>
       </div>
@@ -125,7 +119,7 @@ type ReadOnlyMorphRowProps = {
 function ReadOnlyMorphRow({ label, valueStr, symbol }: ReadOnlyMorphRowProps) {
   return (
     <div className="space-y-1.5">
-      <span className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="block text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">{label}</span>
       <div
         className={cn(
           'relative flex min-h-[3.75rem] items-center rounded-xl border border-trade-shell bg-muted/45 px-3 py-2.5',
@@ -138,7 +132,7 @@ function ReadOnlyMorphRow({ label, valueStr, symbol }: ReadOnlyMorphRowProps) {
         >
           {formatMorphDecimal(valueStr)}
         </TextMorph>
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-[var(--muted-foreground)]">
           {symbol}
         </span>
       </div>
@@ -154,7 +148,11 @@ export type TradeOrderPanelProps = {
 };
 
 export function TradeOrderPanel({ poolName, side, orderType, className }: TradeOrderPanelProps) {
-  const { baseSymbol, quoteSymbol } = useMemo(() => parsePoolSymbols(poolName), [poolName]);
+  const { currentNetwork } = useNetwork();
+  const { baseSymbol, quoteSymbol } = useMemo(() => {
+    const t = poolTickerForKey(currentNetwork, poolName);
+    return { baseSymbol: t.base, quoteSymbol: t.quote };
+  }, [currentNetwork, poolName]);
   const baseId = useId();
   const amountInputId = `${baseId}-amount`;
   const priceInputId = `${baseId}-price`;
@@ -208,7 +206,7 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3', className)}>
-      <div className="mb-3 flex items-start justify-between gap-2 text-[11px] text-muted-foreground">
+      <div className="mb-3 flex items-start justify-between gap-2 text-[11px] text-[var(--muted-foreground)]">
         <span>
           Available{' '}
           <span className="font-medium text-foreground/80">
@@ -266,7 +264,7 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
         <div className="mt-4 space-y-2">
           <ReadOnlyMorphRow label="Estimated fill" valueStr={estimatedReceiveStr} symbol={estReceiveSymbol} />
           <div className="flex items-center justify-between border-t border-trade-shell/80 pt-2 text-xs">
-            <span className="border-b border-dotted border-muted-foreground/60 font-medium text-muted-foreground">
+            <span className="border-b border-dotted border-muted-foreground/60 font-medium text-[var(--muted-foreground)]">
               Total
             </span>
             <span className="font-semibold tabular-nums text-foreground">{limitTotalLine}</span>
@@ -275,23 +273,23 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
       )}
 
       <div className="mt-4 flex items-center justify-between text-xs">
-        <span className="border-b border-dotted border-muted-foreground/60 text-muted-foreground">Max fee</span>
-        <span className="tabular-nums text-muted-foreground">— {quoteSymbol}</span>
+        <span className="border-b border-dotted border-muted-foreground/60 text-[var(--muted-foreground)]">Max fee</span>
+        <span className="tabular-nums text-[var(--muted-foreground)]">— {quoteSymbol}</span>
       </div>
 
       <div className="mt-5">
         <Button
           type="button"
           className={cn(
-            'h-12 w-full rounded-xl text-base font-bold',
+            'h-12 w-full rounded-xl text-base font-bold hover:opacity-90',
             side === 'buy'
-              ? 'bg-emerald-600 text-white hover:bg-emerald-600/90 dark:bg-emerald-700 dark:hover:bg-emerald-700/90'
-              : 'bg-rose-600 text-white hover:bg-rose-600/90 dark:bg-rose-700 dark:hover:bg-rose-700/90'
+              ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+              : 'bg-[var(--destructive)] text-[var(--destructive-foreground)]'
           )}
         >
           {side === 'buy' ? 'Buy' : 'Sell'} {baseSymbol}
         </Button>
-        <p className="mt-2 text-center text-[10px] leading-snug text-muted-foreground">
+        <p className="mt-2 text-center text-xs leading-snug text-[var(--muted-foreground)]">
           Estimates use a mock price until live quotes are connected.
         </p>
       </div>

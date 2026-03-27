@@ -1,5 +1,5 @@
 /**
- * DeepBook v3: `register_balance_manager` → `registry::add_balance_manager` calls `load_inner_mut()` on the
+ * Orderbook v3: `register_balance_manager` → `registry::add_balance_manager` calls `load_inner_mut()` on the
  * registry's `Versioned` inner before touching the balance-manager table. `get_balance_manager_ids` simulates
  * without loading that inner, so an empty id list can still be returned while registration aborts inside
  * `dynamic_field::borrow_child_object_mut` (often abort code 1) when versioned/config state is inconsistent.

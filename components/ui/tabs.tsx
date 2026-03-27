@@ -14,7 +14,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground',
+      'inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-[var(--muted-foreground)]',
       className
     )}
     {...props}
@@ -161,9 +161,9 @@ function Tabs({
                 btnRefs.current[i] = el;
               }}
               className={cn(
-                'inline-flex flex-none shrink-0 px-2 py-1.5 text-left text-xs font-medium leading-snug text-muted-foreground transition-colors',
+                'inline-flex flex-none shrink-0 px-2 py-1.5 text-left text-xs font-medium leading-snug text-[var(--muted-foreground)] transition-colors',
                 'hover:text-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                selected && 'text-foreground',
+                selected && 'text-primary',
                 triggerClassName
               )}
               onClick={() => setActive(tab.id)}
@@ -176,7 +176,7 @@ function Tabs({
           );
         })}
         <div
-          className="pointer-events-none absolute bottom-[-1px] left-0 h-[2px] bg-[#0e0f11] transition-all duration-300 ease-out dark:bg-white"
+          className="pointer-events-none absolute bottom-[-1px] left-0 h-[2px] bg-primary transition-all duration-300 ease-out"
           style={activeStyle}
           aria-hidden
         />

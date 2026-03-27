@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 const MYSOCIAL_ORIGIN = 'https://www.mysocial.network';
 
 const profileMenuChevronClass =
-  'h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-data-[highlighted]:opacity-100';
+  'h-4 w-4 shrink-0 text-[var(--muted-foreground)] opacity-0 transition-opacity duration-150 group-data-[highlighted]:opacity-100';
 
 const profileMenuRowLinkClass =
   'group flex w-full cursor-pointer items-center rounded-md px-2.5 py-2 text-sm outline-none transition-colors text-foreground data-[highlighted]:bg-muted/70';
@@ -300,7 +300,7 @@ function ProfileAvatarPlain({
       ) : (
         <span
           className={cn(
-            'font-semibold text-muted-foreground',
+            'font-semibold text-[var(--muted-foreground)]',
             sizePx >= 44 ? 'text-lg' : 'text-sm'
           )}
         >
@@ -405,7 +405,7 @@ export function ProfileAvatarWithReservationRing({
         ) : (
           <span
             className={cn(
-              'font-semibold text-muted-foreground',
+              'font-semibold text-[var(--muted-foreground)]',
               outer >= 48 ? 'text-lg' : 'text-sm'
             )}
           >
@@ -533,7 +533,7 @@ export function TradeNavProfileMenu({
               rel="noopener noreferrer"
               className={profileMenuRowLinkClass}
             >
-              <User className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <User className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
               <span className="min-w-0 flex-1 truncate">Open in Explorer</span>
               <ChevronRight className={profileMenuChevronClass} aria-hidden />
             </Link>
@@ -546,7 +546,7 @@ export function TradeNavProfileMenu({
                 rel="noopener noreferrer"
                 className={profileMenuRowLinkClass}
               >
-                <Coins className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                <Coins className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
                 <span className="min-w-0 flex-1 truncate">
                   {tokenMenuAction === 'launch' ? 'Launch token' : 'Enable token'}
                 </span>
@@ -561,7 +561,7 @@ export function TradeNavProfileMenu({
               rel="noopener noreferrer"
               className={profileMenuRowLinkClass}
             >
-              <Settings className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <Settings className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
               <span className="min-w-0 flex-1 truncate">Settings</span>
               <ChevronRight className={profileMenuChevronClass} aria-hidden />
             </Link>

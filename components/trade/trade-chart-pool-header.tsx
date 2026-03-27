@@ -5,11 +5,13 @@ import Image from 'next/image';
 import { useMemo, type MouseEvent } from 'react';
 
 import { ProfileMenuWalletCopyRow } from '@/components/trade/trade-nav-profile-menu';
+import { useNetwork } from '@/lib/network-provider';
+import {
+  pairLabelForPoolKey,
+  poolOnChainAddressForKey,
+  poolTickerForKey,
+} from '@/lib/trade/trade-pool-catalog';
 import { cn } from '@/lib/utils';
-
-/** Placeholder pool object ID until metadata is loaded from chain / indexer */
-const TRADE_CHART_POOL_OBJECT_ID =
-  '0xc9f2e8a14d7b063451ac28f91e60d3b88a1f6e70432b9c0d8e5a7f13b2d4c6e8';
 
 function OverlappingPairArt({
   quoteSymbol,
@@ -57,16 +59,16 @@ export function TradeChartPoolHeader({
   className?: string;
   onPoolPickerOpen?: () => void;
 }) {
-  const { base, quote, pairLabel } = useMemo(() => {
-    const parts = poolName.split('_').filter(Boolean);
-    const b = parts[0] ?? poolName;
-    const q = parts[1] ?? '';
+  const { currentNetwork } = useNetwork();
+  const { base, quote, pairLabel, poolAddress } = useMemo(() => {
+    const tick = poolTickerForKey(currentNetwork, poolName);
     return {
-      base: b,
-      quote: q || '—',
-      pairLabel: q ? `${b} / ${q}` : b,
+      base: tick.base,
+      quote: tick.quote,
+      pairLabel: pairLabelForPoolKey(currentNetwork, poolName),
+      poolAddress: poolOnChainAddressForKey(currentNetwork, poolName),
     };
-  }, [poolName]);
+  }, [currentNetwork, poolName]);
 
   return (
     <div
@@ -94,11 +96,15 @@ export function TradeChartPoolHeader({
               onClick={stopPoolRowActivation}
               onPointerDown={stopPoolRowActivation}
             >
-              <ProfileMenuWalletCopyRow
-                address={TRADE_CHART_POOL_OBJECT_ID}
-                addressHead={10}
-                addressTail={10}
-              />
+              {poolAddress ? (
+                <ProfileMenuWalletCopyRow
+                  address={poolAddress}
+                  addressHead={10}
+                  addressTail={10}
+                />
+              ) : (
+                <p className="text-xs text-[var(--muted-foreground)]">Pool address unavailable on this network</p>
+              )}
             </div>
           </div>
         </div>
@@ -111,7 +117,7 @@ export function TradeChartPoolHeader({
           className={cn(
             'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
             'border border-trade-shell bg-muted/70 dark:bg-muted/45',
-            'text-muted-foreground transition-colors',
+            'text-[var(--muted-foreground)] transition-colors',
             'hover:bg-muted/90 dark:hover:bg-muted/55',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
             'disabled:pointer-events-none disabled:opacity-50'

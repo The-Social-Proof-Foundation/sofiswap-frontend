@@ -224,7 +224,7 @@ function CallbackContent() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background font-sans text-foreground">
-      <p className="text-sm text-muted-foreground">{note ?? 'Completing sign-in…'}</p>
+      <p className="text-sm text-[var(--muted-foreground)]">{note ?? 'Completing sign-in…'}</p>
     </div>
   );
 }
@@ -234,7 +234,7 @@ export default function AuthCallbackPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-background font-sans">
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-[var(--muted-foreground)]">Loading…</p>
         </div>
       }
     >

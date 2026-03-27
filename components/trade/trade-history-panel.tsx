@@ -1,5 +1,9 @@
 'use client';
 
+import {
+  TradePanelCenteredState,
+  TradePanelCenteredStateFrame,
+} from '@/components/trade/trade-panel-centered-state';
 import { cn } from '@/lib/utils';
 import { formatCompactDecimal, formatOrderPrice } from '@/lib/trade/orderbook-format';
 import type { TradePrint } from '@/lib/trade/orderbook-types';
@@ -20,13 +24,30 @@ export function TradeHistoryPanel({
 }) {
   const busy = Boolean(isLoading);
 
+  if (error) {
+    return (
+      <div
+        className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', className)}
+        aria-busy={busy}
+        aria-label="Trade history"
+      >
+        <TradePanelCenteredStateFrame>
+          <TradePanelCenteredState
+            headline="Unable to load trade history"
+            message={error}
+          />
+        </TradePanelCenteredStateFrame>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn('flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', className)}
       aria-busy={busy}
       aria-label="Trade history"
     >
-      <div className={cn(rowClass, 'shrink-0 font-sans text-muted-foreground')} role="row">
+      <div className={cn(rowClass, 'shrink-0 font-sans text-[var(--muted-foreground)]')} role="row">
         <span role="columnheader" className="text-left text-[10px] font-medium">
           Price
         </span>
@@ -35,14 +56,14 @@ export function TradeHistoryPanel({
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden" role="list">
-        {error ? (
-          <p className="px-2 py-3 text-center text-[11px] text-destructive" role="status">
-            {error}
-          </p>
-        ) : trades.length === 0 && !busy ? (
-          <p className="px-2 py-3 text-center text-[11px] text-muted-foreground" role="status">
-            No trades
-          </p>
+        {trades.length === 0 && !busy ? (
+          <TradePanelCenteredStateFrame>
+            <TradePanelCenteredState
+              variant="muted"
+              headline="No trades yet"
+              message=""
+            />
+          </TradePanelCenteredStateFrame>
         ) : (
           trades.map((t, i) => (
             <div
