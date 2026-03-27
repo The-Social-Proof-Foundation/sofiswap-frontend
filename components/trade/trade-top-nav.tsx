@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { Book, Coins } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -37,6 +38,21 @@ const tradeNavSegmentItems = [
       'px-2 py-0 text-[12px] leading-snug sm:px-2.5 sm:text-[13px] sm:leading-tight',
   },
 ] as const;
+
+function TradeNavSegmentLeadingIcons({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        'flex shrink-0 items-center gap-1 text-muted-foreground',
+        className
+      )}
+      aria-hidden
+    >
+      <Book className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+      <Coins className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2} />
+    </span>
+  );
+}
 
 function TradeNavSegmentTabs({
   segment,
@@ -286,19 +302,23 @@ export function TradeTopNav({
               'supports-[backdrop-filter]:bg-background/45'
             )}
           >
-            <TradeNavSegmentTabs
-              segment={segment}
-              onSegmentChange={setSegment}
-              className="w-full"
-              listClassName="h-10 w-full max-w-none"
-            />
+            <div className="flex w-full items-center gap-2">
+              <TradeNavSegmentLeadingIcons />
+              <TradeNavSegmentTabs
+                segment={segment}
+                onSegmentChange={setSegment}
+                className="min-w-0 flex-1"
+                listClassName="h-10 w-full max-w-none"
+              />
+            </div>
           </div>
         </div>
 
         {/* Desktop: single row */}
         <div className="hidden h-14 items-center justify-between gap-4 sm:flex">
-          <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3 lg:gap-4">
             <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
+            <TradeNavSegmentLeadingIcons />
             <TradeNavSegmentTabs
               segment={segment}
               onSegmentChange={setSegment}

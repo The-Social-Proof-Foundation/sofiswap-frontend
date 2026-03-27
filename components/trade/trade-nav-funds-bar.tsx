@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  ArrowDownToLine,
   ArrowLeftRight,
   ArrowUpRight,
   Bell,
@@ -64,10 +65,11 @@ export function TradeNavFundsBar() {
         type="button"
         size="sm"
         className={cn(
-          'h-9 shrink-0 rounded-xl px-3.5 font-semibold shadow-sm',
+          'h-9 shrink-0 gap-3 rounded-xl px-3.5 font-semibold shadow-sm',
           'dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-zinc-300'
         )}
       >
+        <ArrowDownToLine className="h-4 w-4 shrink-0" strokeWidth={2} aria-hidden />
         Deposit
       </Button>
 
@@ -78,18 +80,12 @@ export function TradeNavFundsBar() {
             variant="secondary"
             size="sm"
             className={cn(
-              'h-9 shrink-0 px-0 xl:px-3.5',
-              'w-9 xl:w-auto',
+              'h-9 shrink-0 gap-3 px-3.5 whitespace-nowrap',
               tradeNavWalletSecondaryClass
             )}
-            aria-label="Manage funds"
           >
-            <Wallet
-              className="h-[18px] w-[18px] shrink-0 text-foreground/90 xl:hidden"
-              strokeWidth={1.75}
-              aria-hidden
-            />
-            <span className="hidden xl:inline">Manage funds</span>
+            <Wallet className="h-4 w-4 shrink-0 text-foreground/90" strokeWidth={2} aria-hidden />
+            <span>Manage funds</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
