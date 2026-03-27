@@ -39,7 +39,8 @@ const VIEWPORT_2XL_QUERY = '(min-width: 1536px)';
  * OB sits inside the workspace ((100−⅙)% wide), so OB flex-basis = ⅙÷(100−⅙) = 20% of workspace.
  */
 const ORDERBOOK_FLEX_BASIS_PCT_OF_WORKSPACE = (100 / 6) / (100 - 100 / 6);
-/** Cap order book + swapping column width on very wide monitors. */
+/** Floor / cap order book + swapping column width (desktop rail). */
+const MIN_ORDERBOOK_SWAP_PX = 240;
 const MAX_ORDERBOOK_SWAP_PX = 480;
 /** Open trades height bounds (% of vertical split to the left of the swap column). */
 const OPEN_TRADES_MIN_PCT = 4.25;
@@ -139,14 +140,15 @@ function OpenTradesSection({
       )}
       aria-label="Open orders and trade history"
     >
-      <div className="shrink-0 px-2 pt-1 md:px-3 md:pt-1.5">
+      <div className="shrink-0 pt-1 md:pt-1.5">
         <Tabs
           tabs={tabs}
           activeTab={segment}
           onTabChange={(id) => setSegment(id)}
           aria-label="Panel view"
-          listClassName="gap-3"
-          triggerClassName="px-1.5 py-1 font-medium"
+          listClassName="gap-3 pb-1"
+          tabStripInsetClassName="px-2 md:px-3"
+          triggerClassName="px-2 py-1 font-medium"
         />
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-auto px-2 py-2 md:px-3">
@@ -384,13 +386,14 @@ function SwappingInputsSection({
             items={swapSideSegmentItems}
           />
         </div>
-        <div className="px-2 pb-1.5 pt-1 md:px-3">
+        <div className="pb-1.5 pt-1">
           <Tabs
             tabs={[...swapOrderTypeTabs]}
             activeTab={orderType}
             onTabChange={(id) => setOrderType(id as SwapOrderTypeSegment)}
             aria-label="Order type"
-            listClassName="border-b-0 gap-4"
+            listClassName="gap-4 pb-1"
+            tabStripInsetClassName="px-2 md:px-3"
             triggerClassName="px-2 py-1 font-semibold"
           />
         </div>
@@ -514,6 +517,7 @@ export function TradeWorkspaceLayout({
                   className="box-border flex h-full min-h-0 min-w-0 shrink-0 grow-0 flex-col overflow-hidden border-l border-trade-shell"
                   style={{
                     flex: `0 0 ${ORDERBOOK_FLEX_BASIS_PCT_OF_WORKSPACE * 100}%`,
+                    minWidth: MIN_ORDERBOOK_SWAP_PX,
                     maxWidth: MAX_ORDERBOOK_SWAP_PX,
                   }}
                 >
@@ -546,7 +550,10 @@ export function TradeWorkspaceLayout({
           'box-border h-full shrink-0 border-t-0 md:border-l md:border-trade-shell',
           swapColumnClass
         )}
-        style={{ maxWidth: MAX_ORDERBOOK_SWAP_PX }}
+        style={{
+          minWidth: MIN_ORDERBOOK_SWAP_PX,
+          maxWidth: MAX_ORDERBOOK_SWAP_PX,
+        }}
         orderBookCollapsed={orderBookCollapsed}
         onToggleOrderBook={toggleOrderBook}
         showOrderBookToggle

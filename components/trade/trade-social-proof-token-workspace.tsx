@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Layout-only Social Proof Token detail view (chart + stats + bio + history + swap rail).
- * Data is mock/local state until GraphQL is wired.
+ * Social proof token detail shell: pass token, stats, trades, reservations, and chart
+ * points from your API; omitted props render empty placeholders (no fabricated market data).
  */
 
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ import {
 import { SlidingSegmentTabs, type SlidingSegmentItem } from '@/components/ui/sliding-segment-tabs';
 import { Tabs, type UnderlineTabItem } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 import {
   Area,
   AreaChart,
@@ -41,133 +40,74 @@ const railShell = cn(
   'dark:bg-muted/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
 );
 
-const MOCK_TOKEN = {
-  name: 'Rivermint Index',
-  symbol: 'RVMX',
-  address: '0xA0b86991c6218b36c1d19d4a2e9eb0ce3606eb48',
-  about:
-    'Rivermint Index tracks curated creator-economy flows on-chain with a volatility cap and daily rebalance. Holders earn fee share from routed social-volume swaps while governance sets the inclusion set and guardrails.',
-} as const;
-
-const MOCK_STATS = [
-  { label: 'TVL', value: '$231.8M' },
-  { label: 'Market cap', value: '$78.4B' },
-  { label: 'FDV', value: '$1.004' },
-  { label: '1 day volume', value: '$18.2M' },
-  { label: '52W High', value: '$1.018' },
-  { label: '52W Low', value: '0.982' },
-] as const;
-
 type Timeframe = '1H' | '1D' | '1W' | '1M' | '1Y' | 'ALL';
 
-type TradeHistoryRow = {
+export type SocialProofTokenMeta = {
+  name: string;
+  symbol: string;
+  /** Contract or asset address when applicable */
+  address?: string | null;
+  about?: string | null;
+};
+
+export type SocialProofStat = { label: string; value: string };
+
+export type SocialProofChartPoint = {
+  /** Unix ms */
+  t: number;
+  price: number;
+  volume?: number;
+};
+
+const UTC_MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+function formatUtcTimeShortFromIso(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const h = d.getUTCHours();
+  const m = d.getUTCMinutes();
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  const minStr = String(m).padStart(2, '0');
+  return `${UTC_MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}, ${hour12}:${minStr} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+function formatUtcMonthDayMs(ms: number): string {
+  const d = new Date(ms);
+  return `${UTC_MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+export type TradeHistoryRow = {
   id: string;
-  time: Date;
+  /** ISO 8601 from API (stable across SSR and client) */
+  time: string;
   side: 'buy' | 'sell';
   price: string;
   amount: string;
   total: string;
 };
 
-const MOCK_TRADES: TradeHistoryRow[] = [
-  {
-    id: '1',
-    side: 'buy',
-    time: new Date(Date.now() - 3 * 60_000),
-    price: '1.0004',
-    amount: '12,400',
-    total: '12,405',
-  },
-  {
-    id: '2',
-    side: 'sell',
-    time: new Date(Date.now() - 14 * 60_000),
-    price: '0.9998',
-    amount: '3,820',
-    total: '3,819',
-  },
-  {
-    id: '3',
-    side: 'buy',
-    time: new Date(Date.now() - 47 * 60_000),
-    price: '1.0001',
-    amount: '88,100',
-    total: '88,119',
-  },
-  {
-    id: '4',
-    side: 'sell',
-    time: new Date(Date.now() - 2 * 3_600_000),
-    price: '0.9995',
-    amount: '1,204',
-    total: '1,203',
-  },
-  {
-    id: '5',
-    side: 'buy',
-    time: new Date(Date.now() - 6 * 3_600_000),
-    price: '1.0007',
-    amount: '42,055',
-    total: '42,084',
-  },
-  {
-    id: '6',
-    side: 'sell',
-    time: new Date(Date.now() - 14 * 3_600_000),
-    price: '0.9992',
-    amount: '6,710',
-    total: '6,705',
-  },
-];
-
-type ReservationHistoryRow = {
+export type ReservationHistoryRow = {
   id: string;
-  time: Date;
+  time: string;
   holder: string;
   reservationId: string;
   allocated: string;
   received: string;
   status: 'filled' | 'partial' | 'pending';
 };
-
-const MOCK_RESERVATIONS: ReservationHistoryRow[] = [
-  {
-    id: 'r1',
-    time: new Date(Date.now() - 22 * 60_000),
-    holder: '0x8f3a291c9e21b18f4c8d2b7e04a92f1c5d6e7b88',
-    reservationId: 'RSV-4182',
-    allocated: '24,600 RVMX',
-    received: '24,587.4 RVMX',
-    status: 'filled',
-  },
-  {
-    id: 'r2',
-    time: new Date(Date.now() - 105 * 60_000),
-    holder: '0x41c8d0e12f0a9b3c74e5f6228d1a7e9b0456c3d2',
-    reservationId: 'RSV-4177',
-    allocated: '5,000 RVMX',
-    received: '2,840 RVMX',
-    status: 'partial',
-  },
-  {
-    id: 'r3',
-    time: new Date(Date.now() - 9 * 3_600_000),
-    holder: '0x92e7bb4f1d08a65c9e3d0a2f8b1c4e7a6d5e9043',
-    reservationId: 'RSV-4161',
-    allocated: '110,000 RVMX',
-    received: '109,942 RVMX',
-    status: 'filled',
-  },
-  {
-    id: 'r4',
-    time: new Date(Date.now() - 26 * 3_600_000),
-    holder: '0x0a1b2c3d4e5f678901234567890abcdefabcd12',
-    reservationId: 'RSV-4155',
-    allocated: '3,200 RVMX',
-    received: '—',
-    status: 'pending',
-  },
-];
 
 const chartConfig = {
   price: {
@@ -181,19 +121,13 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 10)}...${addr.slice(-10)}`;
 }
 
-function buildSeries(base: number, points: number, wobble: number) {
-  const now = Date.now();
-  const step = (36e5 * 4) / points;
-  return Array.from({ length: points }, (_, i) => {
-    const t = now - (points - 1 - i) * step;
-    const noise = Math.sin(i * 0.35) * wobble + (i / points - 0.5) * (wobble * 0.25);
-    return {
-      t,
-      label: format(t, 'MMM d, h:mm a'),
-      price: Number((base + noise).toFixed(4)),
-      volume: Math.round(180_000 + Math.sin(i * 0.5) * 42_000 + i * 900),
-    };
-  });
+type ChartRow = SocialProofChartPoint & { label: string };
+
+function chartRowsWithLabels(points: readonly SocialProofChartPoint[]): ChartRow[] {
+  return points.map((p) => ({
+    ...p,
+    label: formatUtcTimeShortFromIso(new Date(p.t).toISOString()),
+  }));
 }
 
 function TokenAvatar({
@@ -219,60 +153,75 @@ function TokenAvatar({
   );
 }
 
-function StatGrid() {
+function StatGrid({ stats }: { stats: readonly SocialProofStat[] }) {
   return (
     <section className="space-y-3" aria-labelledby="spt-stats-heading">
       <h2 id="spt-stats-heading" className="text-sm font-semibold text-foreground">
         Stats
       </h2>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-        {MOCK_STATS.map((s) => (
-          <div key={s.label} className="space-y-1">
-            <div className="text-[11px] font-medium text-[var(--muted-foreground)]">{s.label}</div>
-            <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
-              {s.value}
+      {stats.length === 0 ? (
+        <p className="text-sm text-[var(--muted-foreground)]">No stats yet.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
+          {stats.map((s) => (
+            <div key={s.label} className="space-y-1">
+              <div className="text-[11px] font-medium text-[var(--muted-foreground)]">{s.label}</div>
+              <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
+                {s.value}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
 
-function AboutBlock() {
+function AboutBlock({ token }: { token: SocialProofTokenMeta | undefined }) {
   const [expanded, setExpanded] = useState(false);
+  const about = token?.about?.trim();
+  const address = token?.address?.trim();
+
   return (
     <section className="space-y-3" aria-labelledby="spt-about-heading">
       <h2 id="spt-about-heading" className="text-sm font-semibold text-foreground">
         About
       </h2>
-      <p
-        className={cn(
-          'text-sm leading-relaxed text-[var(--muted-foreground)]',
-          !expanded && 'line-clamp-3'
-        )}
-      >
-        {MOCK_TOKEN.about}
-      </p>
-      <button
-        type="button"
-        onClick={() => setExpanded((e) => !e)}
-        className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
-      >
-        {expanded ? 'Show less' : 'Show more'}
-      </button>
+      {about ? (
+        <>
+          <p
+            className={cn(
+              'text-sm leading-relaxed text-[var(--muted-foreground)]',
+              !expanded && 'line-clamp-3'
+            )}
+          >
+            {about}
+          </p>
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            {expanded ? 'Show less' : 'Show more'}
+          </button>
+        </>
+      ) : (
+        <p className="text-sm text-[var(--muted-foreground)]">No description.</p>
+      )}
       <div className="flex flex-wrap gap-2 pt-1">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-9 gap-2 rounded-full border-trade-shell bg-muted/40 px-4 font-normal"
-        >
-          <span className="font-mono text-xs text-[var(--muted-foreground)]">
-            {truncateAddress(MOCK_TOKEN.address)}
-          </span>
-          <Copy className="size-3.5 opacity-70" strokeWidth={1.75} />
-        </Button>
+        {address ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 rounded-full border-trade-shell bg-muted/40 px-4 font-normal"
+          >
+            <span className="font-mono text-xs text-[var(--muted-foreground)]">
+              {truncateAddress(address)}
+            </span>
+            <Copy className="size-3.5 opacity-70" strokeWidth={1.75} />
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="outline"
@@ -313,14 +262,24 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
           </tr>
         </thead>
         <tbody className="font-mono tabular-nums">
-          {rows.map((r) => (
-            <tr
-              key={r.id}
-              className="border-b border-trade-shell/80 last:border-b-0 hover:bg-muted/30"
-            >
-              <td className="max-w-[8rem] truncate px-3 py-2 text-[var(--muted-foreground)]">
-                {format(r.time, 'MMM d, h:mm a')}
+          {rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={5}
+                className="px-3 py-6 text-center text-sm text-[var(--muted-foreground)]"
+              >
+                No transactions yet.
               </td>
+            </tr>
+          ) : (
+            rows.map((r) => (
+              <tr
+                key={r.id}
+                className="border-b border-trade-shell/80 last:border-b-0 hover:bg-muted/30"
+              >
+                <td className="max-w-[8rem] truncate px-3 py-2 text-[var(--muted-foreground)]">
+                  {formatUtcTimeShortFromIso(r.time)}
+                </td>
               <td className="px-3 py-2">
                 <span
                   className={cn(
@@ -336,8 +295,9 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
               <td className="px-3 py-2 text-right">{r.price}</td>
               <td className="hidden px-3 py-2 text-right sm:table-cell">{r.amount}</td>
               <td className="px-3 py-2 text-right text-foreground/90">${r.total}</td>
-            </tr>
-          ))}
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -376,14 +336,24 @@ function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
           </tr>
         </thead>
         <tbody className="font-mono tabular-nums">
-          {rows.map((r) => (
-            <tr
-              key={r.id}
-              className="border-b border-border last:border-b-0 hover:bg-muted/30"
-            >
-              <td className="max-w-[8rem] truncate px-3 py-2 text-[var(--muted-foreground)]">
-                {format(r.time, 'MMM d, h:mm a')}
+          {rows.length === 0 ? (
+            <tr>
+              <td
+                colSpan={6}
+                className="px-3 py-6 text-center text-sm text-[var(--muted-foreground)]"
+              >
+                No reservations yet.
               </td>
+            </tr>
+          ) : (
+            rows.map((r) => (
+              <tr
+                key={r.id}
+                className="border-b border-border last:border-b-0 hover:bg-muted/30"
+              >
+                <td className="max-w-[8rem] truncate px-3 py-2 text-[var(--muted-foreground)]">
+                  {formatUtcTimeShortFromIso(r.time)}
+                </td>
               <td className="max-w-[7rem] truncate px-3 py-2 text-foreground/90" title={r.holder}>
                 {truncateAddress(r.holder)}
               </td>
@@ -402,8 +372,9 @@ function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
                   {reservationStatusLabel(r.status)}
                 </span>
               </td>
-            </tr>
-          ))}
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -417,7 +388,7 @@ const swapModeItems: SlidingSegmentItem[] = [
   { value: 'sell', label: 'Sell', triggerClassName: 'px-2 py-0 text-[12px] leading-tight' },
 ];
 
-function SocialProofSwapCard() {
+function SocialProofSwapCard({ sellSymbol }: { sellSymbol: string }) {
   const [swapMode, setSwapMode] = useState('swap');
 
   return (
@@ -470,8 +441,8 @@ function SocialProofSwapCard() {
                 'transition-transform active:scale-[0.98]'
               )}
             >
-              <TokenAvatar symbol={MOCK_TOKEN.symbol} className="size-7 rounded-full text-[10px]" />
-              <span className="max-w-[5.5rem] truncate">{MOCK_TOKEN.symbol}</span>
+              <TokenAvatar symbol={sellSymbol} className="size-7 rounded-full text-[10px]" />
+              <span className="max-w-[5.5rem] truncate">{sellSymbol}</span>
               <ChevronDown className="size-3.5 opacity-60" strokeWidth={1.75} />
             </button>
           </div>
@@ -542,29 +513,15 @@ function SocialProofSwapCard() {
 function PriceChartBlock({
   timeframe,
   onTimeframeChange,
+  chartSeries,
 }: {
   timeframe: Timeframe;
   onTimeframeChange: (t: Timeframe) => void;
+  chartSeries: readonly SocialProofChartPoint[];
 }) {
   const [chartKind, setChartKind] = useState<'area' | 'bar'>('area');
 
-  const data = useMemo(() => {
-    const pts =
-      timeframe === '1H'
-        ? 32
-        : timeframe === '1D'
-          ? 48
-          : timeframe === '1W'
-            ? 56
-            : timeframe === '1M'
-              ? 60
-              : timeframe === '1Y'
-                ? 64
-                : 72;
-    const wobble =
-      timeframe === 'ALL' ? 0.022 : timeframe === '1Y' ? 0.018 : timeframe === '1M' ? 0.012 : 0.008;
-    return buildSeries(1.0, pts, wobble);
-  }, [timeframe]);
+  const data = useMemo(() => chartRowsWithLabels(chartSeries), [chartSeries]);
 
   const tfItems: SlidingSegmentItem[] = useMemo(
     () =>
@@ -578,6 +535,16 @@ function PriceChartBlock({
 
   return (
     <div className="space-y-3">
+      {data.length === 0 ? (
+        <div
+          className={cn(
+            'flex h-[min(42vw,280px)] w-full max-h-[320px] min-h-[200px] items-center justify-center rounded-xl',
+            'border border-trade-shell bg-muted/20 text-sm text-[var(--muted-foreground)] dark:bg-muted/10'
+          )}
+        >
+          No price history.
+        </div>
+      ) : (
       <ChartContainer
         config={chartConfig}
         className={cn(
@@ -596,7 +563,7 @@ function PriceChartBlock({
             <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/40" />
             <XAxis
               dataKey="t"
-              tickFormatter={(v) => format(Number(v), 'MMM d')}
+              tickFormatter={(v) => formatUtcMonthDayMs(Number(v))}
               tickLine={false}
               axisLine={false}
               minTickGap={28}
@@ -636,7 +603,7 @@ function PriceChartBlock({
             <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted/40" />
             <XAxis
               dataKey="t"
-              tickFormatter={(v) => format(Number(v), 'MMM d')}
+              tickFormatter={(v) => formatUtcMonthDayMs(Number(v))}
               tickLine={false}
               axisLine={false}
               minTickGap={28}
@@ -669,6 +636,7 @@ function PriceChartBlock({
           </BarChart>
         )}
       </ChartContainer>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SlidingSegmentTabs
@@ -708,9 +676,39 @@ function PriceChartBlock({
   );
 }
 
-export function TradeSocialProofTokenWorkspace() {
+export type TradeSocialProofTokenWorkspaceProps = {
+  token?: SocialProofTokenMeta;
+  stats?: readonly SocialProofStat[];
+  trades?: readonly TradeHistoryRow[];
+  reservations?: readonly ReservationHistoryRow[];
+  chartSeries?: readonly SocialProofChartPoint[];
+  /** Formatted spot / last price label when you have it (e.g. from API). */
+  priceLabel?: string;
+  /** Optional secondary line (change / %), already formatted. */
+  changeLabel?: string | null;
+};
+
+export function TradeSocialProofTokenWorkspace({
+  token: tokenProp,
+  stats: statsProp,
+  trades: tradesProp,
+  reservations: reservationsProp,
+  chartSeries: chartSeriesProp,
+  priceLabel,
+  changeLabel,
+}: TradeSocialProofTokenWorkspaceProps = {}) {
   const [timeframe, setTimeframe] = useState<Timeframe>('1D');
   const [bottomTab, setBottomTab] = useState('transactions');
+
+  const token = tokenProp;
+  const stats = statsProp ?? [];
+  const trades = tradesProp ?? [];
+  const reservations = reservationsProp ?? [];
+  const chartSeries = chartSeriesProp ?? [];
+
+  const displayName = token?.name?.trim() || 'Social proof tokens';
+  const displaySymbol = token?.symbol?.trim() || '—';
+  const displayAddress = token?.address?.trim();
 
   const bottomTabs = useMemo((): UnderlineTabItem[] => {
     return [
@@ -731,38 +729,53 @@ export function TradeSocialProofTokenWorkspace() {
         <div className="mx-auto max-w-5xl px-4 py-5 md:px-6 md:py-6 lg:max-w-none lg:pr-6 xl:max-w-6xl">
           <header className="pb-5">
             <div className="flex min-w-0 gap-3">
-              <TokenAvatar symbol={MOCK_TOKEN.symbol} />
+              <TokenAvatar
+                symbol={
+                  displaySymbol !== '—'
+                    ? displaySymbol
+                    : (displayName.slice(0, 2).toUpperCase() || 'SP')
+                }
+              />
               <div className="min-w-0 space-y-0.5">
                 <div className="flex flex-wrap items-baseline gap-2">
                   <h1 className="truncate text-xl font-semibold tracking-tight md:text-2xl">
-                    {MOCK_TOKEN.name}
+                    {displayName}
                   </h1>
                   <span className="text-sm font-medium text-[var(--muted-foreground)]">
-                    {MOCK_TOKEN.symbol}
+                    {displaySymbol}
                   </span>
                 </div>
-                <p className="font-mono text-xs text-[var(--muted-foreground)]">
-                  {truncateAddress(MOCK_TOKEN.address)}
-                </p>
+                {displayAddress ? (
+                  <p className="font-mono text-xs text-[var(--muted-foreground)]">
+                    {truncateAddress(displayAddress)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-[var(--muted-foreground)]">No address</p>
+                )}
               </div>
             </div>
           </header>
 
           <div className="space-y-1 pb-4">
             <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight md:text-4xl">
-              $1.00
+              {priceLabel ?? '—'}
             </p>
-            <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted-foreground)]">
-              <span className="font-medium text-emerald-500 dark:text-emerald-400">+ $0.00</span>
-              <span>(0.08%)</span>
-            </p>
+            {changeLabel ? (
+              <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                {changeLabel}
+              </p>
+            ) : null}
           </div>
 
-          <PriceChartBlock timeframe={timeframe} onTimeframeChange={setTimeframe} />
+          <PriceChartBlock
+            timeframe={timeframe}
+            onTimeframeChange={setTimeframe}
+            chartSeries={chartSeries}
+          />
 
           <div className="mt-8 space-y-8 pb-8">
-            <StatGrid />
-            <AboutBlock />
+            <StatGrid stats={stats} />
+            <AboutBlock token={token} />
             <section className="space-y-3" aria-label="Transactions and reservations">
               <Tabs
                 tabs={bottomTabs}
@@ -773,9 +786,9 @@ export function TradeSocialProofTokenWorkspace() {
                 triggerClassName="px-1 py-2 text-sm font-medium"
               />
               {bottomTab === 'transactions' ? (
-                <TradeHistoryTable rows={MOCK_TRADES} />
+                <TradeHistoryTable rows={[...trades]} />
               ) : (
-                <ReservationsHistoryTable rows={MOCK_RESERVATIONS} />
+                <ReservationsHistoryTable rows={[...reservations]} />
               )}
             </section>
           </div>
@@ -789,7 +802,7 @@ export function TradeSocialProofTokenWorkspace() {
         )}
         aria-label="Swap"
       >
-        <SocialProofSwapCard />
+        <SocialProofSwapCard sellSymbol={displaySymbol === '—' ? 'Token' : displaySymbol} />
       </aside>
     </div>
   );

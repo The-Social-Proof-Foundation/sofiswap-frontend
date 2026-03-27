@@ -2,7 +2,7 @@
 
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
-import { useMemo, type MouseEvent } from 'react';
+import { useMemo, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { ProfileMenuWalletCopyRow } from '@/components/trade/trade-nav-profile-menu';
 import { useNetwork } from '@/lib/network-provider';
@@ -24,20 +24,20 @@ function OverlappingPairArt({
     <div className={cn('flex shrink-0 items-center -space-x-2.5', className)} aria-hidden>
       <div
         className={cn(
-          'relative z-[2] flex h-10 w-10 items-center justify-center overflow-hidden rounded-full p-0.5 shadow-sm',
-          'bg-[var(--secondary)] dark:bg-[var(--secondary)]'
+          'relative z-[2] h-9 w-9 overflow-hidden rounded-full',
+          'shadow-[0_0_0_2px_color-mix(in_srgb,var(--trade-shell-border)_75%,transparent)]'
         )}
       >
         <Image
-          src="/MySo-logo-green-m.png"
+          src="/MySo-icon-green.png"
           alt=""
-          width={40}
-          height={40}
+          width={36}
+          height={36}
           className="h-full w-full rounded-full object-cover"
         />
       </div>
       <div
-        className="relative z-[1] flex h-10 w-10 items-center justify-center rounded-full bg-sky-700 text-[11px] font-bold uppercase tracking-tight text-white shadow-sm dark:bg-sky-800"
+        className="relative z-[1] flex h-9 w-9 items-center justify-center rounded-full border-[0.5px] border-sky-900/25 bg-sky-700 text-[11px] font-bold uppercase tracking-tight text-white shadow-sm dark:border-sky-950/35 dark:bg-sky-800"
         title={quoteSymbol}
       >
         {quoteSymbol.slice(0, 3)}
@@ -48,6 +48,17 @@ function OverlappingPairArt({
 
 function stopPoolRowActivation(e: MouseEvent) {
   e.stopPropagation();
+}
+
+function poolHeaderOpenSpotlightKeyDown(
+  e: KeyboardEvent<HTMLDivElement>,
+  onOpen: (() => void) | undefined
+) {
+  if (!onOpen) return;
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    onOpen();
+  }
 }
 
 export function TradeChartPoolHeader({
@@ -80,14 +91,33 @@ export function TradeChartPoolHeader({
       <span className="sr-only">{`${base} and ${quote} pool`}</span>
 
       <div
+        role={onPoolPickerOpen ? 'button' : undefined}
+        tabIndex={onPoolPickerOpen ? 0 : undefined}
+        onClick={onPoolPickerOpen ? () => onPoolPickerOpen() : undefined}
+        onKeyDown={
+          onPoolPickerOpen
+            ? (e) => poolHeaderOpenSpotlightKeyDown(e, onPoolPickerOpen)
+            : undefined
+        }
+        aria-label={
+          onPoolPickerOpen
+            ? `Open pool search. Current pool: ${pairLabel}.`
+            : undefined
+        }
         className={cn(
-          'flex w-full min-w-0 items-center gap-3 rounded-lg px-2 py-1.5 text-left -mx-2'
+          'flex w-full min-w-0 items-center gap-2 rounded-lg px-4 py-1.5 text-left -mx-2',
+          'transition-colors',
+          onPoolPickerOpen && [
+            'cursor-pointer',
+            'hover:bg-muted/60 dark:hover:bg-muted/35',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+          ]
         )}
       >
-        <div className="inline-flex min-w-0 max-w-full flex-1 items-center gap-3">
-          <OverlappingPairArt quoteSymbol={quote} className="pointer-events-none shrink-0" />
+        <OverlappingPairArt quoteSymbol={quote} className="pointer-events-none shrink-0" />
 
-          <div className="min-w-0 shrink">
+        <div className="flex min-w-0 flex-1 items-center gap-4">
+          <div className="min-w-0 shrink overflow-hidden text-left">
             <div className="truncate text-base font-semibold leading-tight tracking-tight text-foreground">
               {pairLabel}
             </div>
@@ -103,28 +133,20 @@ export function TradeChartPoolHeader({
                   addressTail={10}
                 />
               ) : (
-                <p className="text-xs text-[var(--muted-foreground)]">Pool address unavailable on this network</p>
+                <p className="text-xs text-[var(--muted-foreground)]">Pool address unavailable</p>
               )}
             </div>
           </div>
-        </div>
 
-        <button
-          type="button"
-          onClick={() => onPoolPickerOpen?.()}
-          disabled={!onPoolPickerOpen}
-          aria-label={`Search pools. Current pool: ${pairLabel}.`}
-          className={cn(
-            'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
-            'border border-trade-shell bg-muted/70 dark:bg-muted/45',
-            'text-[var(--muted-foreground)] transition-colors',
-            'hover:bg-muted/90 dark:hover:bg-muted/55',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-            'disabled:pointer-events-none disabled:opacity-50'
-          )}
-        >
-          <ChevronDown className="h-4 w-4 opacity-90" strokeWidth={2} />
-        </button>
+          <ChevronDown
+            className={cn(
+              'h-5 w-6 shrink-0 text-[var(--muted-foreground)] opacity-90',
+              !onPoolPickerOpen && 'opacity-40'
+            )}
+            strokeWidth={2.5}
+            aria-hidden
+          />
+        </div>
       </div>
     </div>
   );

@@ -42,7 +42,7 @@ function tradeNavSegmentItems(): SlidingSegmentItem[] {
     {
       value: 'social-proof-tokens',
       label: (
-        <span className="block min-w-0 max-w-full truncate text-inherit">
+        <span className="block min-w-0 max-w-full truncate text-inherit px-0 md:px-2 2xl:px-4">
           Social Proof Tokens
         </span>
       ),
@@ -312,12 +312,12 @@ export function TradeTopNav({
 
         {/* Desktop: single row */}
         <div className="hidden h-14 items-center justify-between gap-4 sm:flex">
-          <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3 lg:gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-6">
             <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
             <TradeNavSegmentTabs
               segment={segment}
               onSegmentChange={setSegment}
-              className="min-w-0 flex-initial md:px-2 lg:px-4 xl:px-6 2xl:px-8"
+              className="min-w-0 flex-initial"
               listClassName="h-9 w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]"
             />
           </div>

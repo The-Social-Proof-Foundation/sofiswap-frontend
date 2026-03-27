@@ -5,13 +5,19 @@ import {
   ChevronRight,
   Coins,
   Copy,
+  Droplets,
+  Globe,
   LogOut,
+  Moon,
+  Palette,
   Settings,
+  Sun,
   User,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCallback, useState, type PointerEvent } from 'react';
+import { useTheme } from 'next-themes';
+import { useCallback, useEffect, useState, type PointerEvent } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -20,12 +26,19 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ProfilePortfolioOverviewProfile } from '@/lib/graphql/profile-portfolio-overview';
+import { useNetwork } from '@/lib/network-provider';
+import { NETWORK_LABELS, type NetworkType } from '@/lib/network-utils';
 import { cn } from '@/lib/utils';
 
 const MYSOCIAL_ORIGIN = 'https://www.mysocial.network';
+/** Deep link for pool creation on MySocial; adjust if the product path changes. */
+const MYSOCIAL_CREATE_POOL_HREF = `${MYSOCIAL_ORIGIN}/ecosystem/sofiswap/create-pool`;
 
 const profileMenuChevronClass =
   'h-4 w-4 shrink-0 text-[var(--muted-foreground)] opacity-0 transition-opacity duration-150 group-data-[highlighted]:opacity-100';
@@ -417,6 +430,54 @@ export function ProfileAvatarWithReservationRing({
   );
 }
 
+const PROFILE_SUBMENU_SURFACE =
+  'rounded-xl border border-trade-shell bg-popover/90 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-popover/78';
+
+function ProfileMenuThemeToggle({ className }: { className?: string }) {
+  const [mounted, setMounted] = useState(false);
+  const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
+  if (!mounted) {
+    return (
+      <div
+        className={cn('h-7 w-7 shrink-0 rounded-md border border-border bg-muted/40', className)}
+        aria-hidden
+      />
+    );
+  }
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className={cn(
+        'h-7 w-7 shrink-0 border-border bg-background hover:bg-accent hover:text-accent-foreground',
+        className
+      )}
+      onClick={(e) => {
+        e.stopPropagation();
+        toggleTheme();
+      }}
+      aria-label="Toggle color theme"
+    >
+      {theme === 'light' ? (
+        <Moon className="h-3.5 w-3.5" aria-hidden />
+      ) : (
+        <Sun className="h-3.5 w-3.5" aria-hidden />
+      )}
+    </Button>
+  );
+}
+
 export function TradeNavProfileMenu({
   walletAddress,
   profile,
@@ -426,6 +487,7 @@ export function TradeNavProfileMenu({
   profile: ProfilePortfolioOverviewProfile | null | undefined;
   signOut: () => void;
 }) {
+  const { currentNetwork, changeNetwork, isChangingNetwork } = useNetwork();
   const photo = resolveProfilePhotoUrl(profile?.profilePhoto ?? null);
   const hasProfile = profile != null;
   const usernameClean = profile?.username?.replace(/^@/, '').trim() ?? '';
@@ -548,12 +610,85 @@ export function TradeNavProfileMenu({
               >
                 <Coins className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
                 <span className="min-w-0 flex-1 truncate">
-                  {tokenMenuAction === 'launch' ? 'Launch token' : 'Enable token'}
+                  {tokenMenuAction === 'launch' ? 'Launch SPT' : 'Enable Reservations'}
                 </span>
                 <ChevronRight className={profileMenuChevronClass} aria-hidden />
               </Link>
             </DropdownMenuItem>
           ) : null}
+          <DropdownMenuItem asChild>
+            <Link
+              href={MYSOCIAL_CREATE_POOL_HREF}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={profileMenuRowLinkClass}
+            >
+              <Droplets className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">Create Pool</span>
+              <ChevronRight className={profileMenuChevronClass} aria-hidden />
+            </Link>
+          </DropdownMenuItem>
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger
+              disabled={isChangingNetwork}
+              className={cn(
+                profileMenuRowLinkClass,
+                'cursor-pointer data-[state=open]:bg-muted/70',
+                isChangingNetwork && 'pointer-events-none opacity-60'
+              )}
+            >
+              <Globe className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              <span className="min-w-0 flex-1 truncate text-left">Environment</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent
+              sideOffset={6}
+              className={cn('min-w-[10.5rem] p-1', PROFILE_SUBMENU_SURFACE)}
+            >
+              {(['mainnet', 'testnet', 'localnet'] as const).map((network: NetworkType) => {
+                  const isMainnet = network === 'mainnet';
+                  const isActive = currentNetwork === network;
+                  return (
+                    <DropdownMenuItem
+                      key={network}
+                      disabled={isMainnet || isChangingNetwork}
+                      className="relative rounded-md py-2 pl-8 pr-2.5 text-sm"
+                      onSelect={() => {
+                        if (isMainnet) return;
+                        void changeNetwork(network);
+                      }}
+                    >
+                      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                        {isActive ? (
+                          <Check className="h-3 w-3" strokeWidth={2.25} aria-hidden />
+                        ) : null}
+                      </span>
+                      {NETWORK_LABELS[network]}
+                    </DropdownMenuItem>
+                  );
+              })}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          <DropdownMenuItem
+            className={cn(profileMenuRowLinkClass, 'cursor-default')}
+            onSelect={(e) => e.preventDefault()}
+          >
+            <Palette className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">Appearance</span>
+            <div
+              className="ml-auto shrink-0"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ProfileMenuThemeToggle />
+            </div>
+          </DropdownMenuItem>
+        </div>
+
+        <DropdownMenuSeparator className="my-0 bg-trade-shell-border opacity-70" />
+
+        <div className="space-y-0.5 px-1 pb-1 pt-0">
           <DropdownMenuItem asChild>
             <Link
               href={editHref}
@@ -566,11 +701,6 @@ export function TradeNavProfileMenu({
               <ChevronRight className={profileMenuChevronClass} aria-hidden />
             </Link>
           </DropdownMenuItem>
-        </div>
-
-        <DropdownMenuSeparator className="my-0 bg-trade-shell-border opacity-70" />
-
-        <div className="px-1 pb-1 pt-0">
           <DropdownMenuItem
             className={cn(
               'group flex cursor-pointer items-center rounded-md px-2.5 py-2 text-sm outline-none transition-colors',
