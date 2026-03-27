@@ -5,6 +5,7 @@ import '@sehaj23/react-spotlight-search/dist/index.css';
 import { TradeChartPoolHeader } from '@/components/trade/trade-chart-pool-header';
 import { TradePlatformAccessGate } from '@/components/trade/trade-platform-access-gate';
 import { TradeTopNav } from '@/components/trade/trade-top-nav';
+import { TradeSocialProofTokenWorkspace } from '@/components/trade/trade-social-proof-token-workspace';
 import { TradeWorkspaceLayout } from '@/components/trade/trade-workspace-layout';
 import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
 import { useTradeChartOhlcvEnabled } from '@/hooks/useTradeChartOhlcvEnabled';
@@ -17,6 +18,7 @@ import {
   getDefaultTradePoolKey,
   tradePoolKeysForNetwork,
 } from '@/lib/trade/pool-spotlight-items';
+import { cn } from '@/lib/utils';
 import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -208,38 +210,48 @@ export default function TradePage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden font-sans text-foreground">
       <TradeTopNav onTradeNavSegmentChange={setTradeNavSegment} />
-      {showOrderbookWorkspace ? (
-        <>
-          <TradePlatformAccessGate />
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain md:overflow-hidden">
-            <Suspense fallback={null}>
-              <TradeAuthMessage />
-            </Suspense>
-            <TradeWorkspaceLayout
-              chart={
-                <TradeChartWorkspace
-                  poolName={poolName}
-                  onOpenPoolSpotlight={() => setPoolSpotlightOpen(true)}
-                  ohlcvEnabled={ohlcvEnabled}
-                  chartContainerRef={setChartContainerRef}
-                />
-              }
+      <TradePlatformAccessGate />
+      <div
+        className={cn(
+          'flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain md:overflow-hidden',
+          !showOrderbookWorkspace && 'hidden'
+        )}
+        aria-hidden={!showOrderbookWorkspace}
+      >
+        <Suspense fallback={null}>
+          <TradeAuthMessage />
+        </Suspense>
+        <TradeWorkspaceLayout
+          chart={
+            <TradeChartWorkspace
               poolName={poolName}
+              onOpenPoolSpotlight={() => setPoolSpotlightOpen(true)}
+              ohlcvEnabled={ohlcvEnabled}
+              chartContainerRef={setChartContainerRef}
             />
-          </div>
-
-          <Spotlight
-            items={spotlightItems}
-            onSelect={onPoolSpotlightSelect}
-            isOpen={poolSpotlightOpen}
-            onClose={() => setPoolSpotlightOpen(false)}
-            placeholder="Search any trading pool..."
-            showInitialResults
-          />
-        </>
-      ) : (
-        <div className="min-h-0 flex-1 bg-background" aria-hidden />
-      )}
+          }
+          poolName={poolName}
+        />
+      </div>
+      <div
+        className={cn(
+          'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background',
+          showOrderbookWorkspace && 'hidden'
+        )}
+        aria-hidden={showOrderbookWorkspace}
+      >
+        <TradeSocialProofTokenWorkspace />
+      </div>
+      {showOrderbookWorkspace ? (
+        <Spotlight
+          items={spotlightItems}
+          onSelect={onPoolSpotlightSelect}
+          isOpen={poolSpotlightOpen}
+          onClose={() => setPoolSpotlightOpen(false)}
+          placeholder="Search any trading pool..."
+          showInitialResults
+        />
+      ) : null}
     </div>
   );
 }
