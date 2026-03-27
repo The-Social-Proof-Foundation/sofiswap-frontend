@@ -460,21 +460,28 @@ export function TradeWorkspaceLayout({
   if (!isMd) {
     return (
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        className={cn(
+          'flex w-full flex-col overflow-x-hidden',
+          /* Below md: height follows content so the scrollable page column can move. */
+          'md:min-h-0 md:flex-1 md:overflow-hidden'
+        )}
         aria-label="Trading workspace"
       >
-        {/* Mobile stack: chart (capped) → order book → swap → open activity (flexes). */}
-        <div className="flex h-[min(42vh,22rem)] min-h-[11.5rem] max-h-[26rem] shrink-0 flex-col overflow-hidden border-b border-trade-shell">
+        {/* Mobile stack: chart (capped) → order book → swap → activity; parent scrolls. */}
+        <div className="flex h-[min(38vh,20rem)] min-h-[10.5rem] max-h-[24rem] shrink-0 flex-col overflow-hidden border-b border-trade-shell">
           {chart}
         </div>
-        <div className="flex h-[min(30vh,17.5rem)] min-h-[10rem] max-h-[21rem] shrink-0 flex-col overflow-hidden">
+        <div className="flex h-[min(28vh,16rem)] min-h-[9rem] max-h-[18.5rem] shrink-0 flex-col overflow-hidden">
           <OrderBookSection
             poolName={poolName}
             className="h-full min-h-0 flex-1 border-t-0"
           />
         </div>
         <SwappingInputsSection poolName={poolName} className="shrink-0" />
-        <OpenTradesSection poolName={poolName} className="min-h-0 flex-1" />
+        <OpenTradesSection
+          poolName={poolName}
+          className="min-h-[min(40vh,19rem)] shrink-0"
+        />
       </div>
     );
   }

@@ -82,7 +82,8 @@ function Tabs({
   triggerClassName,
   'aria-label': ariaLabel,
 }: UnderlineTabsProps) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  /** Same element as the indicator’s `position: relative` container — keeps geometry aligned. */
+  const tabListRef = React.useRef<HTMLDivElement>(null);
   const btnRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
 
   const isControlled = activeTabProp !== undefined;
@@ -103,25 +104,27 @@ function Tabs({
   const [indicator, setIndicator] = React.useState({ left: 0, width: 0 });
 
   const updateIndicator = React.useCallback(() => {
-    const container = containerRef.current;
+    const list = tabListRef.current;
     const idx = tabs.findIndex((t) => t.id === activeTab);
-    if (!container || idx < 0) return;
+    if (!list || idx < 0) return;
     const btn = btnRefs.current[idx];
     if (!btn) return;
-    const cRect = container.getBoundingClientRect();
+    const lRect = list.getBoundingClientRect();
     const bRect = btn.getBoundingClientRect();
-    setIndicator({ left: bRect.left - cRect.left, width: bRect.width });
+    setIndicator({ left: bRect.left - lRect.left, width: bRect.width });
   }, [activeTab, tabs]);
 
   React.useLayoutEffect(() => {
     updateIndicator();
+    const raf = requestAnimationFrame(() => updateIndicator());
+    return () => cancelAnimationFrame(raf);
   }, [updateIndicator]);
 
   React.useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const list = tabListRef.current;
+    if (!list) return;
     const ro = new ResizeObserver(() => updateIndicator());
-    ro.observe(container);
+    ro.observe(list);
     window.addEventListener('resize', updateIndicator);
     return () => {
       ro.disconnect();
@@ -138,12 +141,13 @@ function Tabs({
   if (tabs.length === 0) return null;
 
   return (
-    <div ref={containerRef} className={cn('relative w-full min-w-0', className)}>
+    <div className={cn('w-full min-w-0', className)}>
       <div
+        ref={tabListRef}
         role="tablist"
         aria-label={ariaLabel}
         className={cn(
-          'relative flex w-full min-w-0 items-stretch justify-start gap-3 border-b border-trade-shell',
+          'relative flex w-full min-w-0 items-stretch justify-start gap-3 overflow-visible border-b border-trade-shell',
           listClassName
         )}
       >
@@ -176,7 +180,7 @@ function Tabs({
           );
         })}
         <div
-          className="pointer-events-none absolute bottom-[-1px] left-0 h-[2px] bg-primary transition-all duration-300 ease-out"
+          className="pointer-events-none absolute bottom-0 left-0 z-[1] h-[2px] bg-primary transition-[left,width,opacity] duration-300 ease-out"
           style={activeStyle}
           aria-hidden
         />
