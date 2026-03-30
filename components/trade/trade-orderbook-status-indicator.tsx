@@ -28,7 +28,7 @@ function orderbookStatusBadgeLabel(
   if (pending) return 'Loading';
   if (loadError) return 'Error';
   if (!data) return '—';
-  return String(data.status).toUpperCase() === 'OK' ? 'Synced' : data.status;
+  return String(data.status).toUpperCase() === 'OK' ? 'Online' : data.status;
 }
 
 const bar = {
@@ -141,7 +141,7 @@ export function TradeOrderbookStatusIndicator() {
       : displayHealth === 'pending'
         ? 'Status'
         : displayHealth === 'healthy'
-          ? 'Synced'
+          ? 'Online'
           : displayHealth === 'degraded'
             ? 'Degraded'
             : 'Issue';
@@ -154,7 +154,7 @@ export function TradeOrderbookStatusIndicator() {
             type="button"
             variant="ghost"
             className={cn(
-              'h-full min-h-9 gap-1.5 rounded-none px-4 text-[11px] font-normal shadow-none md:px-6',
+              'h-full min-h-10 gap-1.5 rounded-none px-4 text-[13px] font-normal shadow-none md:px-6',
               bar.triggerBg,
               bar.muted,
               bar.triggerHover,
@@ -194,7 +194,7 @@ export function TradeOrderbookStatusIndicator() {
           type="button"
           variant="ghost"
           className={cn(
-            'h-full min-h-9 gap-1.5 rounded-none px-4 text-[11px] font-normal shadow-none md:px-6',
+            'h-full min-h-10 gap-1.5 rounded-none px-4 text-[13px] font-normal shadow-none md:px-6',
             bar.triggerBg,
             bar.muted,
             bar.triggerHover,

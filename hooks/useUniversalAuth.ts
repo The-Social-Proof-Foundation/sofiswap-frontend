@@ -8,6 +8,7 @@ import { generateProfileFromGoogleData } from '@/lib/profile-utils'
 import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519'
 import * as bip39 from 'bip39'
 import { processGoogleAuthUser } from '@/lib/resend'
+import { SOCIAL_INDEXER_TESTNET_DEFAULT } from '@/lib/social-indexer/base-url'
 
 // Auth method type - added 'base' for Base network wallet connections and 'imported' for imported wallets
 type AuthMethod = 'google' | 'imported' | 'base' | 'wallet' | null
@@ -49,7 +50,7 @@ interface UniversalAuthState {
 }
 
 // MySocial indexing API
-const SOCIAL_INDEX_API = 'https://mys-social-indexer-testnet.up.railway.app'
+const SOCIAL_INDEX_API = SOCIAL_INDEXER_TESTNET_DEFAULT
 
 // Base network chain ID
 const BASE_CHAIN_ID = 8453

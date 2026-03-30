@@ -1,5 +1,7 @@
 import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519'
 
+import { SOCIAL_INDEXER_TESTNET_DEFAULT } from '@/lib/social-indexer/base-url'
+
 // Profile creation data interface
 interface ProfileCreationData {
   address: string
@@ -56,8 +58,8 @@ interface GoogleUserInfo {
   family_name?: string
 }
 
-// MySocial indexing API endpoints
-export const SOCIAL_INDEX_API = 'https://mys-social-indexer-testnet.up.railway.app'
+// MySocial indexing API endpoints (same default as reservation-pools / marquee)
+export const SOCIAL_INDEX_API = SOCIAL_INDEXER_TESTNET_DEFAULT
 
 /**
  * Fetch a MySocial profile by address

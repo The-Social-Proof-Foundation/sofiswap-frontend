@@ -51,3 +51,9 @@ export function getSofiSwapPlatformConfig(): SofiSwapPlatformConfig | null {
 export function getJoinPlatformMoveTarget(packageId: string): string {
   return `${packageId}::platform::join_platform`;
 }
+
+/** Public default MySocial profile address for the SPT tab when not signed in and no `?profile=`. */
+export function getDefaultSptProfileAddress(): string | null {
+  const v = trimPublic(process.env.NEXT_PUBLIC_DEFAULT_SPT_PROFILE_ADDRESS);
+  return v || null;
+}

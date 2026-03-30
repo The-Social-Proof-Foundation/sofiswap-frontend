@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { TradeNavFundsBar } from '@/components/trade/trade-nav-funds-bar';
 import { TradeNavProfileMenu } from '@/components/trade/trade-nav-profile-menu';
 import { Button } from '@/components/ui/button';
+import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import {
   SlidingSegmentTabs,
   type SlidingSegmentItem,
@@ -23,19 +24,25 @@ import {
   writeTradeNavSegment,
   type TradeNavSegment,
 } from '@/lib/trade-nav-segment-storage';
+import { tradeRailSegmentListClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
+import { Search } from 'lucide-react';
 
 export type { TradeNavSegment };
 
 /** Matches order book rail / buy–sell segment triggers; active color comes from sliding-segment-tabs. */
 const tradeNavSegmentTriggerBase = 'px-2 py-0 text-[13px] leading-tight';
 
+/** Search pill width cap; scales down inside the flex gap between tabs and wallet. */
+const tradeNavSearchWidthClass =
+  'w-[min(100%,14rem)] sm:w-[min(100%,17rem)] md:w-[min(100%,21rem)]';
+
 function tradeNavSegmentItems(): SlidingSegmentItem[] {
   return [
     {
       value: 'orderbook',
       label: (
-        <span className="block min-w-0 max-w-full truncate text-inherit">Orderbook</span>
+        <span className="block min-w-0 max-w-full truncate text-inherit">Exchange</span>
       ),
       triggerClassName: cn(tradeNavSegmentTriggerBase),
     },
@@ -49,6 +56,39 @@ function tradeNavSegmentItems(): SlidingSegmentItem[] {
       triggerClassName: cn(tradeNavSegmentTriggerBase),
     },
   ];
+}
+
+function TradeSpotlightSearchTrigger({
+  onClick,
+  className,
+}: {
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex h-10 w-full max-w-full items-center gap-2 rounded-full border border-trade-shell bg-muted/50 px-3.5 text-left text-[13px] text-[var(--muted-foreground)]',
+        'shadow-[0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-muted/70 hover:text-foreground',
+        'dark:bg-muted/30 dark:hover:bg-muted/45',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        className
+      )}
+      aria-label="Open search: tokens, pools, and wallets"
+    >
+      <Search className="size-3 shrink-0 opacity-65" strokeWidth={1.5} aria-hidden />
+      <span className="min-w-0 flex-1 truncate">Search tokens, pools, and wallets</span>
+      <KbdGroup
+        className="hidden shrink-0 sm:inline-flex"
+        aria-label="Keyboard shortcut: Command-K"
+      >
+        <Kbd aria-hidden>⌘</Kbd>
+        <Kbd aria-hidden>K</Kbd>
+      </KbdGroup>
+    </button>
+  );
 }
 
 function TradeNavSegmentTabs({
@@ -69,11 +109,7 @@ function TradeNavSegmentTabs({
       value={segment}
       onValueChange={onSegmentChange}
       className={className}
-      listClassName={cn(
-        'grid grid-cols-2 gap-0 rounded-[10px] border border-trade-shell bg-muted/70 p-[3px] shadow-inner',
-        'dark:bg-muted/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
-        listClassName
-      )}
+      listClassName={cn(tradeRailSegmentListClass, listClassName)}
       aria-label="Trading view"
       items={items}
     />
@@ -187,12 +223,15 @@ export function TradeTopNav({
   tradeSegment = 'orderbook',
   onTradeSegmentChange,
   onTradeNavSegmentChange,
+  onOpenTradeSearch,
 }: {
   className?: string;
   tradeSegment?: TradeNavSegment;
   onTradeSegmentChange?: (segment: TradeNavSegment) => void;
   /** Fires when the active trading view changes (including after localStorage hydrate). */
   onTradeNavSegmentChange?: (segment: TradeNavSegment) => void;
+  /** Spotlight / command-palette entry (pool search); rendered as a centered pill on desktop. */
+  onOpenTradeSearch?: () => void;
 }) {
   const {
     isConfigured,
@@ -289,12 +328,17 @@ export function TradeTopNav({
       )}
     >
       <div className="w-full px-4 sm:px-6">
-        {/* Mobile: brand + auth, then full-width segment bar */}
+        {/* Mobile: brand + auth, search, segment bar */}
         <div className="flex flex-col sm:hidden">
           <div className="flex h-14 items-center justify-between gap-3">
             <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
             <TradeNavAuthActions {...authProps} />
           </div>
+          {onOpenTradeSearch ? (
+            <div className="pb-2">
+              <TradeSpotlightSearchTrigger onClick={onOpenTradeSearch} />
+            </div>
+          ) : null}
           <div
             className={cn(
               'border-t border-trade-shell bg-background/50 py-2 backdrop-blur-xl',
@@ -310,9 +354,9 @@ export function TradeTopNav({
           </div>
         </div>
 
-        {/* Desktop: single row */}
-        <div className="hidden h-14 items-center justify-between gap-4 sm:flex">
-          <div className="flex min-w-0 flex-1 items-center gap-4 sm:gap-6">
+        {/* Desktop: [brand + tabs] | search centered in remaining gap | auth — avoids overlapping tabs */}
+        <div className="hidden h-14 items-center gap-2 sm:flex sm:gap-3">
+          <div className="flex min-w-0 shrink-0 items-center gap-4 sm:gap-6">
             <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
             <TradeNavSegmentTabs
               segment={segment}
@@ -321,7 +365,17 @@ export function TradeTopNav({
               listClassName="h-9 w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]"
             />
           </div>
-          <TradeNavAuthActions {...authProps} />
+          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-1">
+            {onOpenTradeSearch ? (
+              <TradeSpotlightSearchTrigger
+                onClick={onOpenTradeSearch}
+                className={cn('max-w-none shrink-0', tradeNavSearchWidthClass)}
+              />
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center justify-end">
+            <TradeNavAuthActions {...authProps} />
+          </div>
         </div>
       </div>
     </header>

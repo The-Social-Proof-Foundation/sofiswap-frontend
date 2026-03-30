@@ -26,6 +26,7 @@ import { orderbookRuntimeNetwork } from '@/lib/orderbook-config';
 import { useNetwork } from '@/lib/network-provider';
 import { poolTickerForKey } from '@/lib/trade/trade-pool-catalog';
 import type { UserTradeHistoryRow } from '@/lib/trade/activity-tables';
+import { tradeRailSegmentListClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
 import { ArrowRightToLine, Menu } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -45,11 +46,6 @@ const MAX_ORDERBOOK_SWAP_PX = 480;
 /** Open trades height bounds (% of vertical split to the left of the swap column). */
 const OPEN_TRADES_MIN_PCT = 4.25;
 const OPEN_TRADES_MAX_PCT = 32;
-
-const railSegmentListClass = cn(
-  'grid grid-cols-2 gap-0 rounded-[10px] border border-trade-shell bg-muted/70 p-[3px] shadow-inner',
-  'dark:bg-muted/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-);
 
 function OpenTradesSection({
   className,
@@ -282,7 +278,7 @@ function OrderBookSection({
           value={segment}
           onValueChange={(v) => setSegment(v as OrderBookRailSegment)}
           className="min-w-0 flex-1"
-          listClassName={cn(railSegmentListClass, 'h-9 w-full')}
+          listClassName={cn(tradeRailSegmentListClass, 'h-9 w-full')}
           aria-label="Orderbook panel"
           items={orderBookRailSegmentItems}
         />
@@ -381,7 +377,7 @@ function SwappingInputsSection({
             value={side}
             onValueChange={(v) => setSide(v as SwapSideSegment)}
             className="min-w-0 flex-1"
-            listClassName={cn(railSegmentListClass, 'h-9 w-full')}
+            listClassName={cn(tradeRailSegmentListClass, 'h-9 w-full')}
             aria-label="Buy or sell"
             items={swapSideSegmentItems}
           />

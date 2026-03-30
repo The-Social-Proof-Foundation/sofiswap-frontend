@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ProfilePortfolioOverviewProfile } from '@/lib/graphql/profile-portfolio-overview';
+import { buildMysocialWalletExplorerHref } from '@/lib/mysocial-wallet-explorer';
 import { useNetwork } from '@/lib/network-provider';
 import { NETWORK_LABELS, type NetworkType } from '@/lib/network-utils';
 import { cn } from '@/lib/utils';
@@ -182,13 +183,6 @@ function mysocialEditProfileHref(profile: ProfilePortfolioOverviewProfile | null
   return `${MYSOCIAL_ORIGIN}/settings/profile`;
 }
 
-function mysocialWalletExplorerHref(address: string): string {
-  const a = address.trim();
-  if (!a) return `${MYSOCIAL_ORIGIN}/ecosystem/sofiswap`;
-  const url = new URL('/wallet', MYSOCIAL_ORIGIN);
-  url.searchParams.set('address', a);
-  return url.toString();
-}
 
 /** Matches how sofi logo is shown in {@link TradeTopNav} (`h-8 w-8`). */
 export const TRADE_NAV_LOGO_PX = 32;
@@ -497,7 +491,7 @@ export function TradeNavProfileMenu({
       ? `@${usernameClean}`
       : 'MySocial profile';
   const profileHref = mysocialProfileHref(profile ?? null);
-  const walletExplorerHref = mysocialWalletExplorerHref(walletAddress);
+  const walletExplorerHref = buildMysocialWalletExplorerHref(walletAddress);
   const editHref = mysocialEditProfileHref(profile ?? null);
 
   const ringLabel = profileInitial(profile ?? null);
@@ -576,7 +570,7 @@ export function TradeNavProfileMenu({
                 <p className="mt-0.5 pl-px text-sm leading-tight">
                   <span className="font-bold tabular-nums">{formatSocialCount(followers)}</span>
                   <span className="font-normal text-[var(--muted-foreground)]"> followers</span>
-                  <span className="text-[var(--muted-foreground)] px-2" aria-hidden>
+                  <span className="text-[var(--muted-foreground)] px-1" aria-hidden>
                     {' '}
                   </span>
                   <span className="font-bold tabular-nums">{formatSocialCount(following)}</span>
