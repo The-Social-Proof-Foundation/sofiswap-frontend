@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 
 /** Text + interaction only; the pill background is the sliding thumb. */
 export const slidingSegmentTriggerClass = cn(
-  'relative z-[1] flex h-full min-h-0 w-full min-w-0 items-center justify-center rounded-md font-medium shadow-none',
+  'relative z-[1] flex h-full min-h-0 w-full min-w-0 items-center justify-center rounded-lg font-medium shadow-none',
   'bg-transparent text-[var(--muted-foreground)] transition-colors duration-200',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
   'data-[state=inactive]:hover:text-foreground/90',
@@ -17,7 +17,7 @@ export const slidingSegmentTriggerClass = cn(
 );
 
 const thumbClass = cn(
-  'pointer-events-none z-0 rounded-md will-change-[left,width,top,height]',
+  'pointer-events-none z-0 rounded-lg will-change-[left,width,top,height]',
   'bg-background shadow-[0_1px_3px_rgba(0,0,0,0.12),0_1px_1px_rgba(0,0,0,0.04)]',
   'dark:bg-zinc-800/95 dark:shadow-[0_3px_10px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.06)]'
 );
@@ -49,6 +49,8 @@ export function SlidingSegmentTabs({
   const triggerRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
 
   const [thumb, setThumb] = React.useState({ left: 0, width: 0, top: 0, height: 0 });
+  /** After first layout, thumb snaps in place; spring only runs when the user changes segment. */
+  const [thumbMotion, setThumbMotion] = React.useState<'snap' | 'spring'>('snap');
 
   const updateThumb = React.useCallback(() => {
     const list = listRef.current;
@@ -58,10 +60,14 @@ export function SlidingSegmentTabs({
     if (!el) return;
     const lr = list.getBoundingClientRect();
     const er = el.getBoundingClientRect();
+    const b = getComputedStyle(list);
+    const borderLeft = parseFloat(b.borderLeftWidth) || 0;
+    const borderTop = parseFloat(b.borderTopWidth) || 0;
+    // Absolute thumb is laid out vs padding box; rect delta uses border box — compensate border or pill sits low.
     setThumb({
-      left: er.left - lr.left,
+      left: er.left - lr.left - borderLeft,
       width: er.width,
-      top: er.top - lr.top,
+      top: er.top - lr.top - borderTop,
       height: er.height,
     });
   }, [value, items]);
@@ -81,6 +87,12 @@ export function SlidingSegmentTabs({
       window.removeEventListener('resize', updateThumb);
     };
   }, [updateThumb]);
+
+  React.useEffect(() => {
+    if (thumbMotion !== 'snap' || thumb.width <= 0) return;
+    const id = requestAnimationFrame(() => setThumbMotion('spring'));
+    return () => cancelAnimationFrame(id);
+  }, [thumb.width, thumb.left, thumb.top, thumbMotion]);
 
   const spring = {
     type: 'spring' as const,
@@ -107,7 +119,7 @@ export function SlidingSegmentTabs({
             height: thumb.height,
             opacity: thumb.width > 0 ? 1 : 0,
           }}
-          transition={spring}
+          transition={thumbMotion === 'snap' ? { duration: 0 } : spring}
           style={{ position: 'absolute' }}
         />
         {items.map((item, i) => (

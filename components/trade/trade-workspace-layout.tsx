@@ -14,7 +14,6 @@ import { TradeHistoryPanel } from '@/components/trade/trade-history-panel';
 import { TradeOpenOrdersTable } from '@/components/trade/trade-open-orders-table';
 import { TradeOrderBookPanel } from '@/components/trade/trade-order-book-panel';
 import { TradeOrderPanel } from '@/components/trade/trade-order-panel';
-import { TradeUserTradeHistoryTable } from '@/components/trade/trade-user-trade-history-table';
 import { SlidingSegmentTabs } from '@/components/ui/sliding-segment-tabs';
 import { Tabs, type UnderlineTabItem } from '@/components/ui/tabs';
 import { useAccountOpenOrders } from '@/hooks/useAccountOpenOrders';
@@ -24,13 +23,14 @@ import { usePoolTrades } from '@/hooks/usePoolTrades';
 import { useTradingSetupStatus } from '@/hooks/useTradingSetupStatus';
 import { orderbookRuntimeNetwork } from '@/lib/orderbook-config';
 import { useNetwork } from '@/lib/network-provider';
+import { executeCancelPoolOrder } from '@/lib/tx/cancel-order';
 import { poolTickerForKey } from '@/lib/trade/trade-pool-catalog';
-import type { UserTradeHistoryRow } from '@/lib/trade/activity-tables';
 import { tradeRailSegmentListClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
 import { ArrowRightToLine, Menu } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 const MD_QUERY = '(min-width: 768px)';
 /** Swap-only column on very large viewports (Tailwind 2xl). */
@@ -56,38 +56,55 @@ function OpenTradesSection({
 }) {
   const { currentNetwork } = useNetwork();
   const obNet = orderbookRuntimeNetwork(currentNetwork);
-  const { isAuthenticated, isLoading: authLoading, displayAddress, signIn } =
-    useMySocialAuth();
+  const {
+    isAuthenticated,
+    isLoading: authLoading,
+    displayAddress,
+    signIn,
+    keypair,
+  } = useMySocialAuth();
   const [segment, setSegment] = useState<string>('open-orders');
+  const [cancelingOrderId, setCancelingOrderId] = useState<string | null>(null);
 
   const openOrdersTabActive = segment === 'open-orders';
-  const tradingForOpenOrders = useTradingSetupStatus({
+  const tradeHistoryTabActive = segment === 'trade-history';
+
+  const tradingSetup = useTradingSetupStatus({
     isAuthenticated,
     displayAddress,
     authLoading,
     network: currentNetwork,
-    enabled: openOrdersTabActive,
+    enabled: isAuthenticated && !authLoading,
   });
 
   const {
     rows: openOrderRows,
     error: openOrdersError,
     isLoading: openOrdersLoading,
+    refresh: refreshOpenOrders,
   } = useAccountOpenOrders({
     poolName,
     obNet,
-    primaryBalanceManagerId: tradingForOpenOrders.primaryBalanceManagerId,
+    primaryBalanceManagerId: tradingSetup.primaryBalanceManagerId,
     enabled:
       openOrdersTabActive &&
       isAuthenticated &&
       !authLoading &&
       Boolean(obNet) &&
-      Boolean(tradingForOpenOrders.primaryBalanceManagerId),
+      Boolean(tradingSetup.primaryBalanceManagerId),
   });
 
-  const tradeHistoryRows = useMemo<UserTradeHistoryRow[]>(() => [], []);
+  const {
+    data: poolTrades,
+    error: poolTradesError,
+    isLoading: poolTradesLoading,
+    refresh: refreshPoolTrades,
+  } = usePoolTrades({
+    poolName,
+    enabled: Boolean(poolName.trim()),
+  });
 
-  const tradeHistoryCount = tradeHistoryRows.length;
+  const tradeHistoryCount = poolTrades.length;
 
   const tabs = useMemo((): UnderlineTabItem[] => {
     const tradeHistorySuffix =
@@ -121,6 +138,61 @@ function OpenTradesSection({
   /** Sign-in CTA only for guests; hide while auth is still resolving to avoid flashing the wrong state. */
   const showSignInOnEmpty = !authLoading && !isAuthenticated;
 
+  const onCancelOrder = useCallback(
+    async (orderId: string) => {
+      if (!obNet) {
+        toast.error('Cancel unavailable', {
+          description: 'Orderbook is not available on this network.',
+        });
+        return;
+      }
+      if (!displayAddress || !keypair) {
+        toast.error('Signing unavailable', {
+          description: 'Connect a wallet that can sign transactions.',
+        });
+        return;
+      }
+      const managerId = tradingSetup.primaryBalanceManagerId;
+      if (!managerId) {
+        toast.error('Trading setup incomplete', {
+          description: 'Balance manager not found for this wallet.',
+        });
+        return;
+      }
+      setCancelingOrderId(orderId);
+      try {
+        await executeCancelPoolOrder({
+          network: currentNetwork,
+          obNet,
+          poolKey: poolName.trim(),
+          orderId,
+          balanceManagerObjectId: managerId,
+          sender: displayAddress,
+          signer: keypair,
+        });
+        toast.success('Order canceled');
+        refreshOpenOrders();
+        refreshPoolTrades();
+      } catch (e) {
+        toast.error('Could not cancel order', {
+          description: e instanceof Error ? e.message : String(e),
+        });
+      } finally {
+        setCancelingOrderId(null);
+      }
+    },
+    [
+      obNet,
+      displayAddress,
+      keypair,
+      tradingSetup.primaryBalanceManagerId,
+      currentNetwork,
+      poolName,
+      refreshOpenOrders,
+      refreshPoolTrades,
+    ]
+  );
+
   const renderEmptyState = () => (
     <TradeActivityEmptyState
       showGetStarted={showSignInOnEmpty}
@@ -153,7 +225,7 @@ function OpenTradesSection({
           isAuthenticated &&
           !authLoading &&
           obNet &&
-          tradingForOpenOrders.isLoading ? (
+          tradingSetup.isLoading ? (
             <TradePanelCenteredStateFrame>
               <TradePanelCenteredState
                 variant="muted"
@@ -161,11 +233,11 @@ function OpenTradesSection({
                 message=""
               />
             </TradePanelCenteredStateFrame>
-          ) : openOrdersTabActive && isAuthenticated && !authLoading && obNet && tradingForOpenOrders.error ? (
+          ) : openOrdersTabActive && isAuthenticated && !authLoading && obNet && tradingSetup.error ? (
             <TradePanelCenteredStateFrame>
               <TradePanelCenteredState
                 headline="Trading setup unavailable"
-                message={tradingForOpenOrders.error}
+                message={tradingSetup.error}
                 headlineClassName="text-primary"
               />
             </TradePanelCenteredStateFrame>
@@ -182,17 +254,34 @@ function OpenTradesSection({
               <TradePanelCenteredState headline="Unable to load open orders" message={openOrdersError} />
             </TradePanelCenteredStateFrame>
           ) : openOrderRows.length > 0 ? (
-            <TradeOpenOrdersTable rows={openOrderRows} />
+            <TradeOpenOrdersTable
+              rows={openOrderRows}
+              onCancelOrder={
+                obNet && keypair && tradingSetup.primaryBalanceManagerId ? onCancelOrder : undefined
+              }
+              cancelingOrderId={cancelingOrderId}
+            />
           ) : (
             renderEmptyState()
           )
         ) : null}
 
         {segment === 'trade-history' ? (
-          tradeHistoryRows.length > 0 ? (
-            <TradeUserTradeHistoryTable rows={tradeHistoryRows} />
+          tradeHistoryTabActive && poolTradesLoading ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState
+                variant="muted"
+                headline="Loading trade history…"
+                message=""
+              />
+            </TradePanelCenteredStateFrame>
           ) : (
-            renderEmptyState()
+            <TradeHistoryPanel
+              className="min-h-[8rem]"
+              trades={poolTrades}
+              isLoading={poolTradesLoading}
+              error={poolTradesError}
+            />
           )
         ) : null}
       </div>
@@ -278,7 +367,7 @@ function OrderBookSection({
           value={segment}
           onValueChange={(v) => setSegment(v as OrderBookRailSegment)}
           className="min-w-0 flex-1"
-          listClassName={cn(tradeRailSegmentListClass, 'h-9 w-full')}
+          listClassName={cn(tradeRailSegmentListClass, 'h-10 w-full')}
           aria-label="Orderbook panel"
           items={orderBookRailSegmentItems}
         />
@@ -377,7 +466,7 @@ function SwappingInputsSection({
             value={side}
             onValueChange={(v) => setSide(v as SwapSideSegment)}
             className="min-w-0 flex-1"
-            listClassName={cn(tradeRailSegmentListClass, 'h-9 w-full')}
+            listClassName={cn(tradeRailSegmentListClass, 'h-10 w-full')}
             aria-label="Buy or sell"
             items={swapSideSegmentItems}
           />

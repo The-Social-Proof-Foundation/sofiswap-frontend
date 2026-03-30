@@ -31,7 +31,7 @@ import { Search } from 'lucide-react';
 export type { TradeNavSegment };
 
 /** Matches order book rail / buy–sell segment triggers; active color comes from sliding-segment-tabs. */
-const tradeNavSegmentTriggerBase = 'px-2 py-0 text-[13px] leading-tight';
+const tradeNavSegmentTriggerBase = 'px-2 py-0 text-[13px] leading-none';
 
 /** Search pill width cap; scales down inside the flex gap between tabs and wallet. */
 const tradeNavSearchWidthClass =
@@ -70,7 +70,7 @@ function TradeSpotlightSearchTrigger({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-10 w-full max-w-full items-center gap-2 rounded-full border border-trade-shell bg-muted/50 px-3.5 text-left text-[13px] text-[var(--muted-foreground)]',
+        'flex h-11 w-full max-w-full items-center gap-2 rounded-full border border-trade-shell bg-muted/50 px-3.5 text-left text-[13px] text-[var(--muted-foreground)]',
         'shadow-[0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-muted/70 hover:text-foreground',
         'dark:bg-muted/30 dark:hover:bg-muted/45',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
@@ -78,7 +78,7 @@ function TradeSpotlightSearchTrigger({
       )}
       aria-label="Open search: tokens, pools, and wallets"
     >
-      <Search className="size-3 shrink-0 opacity-65" strokeWidth={1.5} aria-hidden />
+      <Search className="shrink-0 opacity-65" size={16} strokeWidth={1.75} aria-hidden />
       <span className="min-w-0 flex-1 truncate">Search tokens, pools, and wallets</span>
       <KbdGroup
         className="hidden shrink-0 sm:inline-flex"
@@ -129,21 +129,21 @@ function TradeNavBrand({
     <Link
       href="/"
       className={cn(
-        'group flex shrink-0 items-center gap-2 font-satoshi text-xl font-semibold tracking-tight transition-opacity hover:opacity-90 sm:gap-3',
+        'group flex shrink-0 items-center gap-2 font-satoshi text-[1.375rem] font-semibold tracking-tight transition-opacity hover:opacity-90 sm:gap-3',
         linkClassName
       )}
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center">
         {mounted ? (
           <Image
             src={logoSrc}
             alt="SofiSwap Logo"
-            width={32}
-            height={32}
-            className="h-8 w-8"
+            width={36}
+            height={36}
+            className="h-9 w-9"
           />
         ) : (
-          <div className="h-8 w-8" aria-hidden />
+          <div className="h-9 w-9" aria-hidden />
         )}
       </div>
       <span className="inline-flex items-baseline">
@@ -320,6 +320,9 @@ export function TradeTopNav({
     profile: profileOverview?.profile,
   };
 
+  /** Matches TradeNavAuthActions: funds + profile vs Get started. */
+  const loggedIn = isAuthenticated && Boolean(displayAddress?.trim());
+
   return (
     <header
       className={cn(
@@ -330,7 +333,7 @@ export function TradeTopNav({
       <div className="w-full px-4 sm:px-6">
         {/* Mobile: brand + auth, search, segment bar */}
         <div className="flex flex-col sm:hidden">
-          <div className="flex h-14 items-center justify-between gap-3">
+          <div className="flex h-[3.75rem] items-center justify-between gap-3">
             <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
             <TradeNavAuthActions {...authProps} />
           </div>
@@ -349,33 +352,50 @@ export function TradeTopNav({
               segment={segment}
               onSegmentChange={setSegment}
               className="w-full min-w-0"
-              listClassName="h-9 w-full max-w-none"
+              listClassName="h-11 w-full max-w-none"
             />
           </div>
         </div>
 
-        {/* Desktop: [brand + tabs] | search centered in remaining gap | auth — avoids overlapping tabs */}
-        <div className="hidden h-14 items-center gap-2 sm:flex sm:gap-3">
+        {/* Desktop: logged-in → search centered; guest → search right-aligned next to Get started */}
+        <div className="hidden h-[3.75rem] items-center gap-2 sm:flex sm:gap-3">
           <div className="flex min-w-0 shrink-0 items-center gap-4 sm:gap-6">
             <TradeNavBrand mounted={mounted} logoSrc={logoSrc} />
             <TradeNavSegmentTabs
               segment={segment}
               onSegmentChange={setSegment}
               className="min-w-0 flex-initial"
-              listClassName="h-9 w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]"
+              listClassName="h-11 w-full max-w-[min(100%,20rem)] sm:max-w-[22rem]"
             />
           </div>
-          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-1">
-            {onOpenTradeSearch ? (
-              <TradeSpotlightSearchTrigger
-                onClick={onOpenTradeSearch}
-                className={cn('max-w-none shrink-0', tradeNavSearchWidthClass)}
-              />
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-center justify-end">
-            <TradeNavAuthActions {...authProps} />
-          </div>
+          {loggedIn ? (
+            <>
+              <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-1">
+                {onOpenTradeSearch ? (
+                  <TradeSpotlightSearchTrigger
+                    onClick={onOpenTradeSearch}
+                    className={cn('max-w-none shrink-0', tradeNavSearchWidthClass)}
+                  />
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center justify-end">
+                <TradeNavAuthActions {...authProps} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="min-h-0 min-w-0 flex-1" aria-hidden />
+              <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 sm:gap-3">
+                {onOpenTradeSearch ? (
+                  <TradeSpotlightSearchTrigger
+                    onClick={onOpenTradeSearch}
+                    className={cn('max-w-none shrink-0', tradeNavSearchWidthClass)}
+                  />
+                ) : null}
+                <TradeNavAuthActions {...authProps} />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </header>

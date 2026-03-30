@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { OpenOrderRow } from '@/lib/trade/activity-tables';
 
@@ -9,9 +10,13 @@ const td = 'py-2 text-xs tabular-nums text-foreground';
 export function TradeOpenOrdersTable({
   rows,
   className,
+  onCancelOrder,
+  cancelingOrderId,
 }: {
   rows: OpenOrderRow[];
   className?: string;
+  onCancelOrder?: (orderId: string) => void;
+  cancelingOrderId?: string | null;
 }) {
   if (rows.length === 0) return null;
 
@@ -45,7 +50,22 @@ export function TradeOpenOrdersTable({
               <td className={cn(td, 'pr-3 text-right')}>{row.price}</td>
               <td className={cn(td, 'pr-3 text-right')}>{row.quantity}</td>
               <td className={cn(td, 'pr-3 text-right')}>{row.filled}</td>
-              <td className={cn(td, 'text-right text-[var(--muted-foreground)]')}>—</td>
+              <td className={cn(td, 'text-right')}>
+                {onCancelOrder ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs font-semibold text-rose-600 hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300"
+                    disabled={cancelingOrderId === row.id}
+                    onClick={() => onCancelOrder(row.id)}
+                  >
+                    {cancelingOrderId === row.id ? 'Canceling…' : 'Cancel'}
+                  </Button>
+                ) : (
+                  <span className="text-[var(--muted-foreground)]">—</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

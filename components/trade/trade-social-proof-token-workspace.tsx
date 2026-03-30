@@ -1223,7 +1223,7 @@ function PriceChartBlock({
         value={timeframe}
         onValueChange={(v) => onTimeframeChange(v as Timeframe)}
         className="min-w-0 sm:max-w-[420px]"
-        listClassName={cn(tradeSptSwapSegmentShellClass, 'grid h-9 w-full grid-cols-6 sm:w-auto')}
+        listClassName={cn(tradeSptSwapSegmentShellClass, 'grid h-10 w-full grid-cols-6 sm:w-auto')}
         aria-label="Chart timeframe"
         items={tfItems}
       />

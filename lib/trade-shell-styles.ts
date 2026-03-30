@@ -7,13 +7,13 @@ import { cn } from '@/lib/utils';
 
 /** Buy/sell + Exchange/SPT-style segment control: bordered inset track (see TradeTopNav, workspace rail). */
 export const tradeRailSegmentListClass = cn(
-  'grid grid-cols-2 gap-0 rounded-[10px] border border-trade-shell bg-muted/70 p-[3px] shadow-inner',
+  'grid grid-cols-2 grid-rows-1 items-stretch gap-0 overflow-hidden rounded-xl border border-trade-shell bg-muted/70 p-1 shadow-inner',
   'dark:bg-muted/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
 );
 
 /** Soft segment track inside SPT panels (no outer border — avoids border-on-border). */
 export const tradeSptSwapSegmentShellClass = cn(
-  'grid gap-0 rounded-[10px] bg-muted/45 p-[3px]',
+  'grid grid-rows-1 items-stretch gap-0 overflow-hidden rounded-xl bg-muted/45 p-1',
   'dark:bg-muted/25'
 );
 

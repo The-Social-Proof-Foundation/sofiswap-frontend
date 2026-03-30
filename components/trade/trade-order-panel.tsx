@@ -245,10 +245,10 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
           <Button
             key={pct}
             type="button"
-            variant="outline"
+            variant="default"
             size="sm"
             disabled={pctDisabled}
-            className="h-9 rounded-lg px-0 text-[11px] font-semibold"
+            className="h-8 rounded-lg px-0 text-[11px]"
             onClick={() => applyPercent(pct)}
           >
             {pct}%

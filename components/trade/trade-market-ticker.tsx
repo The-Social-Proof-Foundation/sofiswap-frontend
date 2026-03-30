@@ -46,7 +46,7 @@ const TICKER_MODE_LABEL: Record<TickerListMode, string> = {
   new: 'Newest',
 };
 
-/** Reference-style palette (dark terminal ticker) */
+/** Reference-style palette (dark terminal ticker); deltas use theme primary / destructive for brand parity */
 const bar = {
   bg: 'bg-[#0d0d0d]',
   border: 'border-trade-shell',
@@ -55,8 +55,8 @@ const bar = {
   muted: 'text-[#a0a0a0]',
   mutedHover: 'hover:text-[#c8c8c8]',
   body: 'text-[#e0e0e0]',
-  up: 'text-[#26a69a]',
-  down: 'text-[#ef5350]',
+  up: 'text-primary',
+  down: 'text-destructive',
   menuBg: 'bg-[#1a1a1a]',
   menuBorder: 'border-trade-shell',
 } as const;
