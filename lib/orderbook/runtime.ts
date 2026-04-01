@@ -37,21 +37,33 @@ export async function fetchRegisteredBalanceManagerIds(
       target: `${orderbookPackageId}::registry::get_balance_manager_ids`,
       arguments: [tx.object(registryId), tx.pure.address(sender)],
     });
-    const res = await jsonRpcClient.core.simulateTransaction({
-      transaction: tx,
-      include: { commandResults: true, effects: true },
+    // Use dev-inspect instead of `core.simulateTransaction`: the latter builds from
+    // `TransactionDataBuilder` after only `prepareForSerialization`, skipping
+    // `Transaction#build`'s `resolveTransactionPlugin` — which can leave inputs in a
+    // non-BCS-serializable shape and throw
+    // "Expected object with one key, but found 0 for type CallArg".
+    const inspect = await jsonRpcClient.devInspectTransactionBlock({
+      sender,
+      transactionBlock: tx,
     });
-    const raw = res.commandResults?.[0]?.returnValues?.[0]?.bcs;
-    if (!raw) {
-      throw new Error('simulateTransaction: missing return value for get_balance_manager_ids');
+    if (inspect.error) {
+      throw new Error(inspect.error);
     }
+    const rawTuple = inspect.results?.[0]?.returnValues?.[0];
+    if (!rawTuple) {
+      throw new Error('devInspectTransactionBlock: missing return value for get_balance_manager_ids');
+    }
+    const raw = new Uint8Array(rawTuple[0]);
     const ids = bcs
       .vector(bcs.Address)
       .parse(raw)
       .map((id) => normalizeMySoAddress(id));
     return { ids, error: null };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    let msg = e instanceof Error ? e.message : String(e);
+    if (/borrow_child_object|dynamic_field::borrow/i.test(msg)) {
+      msg = `${msg} — Registry/package IDs may not match this chain, or the registry balance-manager map was not initialized. Check NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_* and NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_* (pair from the same deploy) and network selection.`;
+    }
     return { ids: [], error: msg };
   }
 }
@@ -70,7 +82,7 @@ const BALANCE_LOG_COIN_KEYS = ['MYSO', 'MYUSD'] as const;
  */
 export async function logBalanceManagerSnapshotToConsole(input: {
   jsonRpcClient: MySoJsonRpcClient;
-  /** Required for `simulateTransaction` (MySo RPC expects a transaction sender). */
+  /** Sender for dev-inspect / PTB simulation (MySo RPC). */
   simulationSender: string;
   balanceManagerObjectId: string;
   network: OrderbookRuntimeNetwork;
@@ -92,14 +104,18 @@ export async function logBalanceManagerSnapshotToConsole(input: {
         arguments: [tx.object(balanceManagerObjectId)],
         typeArguments: [coin.type],
       });
-      const res = await jsonRpcClient.core.simulateTransaction({
-        transaction: tx,
-        include: { commandResults: true, effects: true },
+      const inspect = await jsonRpcClient.devInspectTransactionBlock({
+        sender,
+        transactionBlock: tx,
       });
-      const raw = res.commandResults?.[0]?.returnValues?.[0]?.bcs;
-      if (!raw) {
-        throw new Error('simulateTransaction: missing balance return value');
+      if (inspect.error) {
+        throw new Error(inspect.error);
       }
+      const rawTuple = inspect.results?.[0]?.returnValues?.[0];
+      if (!rawTuple) {
+        throw new Error('devInspectTransactionBlock: missing balance return value');
+      }
+      const raw = new Uint8Array(rawTuple[0]);
       const parsedBalance = bcs.U64.parse(raw);
       const adjusted = Number(parsedBalance) / coin.scalar;
       balances[coinKey] = {

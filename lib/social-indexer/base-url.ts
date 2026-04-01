@@ -1,7 +1,7 @@
 import type { NetworkType } from '@/lib/network-utils';
 import { getFullnodeJsonRpcUrl } from '@/lib/network-utils';
 
-/** Same host the app uses for `/profiles/...` (see profile-utils). Not the Sui JSON-RPC fullnode. */
+/** Same host the app uses for `/profiles/...` (see profile-utils). Not the MySo JSON-RPC fullnode. */
 export const SOCIAL_INDEXER_TESTNET_DEFAULT =
   'https://social.testnet.mysocial.network';
 

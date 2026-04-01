@@ -409,24 +409,34 @@ function maxIndividualReservationHuman(
   return Number.isFinite(scaled) && scaled > 0 ? scaled : null;
 }
 
+function firstFormattedPrice(...candidates: (SptScalar | null | undefined)[]): string {
+  for (const c of candidates) {
+    const f = formatPriceish(c ?? null);
+    if (f !== '—') return f;
+  }
+  return '—';
+}
+
+/** Reservation / no-live-pool header: token spot/base, then ecosystem `sptConfiguration.basePrice`. */
 function buildReservationPriceLabels(
-  profile: SocialProofTokenPageProfile | null
+  profile: SocialProofTokenPageProfile | null,
+  config: SocialProofTokenPageConfiguration | null
 ): { priceLabel: string; changeLabel: string | null } {
   const spt = profile?.socialProofToken ?? null;
-  if (!spt) return { priceLabel: '—', changeLabel: null };
-  const pl =
-    formatPriceish(spt.currentPrice) !== '—'
-      ? formatPriceish(spt.currentPrice)
-      : formatPriceish(spt.basePrice);
-  return {
-    priceLabel: pl !== '—' ? pl : '—',
-    changeLabel: null,
-  };
+  const pl = firstFormattedPrice(
+    spt?.currentPrice,
+    spt?.basePrice,
+    config?.basePrice
+  );
+  return { priceLabel: pl, changeLabel: null };
 }
 
 export type MappedSocialProofTokenWorkspace = {
   token: SocialProofTokenMeta;
+  /** GraphQL profile.displayName (creator); prefer over token name in identity UI. */
+  creatorDisplayName: string | null;
   profilePhotoUrl: string | null;
+  coverPhotoUrl: string | null;
   websiteUrl: string | null;
   /** Reservation fill 0–100 for header ring; null if no SPT. */
   reservationFillPercent: number | null;
@@ -449,6 +459,12 @@ export type MappedSocialProofTokenWorkspace = {
   usdPerMysoReservationQuote: number | null;
   /** GraphQL `socialProofToken.isActive`: drives reservation vs trading side panel. */
   sptIsActive: boolean | null;
+  /** Ecosystem SPT configuration (fees, thresholds, reservation base price, etc.). */
+  sptConfiguration: SocialProofTokenPageConfiguration | null;
+  /** Reservation fee basis points from GraphQL `sptConfiguration` (for UI estimates). */
+  reservationPlatformFeeBps: number | null;
+  reservationTreasuryFeeBps: number | null;
+  reservationCreatorFeeBps: number | null;
 };
 
 export function mapSocialProofTokenPageToWorkspace(result: SocialProofTokenPageResult): MappedSocialProofTokenWorkspace {
@@ -464,7 +480,7 @@ export function mapSocialProofTokenPageToWorkspace(result: SocialProofTokenPageR
   const reservationPoolAddress = profile?.reservationPoolAddress?.trim() || null;
 
   const poolPrice = buildPriceLabels(sptPool);
-  const resPrice = buildReservationPriceLabels(profile);
+  const resPrice = buildReservationPriceLabels(profile, sptConfiguration);
   const priceLabel = sptPool ? poolPrice.priceLabel : resPrice.priceLabel;
   const changeLabel = sptPool ? poolPrice.changeLabel : resPrice.changeLabel;
 
@@ -503,7 +519,9 @@ export function mapSocialProofTokenPageToWorkspace(result: SocialProofTokenPageR
 
   return {
     token,
+    creatorDisplayName: profile?.displayName?.trim() || null,
     profilePhotoUrl: profile?.profilePhoto?.trim() || null,
+    coverPhotoUrl: profile?.coverPhoto?.trim() || null,
     websiteUrl: profile?.website?.trim() || null,
     reservationFillPercent,
     profileRibbon,
@@ -524,5 +542,9 @@ export function mapSocialProofTokenPageToWorkspace(result: SocialProofTokenPageR
     maxIndividualReservationMyso,
     usdPerMysoReservationQuote,
     sptIsActive: spt?.isActive ?? null,
+    sptConfiguration: sptConfiguration ?? null,
+    reservationPlatformFeeBps: scalarToNum(sptConfiguration?.reservationPlatformFeeBps),
+    reservationTreasuryFeeBps: scalarToNum(sptConfiguration?.reservationTreasuryFeeBps),
+    reservationCreatorFeeBps: scalarToNum(sptConfiguration?.reservationCreatorFeeBps),
   };
 }

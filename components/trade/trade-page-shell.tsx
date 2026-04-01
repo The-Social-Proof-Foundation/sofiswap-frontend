@@ -60,6 +60,16 @@ const Spotlight = dynamic(
 const DEFAULT_INTERVAL: OhlcvInterval = '1h';
 const DEFAULT_LIMIT = 200;
 
+function isSearchHotkeyBlockedTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  const role = target.getAttribute('role');
+  if (role === 'textbox' || role === 'combobox') return true;
+  return Boolean(target.closest('[data-radix-select-viewport],[data-radix-popper-content-wrapper]'));
+}
+
 function TradeAuthMessage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -253,9 +263,12 @@ export function TradePageShell() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key !== 'k') return;
+      if (e.defaultPrevented || e.repeat) return;
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.isComposing) return;
+      if (isSearchHotkeyBlockedTarget(e.target as EventTarget)) return;
       e.preventDefault();
-      setPoolSpotlightOpen((open) => !open);
+      setPoolSpotlightOpen(true);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -293,7 +306,7 @@ export function TradePageShell() {
         onTradeSegmentChange={onTradeSegmentChange}
         onOpenTradeSearch={() => setPoolSpotlightOpen(true)}
       />
-      <TradePlatformAccessGate />
+      <TradePlatformAccessGate verifyOrderbookTradingSetup={showOrderbookWorkspace} />
       <div
         className={cn(
           'flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain md:overflow-hidden',

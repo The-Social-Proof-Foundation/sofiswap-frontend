@@ -100,7 +100,15 @@ async function pollPlatformUserAccessAfterJoin(
   return { timedOut: true, result: last };
 }
 
-export function TradePlatformAccessGate() {
+export function TradePlatformAccessGate({
+  verifyOrderbookTradingSetup = true,
+}: {
+  /**
+   * When false (e.g. Social Proof Tokens tab only), skip registry / BalanceManager reads so a bad
+   * `NEXT_PUBLIC_ORDERBOOK_*` pair on this chain does not block the gate or toast on every load.
+   */
+  verifyOrderbookTradingSetup?: boolean;
+} = {}) {
   const { currentNetwork } = useNetwork();
   const { isAuthenticated, displayAddress, keypair, isLoading, signOut } = useMySocialAuth();
 
@@ -109,8 +117,11 @@ export function TradePlatformAccessGate() {
     displayAddress,
     authLoading: isLoading,
     network: currentNetwork,
+    enabled: verifyOrderbookTradingSetup,
   });
   const { refresh: refreshTradingSetup, orderbookSkipped } = trading;
+  const effectiveOrderbookSkipped =
+    orderbookSkipped || !verifyOrderbookTradingSetup;
 
   const config = useMemo(() => getSofiSwapPlatformConfig(), []);
   const [mode, setMode] = useState<GateMode>('idle');
@@ -134,7 +145,7 @@ export function TradePlatformAccessGate() {
     let hydratedFromCache = false;
 
     const tradingCtx = {
-      orderbookSkipped: trading.orderbookSkipped,
+      orderbookSkipped: effectiveOrderbookSkipped,
       bmLoading: trading.isLoading,
       bmError: trading.error,
       bmIds: trading.balanceManagerIds,
@@ -223,7 +234,12 @@ export function TradePlatformAccessGate() {
         fetchedAt: Date.now(),
       });
 
-      if (!trading.orderbookSkipped && !trading.isLoading && trading.error) {
+      if (
+        verifyOrderbookTradingSetup &&
+        !trading.orderbookSkipped &&
+        !trading.isLoading &&
+        trading.error
+      ) {
         toast.error(
           trading.error.includes('fetch')
             ? trading.error
@@ -290,6 +306,8 @@ export function TradePlatformAccessGate() {
     trading.error,
     trading.isLoading,
     trading.orderbookSkipped,
+    verifyOrderbookTradingSetup,
+    effectiveOrderbookSkipped,
   ]);
 
   useEffect(() => {
@@ -386,7 +404,7 @@ export function TradePlatformAccessGate() {
         return;
       }
 
-      if (!orderbookSkipped) {
+      if (!effectiveOrderbookSkipped) {
         const poll = await pollRegisteredBalanceManagerIdsAfterTx(currentNetwork, displayAddress);
         await refreshTradingSetup();
         if (poll.pollError) {
@@ -418,7 +436,15 @@ export function TradePlatformAccessGate() {
     } finally {
       setJoinPending(false);
     }
-  }, [config, currentNetwork, displayAddress, keypair, runCheck, orderbookSkipped, refreshTradingSetup]);
+  }, [
+    config,
+    currentNetwork,
+    displayAddress,
+    keypair,
+    runCheck,
+    effectiveOrderbookSkipped,
+    refreshTradingSetup,
+  ]);
 
   const onRepair = useCallback(async () => {
     if (!displayAddress || !keypair) return;

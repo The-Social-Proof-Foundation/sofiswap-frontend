@@ -13,6 +13,13 @@ function trimPublic(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/** Canonical MySo package / object id: `0x` plus 64 hex digits (see fullnode / explorer formatting). */
+function isCanonicalMysoHexId(value: string): boolean {
+  if (!value.startsWith('0x') && !value.startsWith('0X')) return false;
+  const hex = value.slice(2);
+  return /^[0-9a-fA-F]{64}$/.test(hex);
+}
+
 /** On-chain orderbook deployment — defaults to IDs bundled in `@socialproof/orderbook` (may lag your network). */
 export interface ResolvedOrderbookDeployment {
   orderbookPackageId: string;
@@ -35,13 +42,25 @@ export function getResolvedOrderbookDeployment(
     const pkg = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_TESTNET);
     const reg = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_TESTNET);
     if (pkg && reg) {
-      return { orderbookPackageId: pkg, registryId: reg };
+      if (isCanonicalMysoHexId(pkg) && isCanonicalMysoHexId(reg)) {
+        return { orderbookPackageId: pkg, registryId: reg };
+      }
+      console.warn(
+        '[orderbook-config] Ignoring NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_TESTNET / _REGISTRY_ID_TESTNET: ' +
+          'each value must be a canonical MySo id (0x + 64 hex). Using @socialproof/orderbook testnet defaults.'
+      );
     }
   } else {
     const pkg = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_MAINNET);
     const reg = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_MAINNET);
     if (pkg && reg) {
-      return { orderbookPackageId: pkg, registryId: reg };
+      if (isCanonicalMysoHexId(pkg) && isCanonicalMysoHexId(reg)) {
+        return { orderbookPackageId: pkg, registryId: reg };
+      }
+      console.warn(
+        '[orderbook-config] Ignoring NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_MAINNET / _REGISTRY_ID_MAINNET: ' +
+          'each value must be a canonical MySo id (0x + 64 hex). Using @socialproof/orderbook mainnet defaults.'
+      );
     }
   }
   return {

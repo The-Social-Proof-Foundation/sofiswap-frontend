@@ -7,6 +7,14 @@
 
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { useMySocialAuth } from '@/hooks/useMySocialAuth';
+import { useNetwork } from '@/lib/network-provider';
+import { checkFollowStatus } from '@/lib/profile-utils';
+import {
+  signAndExecuteFollowUser,
+  signAndExecuteUnfollowUser,
+} from '@/lib/tx/social-follow';
+import { INSUFFICIENT_MYSO_FOR_GAS_MESSAGE } from '@/lib/transaction-utils';
 import {
   ChartContainer,
   ChartTooltip,
@@ -23,14 +31,19 @@ import {
   ArrowDownUp,
   ChevronDown,
   Globe,
+  Layers,
+  Loader2,
+  Lock,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { buildMysocialWalletExplorerHref } from '@/lib/mysocial-wallet-explorer';
 import { resolveSptSidePanelMode } from '@/lib/spt-reservation-ui-policy';
 import {
   tradeSptEmptyAsideClass,
   tradeSptRoundedPanelClass,
+  tradeSptRoundedPanelShellClass,
   tradeSptSwapSegmentShellClass,
   tradeSptTableWellClass,
   tradeSptTallCardReserveClass,
@@ -136,6 +149,122 @@ function truncateAddress(addr: string): string {
 }
 
 /** Pulls a signed % from strings like `24h 1.5%` for the chip; leaves the remainder for the caption. */
+function mysoAddressesEqual(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = a?.trim().toLowerCase() ?? '';
+  const y = b?.trim().toLowerCase() ?? '';
+  if (!x || !y) return false;
+  return x === y;
+}
+
+function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | null }) {
+  const { displayAddress, keypair, isAuthenticated } = useMySocialAuth();
+  const { currentNetwork } = useNetwork();
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const target = targetAddress?.trim() ?? null;
+  const viewer = displayAddress?.trim() ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      if (!viewer || !target || mysoAddressesEqual(viewer, target)) {
+        if (!cancelled) setIsFollowing(false);
+        return;
+      }
+      setStatusLoading(true);
+      try {
+        const v = await checkFollowStatus(viewer, target);
+        if (!cancelled) setIsFollowing(v);
+      } finally {
+        if (!cancelled) setStatusLoading(false);
+      }
+    }
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewer, target]);
+
+  if (!target || !viewer || mysoAddressesEqual(viewer, target)) {
+    return null;
+  }
+  if (!isAuthenticated) {
+    return null;
+  }
+
+  const busy = statusLoading || actionLoading;
+
+  const onPress = async () => {
+    if (!keypair || !viewer) {
+      toast.error('Wallet signing is not ready. Try signing in again.');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      if (isFollowing) {
+        await signAndExecuteUnfollowUser({
+          network: currentNetwork,
+          signer: keypair,
+          followerAddress: viewer,
+          followingAddress: target,
+        });
+        setIsFollowing(false);
+        toast.success('Unfollowed');
+      } else {
+        await signAndExecuteFollowUser({
+          network: currentNetwork,
+          signer: keypair,
+          followerAddress: viewer,
+          followingAddress: target,
+        });
+        setIsFollowing(true);
+        toast.success('Following');
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === INSUFFICIENT_MYSO_FOR_GAS_MESSAGE || msg.includes('Insufficient MySo')) {
+        toast.error(INSUFFICIENT_MYSO_FOR_GAS_MESSAGE);
+      } else {
+        toast.error(msg || 'Could not update follow status');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  return (
+    <Button
+      type="button"
+      variant={isFollowing ? 'secondary' : 'default'}
+      size="sm"
+      className="h-8 shrink-0 gap-1.5 px-3 text-xs font-medium"
+      disabled={busy || !keypair}
+      onClick={() => void onPress()}
+      aria-busy={busy}
+    >
+      {busy ? (
+        <>
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          <span className="sr-only">Loading</span>
+        </>
+      ) : isFollowing ? (
+        'Following'
+      ) : (
+        'Follow'
+      )}
+    </Button>
+  );
+}
+
+function formatSptUsdPriceLabel(raw: string): string {
+  const t = raw.trim();
+  if (!t || t === '—') return '—';
+  if (t.startsWith('$')) return t;
+  return `$${t}`;
+}
+
 function parsePercentFromChangeLabel(raw: string | null | undefined): {
   percent: number | null;
   rest: string | null;
@@ -251,12 +380,18 @@ function WorkspaceHeaderAvatar({
     return (
       <div
         className={cn(
-          'relative flex size-16 shrink-0 overflow-hidden rounded-full ring-1 ring-border/55 sm:size-[4.25rem]',
-          'shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
+          'relative flex size-16 shrink-0 rounded-full bg-background p-px shadow-sm ring-1 ring-border sm:size-[4.25rem]',
           className
         )}
       >
-        <SptHeaderAvatarFace photoUrl={photoUrl ?? null} symbol={symbol} />
+        <div
+          className={cn(
+            'relative flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-full',
+            'shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-border/70'
+          )}
+        >
+          <SptHeaderAvatarFace photoUrl={photoUrl ?? null} symbol={symbol} />
+        </div>
       </div>
     );
   }
@@ -273,8 +408,7 @@ function WorkspaceHeaderAvatar({
   return (
     <div
       className={cn(
-        'shrink-0 rounded-full p-1.5',
-        'bg-muted/50 ring-1 ring-border/50 dark:bg-muted/30 dark:ring-border/40',
+        'shrink-0 rounded-full bg-background p-1 shadow-sm ring-1 ring-border',
         className
       )}
     >
@@ -284,13 +418,24 @@ function WorkspaceHeaderAvatar({
           viewBox={`0 0 ${vb} ${vb}`}
           aria-hidden
         >
+          {/* Wide faint track behind the inner track + progress (hex --muted-foreground: use stroke + opacity). */}
+          <circle
+            cx={c}
+            cy={c}
+            r={42.35}
+            fill="none"
+            className="stroke-[var(--muted-foreground)]"
+            strokeWidth={ringStroke * 1.12}
+            opacity={0.14}
+          />
           <circle
             cx={c}
             cy={c}
             r={r}
             fill="none"
-            className="stroke-muted-foreground/35"
+            className="stroke-[var(--muted-foreground)]"
             strokeWidth={ringStroke}
+            opacity={0.28}
           />
           <circle
             cx={c}
@@ -303,8 +448,8 @@ function WorkspaceHeaderAvatar({
             strokeDasharray={`${dash} ${cLen}`}
           />
         </svg>
-        {/* Padding between ring and photo: clear gutter inside the progress ring */}
-        <div className="absolute inset-[13px] flex overflow-hidden rounded-full bg-muted sm:inset-[14px]">
+        {/* Padding between ring and photo: opaque track + photo well */}
+        <div className="absolute inset-[13px] flex overflow-hidden rounded-full bg-background ring-1 ring-border sm:inset-[14px]">
           <SptHeaderAvatarFace photoUrl={photoUrl ?? null} symbol={symbol} />
         </div>
       </div>
@@ -312,133 +457,170 @@ function WorkspaceHeaderAvatar({
   );
 }
 
-function SptProfileHeaderBlock({
-  displayName,
-  displaySymbol,
-  profilePhotoUrl,
-  profileRibbon,
-  reservationFillPercent,
-  showTradingQuote,
-  quoteDisplayPrice,
-  quoteSubline,
+function SptWorkspacePriceBand({
+  formattedUsdPrice,
+  isReservationPhase,
+  show24hChange,
   quotePctChipValue,
+  quoteSubline,
 }: {
-  displayName: string;
-  displaySymbol: string;
-  profilePhotoUrl: string | null;
-  profileRibbon: SocialProofProfileRibbon | null;
-  reservationFillPercent?: number | null;
-  /** When false (reservation / inactive SPT), hide price, % change, and subline. */
-  showTradingQuote: boolean;
-  quoteDisplayPrice: string;
-  quoteSubline: string;
+  formattedUsdPrice: string;
+  isReservationPhase: boolean;
+  show24hChange: boolean;
   quotePctChipValue: number | null;
+  quoteSubline: string;
 }) {
-  const username = profileRibbon?.username?.trim();
-  const profileAddress = profileRibbon?.profileAddress?.trim() ?? null;
-
-  const sym = displaySymbol !== '—' ? displaySymbol : null;
-  const showFollowStats =
-    profileRibbon?.followersCount != null || profileRibbon?.followingCount != null;
-
   return (
-    <header className="w-full pb-5 md:pb-6">
-      <div className="flex w-full min-w-0 flex-col gap-3">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <WorkspaceHeaderAvatar
-            photoUrl={profilePhotoUrl}
-            symbol={
-              sym || (displayName.slice(0, 2).toUpperCase() || 'SP')
-            }
-            reservationFillPercent={reservationFillPercent}
-            className="shrink-0"
-          />
-          <div className="min-w-0 flex-1 text-left">
-            <div className="flex min-w-0 flex-wrap items-end gap-x-1.5 gap-y-0.5">
-              <h1 className="min-w-0 text-lg font-semibold leading-tight tracking-tight text-foreground sm:text-xl">
-                {displayName}
-              </h1>
-              {sym ? (
-                <span className="shrink-0 text-sm font-medium leading-tight text-[var(--muted-foreground)]">
-                  {sym}
-                </span>
-              ) : null}
-              {username ? (
-                <span className="shrink-0 text-sm leading-tight text-[var(--muted-foreground)]">
-                  <span className="text-[var(--muted-foreground)]">@</span>
-                  {username}
-                </span>
-              ) : null}
-            </div>
-
-            {profileAddress ? (
-              <div className="mt-1 max-w-md min-w-0">
-                <ProfileMenuWalletCopyRow address={profileAddress} addressHead={10} addressTail={10} />
-              </div>
-            ) : null}
-
-            {showFollowStats && profileRibbon ? (
-              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm text-[var(--muted-foreground)]">
-                {profileRibbon.followersCount != null ? (
-                  <p className="inline-flex items-baseline gap-1 leading-snug">
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {profileRibbon.followersCount.toLocaleString()}
-                    </span>
-                    <span className="text-[var(--muted-foreground)]">followers</span>
-                  </p>
-                ) : null}
-                {profileRibbon.followingCount != null ? (
-                  <p className="inline-flex items-baseline gap-1 leading-snug">
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {profileRibbon.followingCount.toLocaleString()}
-                    </span>
-                    <span className="text-[var(--muted-foreground)]">following</span>
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        {showTradingQuote ? (
-          <div className="flex w-full min-w-0 flex-col gap-0.5 text-left sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between sm:gap-x-3">
-            <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-              <p className="font-mono text-3xl font-semibold tabular-nums tracking-tight md:text-4xl">
-                {quoteDisplayPrice}
-              </p>
-              {quotePctChipValue != null ? (
-                <SptQuoteChangePctChip value={quotePctChipValue} />
-              ) : null}
-            </div>
-            <p className="text-sm text-muted-foreground sm:text-right">{quoteSubline}</p>
-          </div>
+    <div className="flex w-full min-w-0 flex-col justify-start gap-0.5 pl-4 pt-3 text-left sm:pt-4">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <p className="font-sans text-2xl font-semibold tabular-nums tracking-[-0.02em] md:text-3xl leading-none antialiased">
+          {formattedUsdPrice}
+        </p>
+        {isReservationPhase ? (
+          <span
+            className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-[var(--muted-foreground)] sm:h-4 sm:w-4"
+            title="Reservation phase"
+          >
+            <Lock aria-hidden className="block" size="100%" strokeWidth={1.35} />
+            <span className="sr-only">Reservation phase; spot trading not live</span>
+          </span>
+        ) : show24hChange && quotePctChipValue != null ? (
+          <SptQuoteChangePctChip value={quotePctChipValue} />
         ) : null}
       </div>
-    </header>
+      <p className="text-sm tabular-nums text-foreground">
+        0 <span className="text-xs text-[var(--muted-foreground)]">MySo</span>
+      </p>
+      {!isReservationPhase && show24hChange ? (
+        <p className="text-sm text-muted-foreground">{quoteSubline}</p>
+      ) : null}
+    </div>
   );
 }
 
-function StatGrid({ stats }: { stats: readonly SocialProofStat[] }) {
+function SptProfileIdentityCard({
+  creatorDisplayName,
+  displayName,
+  displaySymbol,
+  coverPhotoUrl,
+  profilePhotoUrl,
+  profileRibbon,
+  reservationFillPercent,
+  className,
+}: {
+  creatorDisplayName: string | null;
+  displayName: string;
+  displaySymbol: string;
+  coverPhotoUrl: string | null;
+  profilePhotoUrl: string | null;
+  profileRibbon: SocialProofProfileRibbon | null;
+  reservationFillPercent?: number | null;
+  className?: string;
+}) {
+  const headline =
+    creatorDisplayName?.trim() || displayName.trim() || 'Social proof tokens';
+  const rawUser = profileRibbon?.username?.trim();
+  const username = rawUser?.replace(/^@/, '') ?? null;
+  const profileAddress = profileRibbon?.profileAddress?.trim() ?? null;
+  const sym = displaySymbol !== '—' ? displaySymbol : null;
+  const showFollowStats =
+    profileRibbon?.followersCount != null || profileRibbon?.followingCount != null;
+  const coverSrc = coverPhotoUrl?.trim();
+
   return (
-    <section className="space-y-3" aria-labelledby="spt-stats-heading">
-      <h2 id="spt-stats-heading" className="text-sm font-semibold text-foreground">
-        Stats
-      </h2>
-      {stats.length === 0 ? (
-        <p className="text-sm text-[var(--muted-foreground)]">No stats yet.</p>
-      ) : (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-          {stats.map((s) => (
-            <div key={s.label} className="space-y-1">
-              <div className="text-[11px] font-medium text-[var(--muted-foreground)]">{s.label}</div>
-              <div className="font-mono text-sm font-semibold tabular-nums text-foreground">
-                {s.value}
-              </div>
-            </div>
-          ))}
-        </div>
+    <div
+      className={cn(
+        tradeSptRoundedPanelClass,
+        '!p-0 overflow-hidden',
+        'flex min-h-0 min-w-0 flex-col',
+        className
       )}
-    </section>
+    >
+      <div className="relative h-[3.5rem] w-full shrink-0 bg-muted/40 sm:h-[6rem]">
+        {coverSrc ? (
+          <Image
+            src={coverSrc}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="(min-width: 1280px) 400px, 100vw"
+            unoptimized
+          />
+        ) : (
+          <div
+            className="absolute inset-0 bg-gradient-to-r from-primary/[0.14] via-muted/35 to-muted/20 dark:from-primary/[0.12] dark:via-muted/20 dark:to-muted/12"
+            aria-hidden
+          />
+        )}
+      </div>
+      <div className="min-w-0 pb-3 pl-0 pr-1.5 pt-1 sm:pb-4 sm:pr-2 sm:pt-1.5">
+        <div className="flex min-w-0 items-start justify-between gap-0.5 sm:gap-1">
+          <div className="flex min-w-0 flex-1 items-start gap-0.5 sm:gap-1">
+            <WorkspaceHeaderAvatar
+              photoUrl={profilePhotoUrl}
+              symbol={sym || (headline.slice(0, 2).toUpperCase() || 'SP')}
+              reservationFillPercent={reservationFillPercent}
+              className={cn(
+                'shrink-0',
+                reservationFillPercent != null
+                  ? '-mt-[3.5rem] sm:-mt-[3.75rem]'
+                  : '-mt-[2.375rem] sm:-mt-[2.625rem]'
+              )}
+            />
+            <div className="min-w-0 flex-1 text-left">
+              <div className="flex min-w-0 items-center justify-between gap-1 sm:gap-1.5">
+                <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1 gap-y-0.5 sm:gap-x-1.5">
+                  <h1 className="min-w-0 text-lg font-medium leading-tight tracking-tight text-foreground sm:text-xl">
+                    {headline}
+                  </h1>
+                  {username ? (
+                    <span className="shrink-0 text-sm leading-tight text-[var(--muted-foreground)]">
+                      @
+                      {username}
+                    </span>
+                  ) : null}
+                  {sym ? (
+                    <span className="shrink-0 rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium leading-none text-[var(--muted-foreground)]">
+                      {sym}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              {profileAddress ? (
+                <div className="mt-1 max-w-md min-w-0">
+                  <ProfileMenuWalletCopyRow address={profileAddress} addressHead={10} addressTail={10} />
+                </div>
+              ) : null}
+
+              {showFollowStats && profileRibbon ? (
+                <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-sm">
+                  {profileRibbon.followersCount != null ? (
+                    <p className="inline-flex items-baseline gap-1 leading-snug">
+                      <span className="font-semibold tabular-nums text-primary">
+                        {profileRibbon.followersCount.toLocaleString()}
+                      </span>
+                      <span className="text-[var(--muted-foreground)]">followers</span>
+                    </p>
+                  ) : null}
+                  {profileRibbon.followingCount != null ? (
+                    <p className="inline-flex items-baseline gap-1 leading-snug">
+                      <span className="font-semibold tabular-nums text-primary">
+                        {profileRibbon.followingCount.toLocaleString()}
+                      </span>
+                      <span className="text-[var(--muted-foreground)]">following</span>
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <div className="shrink-0 self-start">
+            <SptCreatorFollowButton targetAddress={profileAddress} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -572,9 +754,9 @@ function AboutBlock({
 function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
   return (
     <div className={tradeSptTableWellClass} role="region" aria-label="Token transaction history">
-      <table className="w-full text-left text-xs">
+      <table className="w-full text-left text-xs font-satoshi">
         <thead>
-          <tr className="border-b border-border/50 text-[var(--muted-foreground)]">
+          <tr className="border-b border-trade-shell text-[var(--muted-foreground)]">
             <th className="px-3 py-2.5 font-medium">Time</th>
             <th className="px-3 py-2.5 font-medium">Side</th>
             <th className="px-3 py-2.5 text-right font-medium">Price</th>
@@ -582,21 +764,25 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
             <th className="px-3 py-2.5 text-right font-medium">Total</th>
           </tr>
         </thead>
-        <tbody className="font-mono tabular-nums">
+        <tbody className="tabular-nums tracking-tight text-[13px] leading-normal">
           {rows.length === 0 ? (
             <tr>
-              <td
-                colSpan={5}
-                className="px-3 py-6 text-center text-sm text-[var(--muted-foreground)]"
-              >
-                No transactions yet.
+              <td colSpan={5} className="p-0" role="presentation">
+                <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-trade-shell bg-muted/25 text-muted-foreground dark:bg-muted/15">
+                    <Layers className="size-5" strokeWidth={1.65} aria-hidden />
+                  </span>
+                  <p className="text-[13px] font-medium leading-snug tracking-tight text-[var(--muted-foreground)]">
+                    No transactions yet.
+                  </p>
+                </div>
               </td>
             </tr>
           ) : (
             rows.map((r) => (
               <tr
                 key={r.id}
-                className="border-b border-border/35 last:border-b-0 hover:bg-muted/25"
+                className="border-b border-trade-shell last:border-b-0 hover:bg-muted/25"
               >
                 <td className="max-w-[8rem] truncate px-3 py-2 text-[var(--muted-foreground)]">
                   {formatUtcTimeShortFromIso(r.time)}
@@ -604,7 +790,7 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
               <td className="px-3 py-2">
                 <span
                   className={cn(
-                    'font-sans font-semibold uppercase',
+                    'font-semibold uppercase tracking-wide',
                     r.side === 'buy'
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : 'text-rose-500 dark:text-rose-400'
@@ -630,7 +816,7 @@ function HoldersTable({ rows }: { rows: readonly SocialProofHolderRow[] }) {
     <div className={tradeSptTableWellClass} role="region" aria-label="Token holders">
       <table className="w-full text-left text-xs">
         <thead>
-          <tr className="border-b border-border/50 text-[var(--muted-foreground)]">
+          <tr className="border-b border-trade-shell text-[var(--muted-foreground)]">
             <th className="px-3 py-2.5 font-medium">Holder</th>
             <th className="px-3 py-2.5 font-medium">Address</th>
             <th className="hidden px-3 py-2.5 text-right font-medium sm:table-cell">Amount</th>
@@ -685,9 +871,9 @@ function reservationStatusLabel(status: ReservationHistoryRow['status']) {
 function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
   return (
     <div className={tradeSptTableWellClass} role="region" aria-label="Reservation holder history">
-      <table className="w-full text-left text-xs">
+      <table className="w-full text-left text-xs font-satoshi">
         <thead>
-          <tr className="border-b border-border text-[var(--muted-foreground)]">
+          <tr className="border-b border-trade-shell text-[var(--muted-foreground)]">
             <th className="px-3 py-2.5 font-medium">Time</th>
             <th className="px-3 py-2.5 font-medium">Holder</th>
             <th className="hidden px-3 py-2.5 font-medium md:table-cell">Reservation</th>
@@ -696,21 +882,25 @@ function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
             <th className="px-3 py-2.5 text-right font-medium">Status</th>
           </tr>
         </thead>
-        <tbody className="font-mono tabular-nums">
+        <tbody className="tabular-nums tracking-tight text-[13px] leading-normal">
           {rows.length === 0 ? (
             <tr>
-              <td
-                colSpan={6}
-                className="px-3 py-6 text-center text-sm text-[var(--muted-foreground)]"
-              >
-                No reservations yet.
+              <td colSpan={6} className="p-0" role="presentation">
+                <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-trade-shell bg-muted/25 text-muted-foreground dark:bg-muted/15">
+                    <Layers className="size-5" strokeWidth={1.65} aria-hidden />
+                  </span>
+                  <p className="text-[13px] font-medium leading-snug tracking-tight text-[var(--muted-foreground)]">
+                    No reservations yet.
+                  </p>
+                </div>
               </td>
             </tr>
           ) : (
             rows.map((r) => (
               <tr
                 key={r.id}
-                className="border-b border-border last:border-b-0 hover:bg-muted/30"
+                className="border-b border-trade-shell last:border-b-0 hover:bg-muted/25"
               >
                 <td className="max-w-[8rem] truncate px-3 py-2 text-[var(--muted-foreground)]">
                   {formatUtcTimeShortFromIso(r.time)}
@@ -724,7 +914,7 @@ function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
               <td className="px-3 py-2 text-right">
                 <span
                   className={cn(
-                    'font-sans text-[11px] font-medium',
+                    'text-[11px] font-semibold tracking-tight tabular-nums',
                     r.status === 'filled' && 'text-emerald-600 dark:text-emerald-400',
                     r.status === 'partial' && 'text-amber-600 dark:text-amber-400',
                     r.status === 'pending' && 'text-[var(--muted-foreground)]'
@@ -778,6 +968,78 @@ function parsePositiveDecimal(s: string): number | null {
   return n;
 }
 
+function formatMysoBreakdownAmount(n: number): string {
+  return formatCompactDecimal(n, { maxFractionDigits: 8 });
+}
+
+/** Fee in MySo from principal × bps / 10_000 (GraphQL reservation / trading fee fields). */
+function mysoFeeFromBps(principalMyso: number, bps: number | null | undefined): number {
+  if (principalMyso <= 0 || !Number.isFinite(principalMyso)) return 0;
+  if (bps == null || !Number.isFinite(bps)) return 0;
+  const b = Math.max(0, bps);
+  return (principalMyso * b) / 10_000;
+}
+
+const sptFeeBreakdownCardClass = cn(
+  'rounded-xl border border-border/50 bg-background/40 px-3 py-2.5',
+  'dark:border-trade-shell dark:bg-background/22'
+);
+
+function SptTradeFeeBreakdownCard({
+  subtotalMyso,
+  gasFeeMyso,
+  platformEcosystemFeeMyso,
+  creatorFeeMyso,
+  overallTotalFeeMyso,
+}: {
+  subtotalMyso: number;
+  gasFeeMyso: number;
+  platformEcosystemFeeMyso: number;
+  creatorFeeMyso: number;
+  overallTotalFeeMyso: number;
+}) {
+  const row = (label: string, amountMyso: number, variant: 'default' | 'total' = 'default') => (
+    <div className="flex items-baseline justify-between gap-3 text-[11px] leading-snug">
+      <span className="min-w-0 text-left text-[var(--muted-foreground)]">{label}</span>
+      <span
+        className="flex min-w-0 shrink-0 items-baseline justify-end gap-1"
+        title={`${formatMysoBreakdownAmount(amountMyso)} MySo`}
+      >
+        <span
+          className={cn(
+            'text-right tabular-nums text-foreground',
+            variant === 'total' ? 'text-sm font-semibold' : ''
+          )}
+        >
+          {formatMysoBreakdownAmount(amountMyso)}
+        </span>
+        <span
+          className={cn(
+            'shrink-0 font-semibold tracking-tight text-[var(--muted-foreground)]',
+            variant === 'total' ? 'text-xs' : 'text-[10px]'
+          )}
+        >
+          MySo
+        </span>
+      </span>
+    </div>
+  );
+
+  return (
+    <div className={sptFeeBreakdownCardClass} role="region" aria-label="Cost breakdown in MySo">
+      <div className="space-y-1.5">
+        {row('Subtotal', subtotalMyso)}
+        {row('Gas fee', gasFeeMyso)}
+        {row('Platform ecosystem fee', platformEcosystemFeeMyso)}
+        {row('Creator fee', creatorFeeMyso)}
+        <div className="border-t border-border/50 pt-1.5 dark:border-trade-shell">
+          {row('Total', overallTotalFeeMyso, 'total')}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const sptSwapBucketClass = cn(
   'rounded-[22px] border border-border/55 p-4',
   'bg-gradient-to-br from-secondary-foreground/[0.08] via-muted/40 to-muted/22',
@@ -795,10 +1057,18 @@ function SimpleReservationAmountCard({
   walletMysoAvailable,
   maxReservationMyso,
   usdPerMyso,
+  reservationPlatformFeeBps,
+  reservationTreasuryFeeBps,
+  reservationCreatorFeeBps,
+  className,
 }: {
   walletMysoAvailable: number | null;
   maxReservationMyso: number | null;
   usdPerMyso: number | null;
+  reservationPlatformFeeBps?: number | null;
+  reservationTreasuryFeeBps?: number | null;
+  reservationCreatorFeeBps?: number | null;
+  className?: string;
 }) {
   const [inputMode, setInputMode] = useState<'myso' | 'usd'>('myso');
   const [draft, setDraft] = useState('');
@@ -816,7 +1086,18 @@ function SimpleReservationAmountCard({
   const canConvert = usdPerMyso != null && usdPerMyso > 0;
 
   const secondaryLine = useMemo(() => {
-    if (!canConvert || primaryAmount <= 0) {
+    const zeroUsdLabel = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(0);
+    const zeroMysoLabel = `${formatCompactDecimal(0, { maxFractionDigits: 2 })} MySo`;
+
+    if (primaryAmount <= 0) {
+      return inputMode === 'myso' ? zeroUsdLabel : zeroMysoLabel;
+    }
+    if (!canConvert) {
       return '—';
     }
     if (inputMode === 'myso') {
@@ -839,10 +1120,10 @@ function SimpleReservationAmountCard({
       }).format(usd);
     }
     const myso = primaryAmount / usdPerMyso!;
-    return `${formatCompactDecimal(myso, { maxFractionDigits: 2 })} MYSO`;
+    return `${formatCompactDecimal(myso, { maxFractionDigits: 2 })} MySo`;
   }, [canConvert, inputMode, primaryAmount, usdPerMyso]);
 
-  const primarySuffix = inputMode === 'myso' ? 'MYSO' : 'USD';
+  const primarySuffix = inputMode === 'myso' ? 'MySo' : 'USD';
 
   const applyFraction = (pct: number) => {
     if (effectiveMax == null || effectiveMax <= 0) return;
@@ -869,19 +1150,61 @@ function SimpleReservationAmountCard({
 
   const reserveDisabled = primaryAmount <= 0 || !Number.isFinite(primaryAmount);
 
+  const { reserveSubtotalMyso, reserveFeeLinesMyso } = useMemo(() => {
+    const emptyFees = { gas: 0, platform: 0, creator: 0, total: 0 };
+    if (primaryAmount <= 0 || !Number.isFinite(primaryAmount)) {
+      return { reserveSubtotalMyso: 0, reserveFeeLinesMyso: emptyFees };
+    }
+    let subtotalMyso: number;
+    if (inputMode === 'myso') {
+      subtotalMyso = primaryAmount;
+    } else if (canConvert) {
+      subtotalMyso = primaryAmount / usdPerMyso!;
+    } else {
+      subtotalMyso = 0;
+    }
+    const platformBps = reservationPlatformFeeBps ?? null;
+    const treasuryBps = reservationTreasuryFeeBps ?? null;
+    const creatorBps = reservationCreatorFeeBps ?? null;
+    const platformEcosystemBps =
+      (platformBps != null && Number.isFinite(platformBps) ? Math.max(0, platformBps) : 0) +
+      (treasuryBps != null && Number.isFinite(treasuryBps) ? Math.max(0, treasuryBps) : 0);
+    const platformEcosystemMyso = mysoFeeFromBps(subtotalMyso, platformEcosystemBps);
+    const creatorMyso = mysoFeeFromBps(subtotalMyso, creatorBps);
+    const gasMyso = 0;
+    const totalFeesMyso = gasMyso + platformEcosystemMyso + creatorMyso;
+    return {
+      reserveSubtotalMyso: subtotalMyso,
+      reserveFeeLinesMyso: {
+        gas: gasMyso,
+        platform: platformEcosystemMyso,
+        creator: creatorMyso,
+        total: totalFeesMyso,
+      },
+    };
+  }, [
+    canConvert,
+    inputMode,
+    primaryAmount,
+    reservationCreatorFeeBps,
+    reservationPlatformFeeBps,
+    reservationTreasuryFeeBps,
+    usdPerMyso,
+  ]);
+
   return (
-    <div className={tradeSptTallCardReserveClass}>
+    <div className={cn(tradeSptTallCardReserveClass, className)}>
       <div>
         <p className="text-md font-medium text-[var(--muted-foreground)]">Reserve</p>
       </div>
 
       <div className="space-y-3">
-        <div className="flex min-h-[3rem] items-end gap-2">
+        <div className="flex min-h-[3rem] items-end gap-2 pt-2">
           <input
             type="text"
             inputMode="decimal"
             autoComplete="off"
-            aria-label={inputMode === 'myso' ? 'Amount in MYSO' : 'Amount in USD'}
+            aria-label={inputMode === 'myso' ? 'Amount in MySo' : 'Amount in USD'}
             placeholder="0"
             value={draft}
             onChange={(e) => setDraft(sanitizeDecimalInput(e.target.value, inputMode === 'usd'))}
@@ -908,8 +1231,8 @@ function SimpleReservationAmountCard({
             aria-label={
               canConvert
                 ? inputMode === 'myso'
-                  ? 'Switch to typing USD; shows MYSO equivalent'
-                  : 'Switch to typing MYSO; shows USD equivalent'
+                  ? 'Switch to typing USD; shows MySo equivalent'
+                  : 'Switch to typing MySo; shows USD equivalent'
                 : 'USD conversion unavailable'
             }
           >
@@ -926,7 +1249,7 @@ function SimpleReservationAmountCard({
           <div
             className="flex shrink-0 flex-wrap justify-end gap-1.5 sm:ml-2"
             role="group"
-            aria-label="Fill amount from available MYSO"
+            aria-label="Fill amount from available MySo"
           >
             {simpleReservationPctPresets.map((pct) => (
               <button
@@ -970,13 +1293,22 @@ function SimpleReservationAmountCard({
         ) : null}
       </div>
 
-      <Button
-        type="button"
-        disabled={reserveDisabled}
-        className="h-12 w-full rounded-2xl font-semibold opacity-80"
-      >
-        {reserveDisabled ? 'Enter an amount' : 'Reserve'}
-      </Button>
+      <div className="mt-1 flex min-h-0 flex-col gap-4">
+        <SptTradeFeeBreakdownCard
+          subtotalMyso={reserveSubtotalMyso}
+          gasFeeMyso={reserveFeeLinesMyso.gas}
+          platformEcosystemFeeMyso={reserveFeeLinesMyso.platform}
+          creatorFeeMyso={reserveFeeLinesMyso.creator}
+          overallTotalFeeMyso={reserveFeeLinesMyso.total}
+        />
+        <Button
+          type="button"
+          disabled={reserveDisabled}
+          className="h-12 w-full shrink-0 rounded-2xl font-semibold opacity-80"
+        >
+          {reserveDisabled ? 'Enter an amount' : 'Reserve'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -984,9 +1316,11 @@ function SimpleReservationAmountCard({
 function SocialProofSwapCard({
   sellSymbol,
   tradingEnabled,
+  className,
 }: {
   sellSymbol: string;
   tradingEnabled?: boolean | null;
+  className?: string;
 }) {
   const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy');
   const [sellPct, setSellPct] = useState<string | null>(null);
@@ -1070,7 +1404,7 @@ function SocialProofSwapCard({
         <span className="min-w-0 text-3xl font-semibold tabular-nums leading-none tracking-tight text-foreground">
           0
         </span>
-        <button type="button" className={sptSwapTokenSelectClass} aria-label="Select buy token (ETH)">
+        <button type="button" className={sptSwapTokenSelectClass} aria-label="Select buy token (Eth)">
           <div
             className={cn(
               'flex size-8 shrink-0 items-center justify-center rounded-full',
@@ -1078,9 +1412,9 @@ function SocialProofSwapCard({
             )}
             aria-hidden
           >
-            ETH
+            Eth
           </div>
-          <span className="max-w-[5rem] truncate">ETH</span>
+          <span className="max-w-[5rem] truncate">Eth</span>
           <ChevronDown className="size-4 shrink-0 opacity-55" strokeWidth={2} />
         </button>
       </div>
@@ -1089,7 +1423,7 @@ function SocialProofSwapCard({
   );
 
   return (
-    <div data-trade-mode={tradeMode} className={tradeSptTallCardSwapClass}>
+    <div data-trade-mode={tradeMode} className={cn(tradeSptTallCardSwapClass, className)}>
       {swapDisabled ? (
         <p className="rounded-lg bg-muted/35 px-3 py-2.5 text-center text-xs text-[var(--muted-foreground)] dark:bg-muted/25">
           Trading isn’t enabled for this token in your network configuration.
@@ -1120,13 +1454,22 @@ function SocialProofSwapCard({
         )}
       </div>
 
-      <Button
-        type="button"
-        disabled={swapDisabled}
-        className="h-12 w-full rounded-2xl font-semibold opacity-80"
-      >
-        {swapDisabled ? 'Trading unavailable' : 'Enter an amount'}
-      </Button>
+      <div className="mt-1 flex min-h-0 flex-col gap-4">
+        <SptTradeFeeBreakdownCard
+          subtotalMyso={0}
+          gasFeeMyso={0}
+          platformEcosystemFeeMyso={0}
+          creatorFeeMyso={0}
+          overallTotalFeeMyso={0}
+        />
+        <Button
+          type="button"
+          disabled={swapDisabled}
+          className="h-12 w-full shrink-0 rounded-2xl font-semibold opacity-80"
+        >
+          {swapDisabled ? 'Trading unavailable' : 'Enter an amount'}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -1233,12 +1576,14 @@ function PriceChartBlock({
 
 export type TradeSocialProofTokenWorkspaceProps = {
   token?: SocialProofTokenMeta;
+  /** GraphQL profile.displayName for identity headline. */
+  creatorDisplayName?: string | null;
   profilePhotoUrl?: string | null;
+  coverPhotoUrl?: string | null;
   websiteUrl?: string | null;
   /** Reservation fill 0–100 for header avatar ring; null hides ring. */
   reservationFillPercent?: number | null;
   profileRibbon?: SocialProofProfileRibbon | null;
-  stats?: readonly SocialProofStat[];
   trades?: readonly TradeHistoryRow[];
   reservations?: readonly ReservationHistoryRow[];
   formerReservations?: readonly ReservationHistoryRow[];
@@ -1255,19 +1600,24 @@ export type TradeSocialProofTokenWorkspaceProps = {
   hasLiveTradingPool?: boolean;
   maxIndividualReservationMyso?: number | null;
   usdPerMysoReservationQuote?: number | null;
-  /** Connected wallet MYSO balance when portfolio overview is loaded. */
+  /** Connected wallet MySo balance when portfolio overview is loaded. */
   walletMysoAvailable?: number | null;
   /** GraphQL `socialProofToken.isActive`: `true` = trading layout, else reservation layout (when no pool). */
   sptIsActive?: boolean | null;
+  /** `sptConfiguration` reservation fee bps for breakdown estimates (platform + treasury shown as platform ecosystem). */
+  reservationPlatformFeeBps?: number | null;
+  reservationTreasuryFeeBps?: number | null;
+  reservationCreatorFeeBps?: number | null;
 };
 
 export function TradeSocialProofTokenWorkspace({
   token: tokenProp,
+  creatorDisplayName: creatorDisplayNameProp,
   profilePhotoUrl,
+  coverPhotoUrl,
   websiteUrl,
   reservationFillPercent,
   profileRibbon: profileRibbonProp,
-  stats: statsProp,
   trades: tradesProp,
   reservations: reservationsProp,
   formerReservations: formerReservationsProp,
@@ -1284,19 +1634,22 @@ export function TradeSocialProofTokenWorkspace({
   usdPerMysoReservationQuote: usdPerMysoReservationQuoteProp,
   walletMysoAvailable: walletMysoAvailableProp,
   sptIsActive: sptIsActiveProp,
+  reservationPlatformFeeBps: reservationPlatformFeeBpsProp,
+  reservationTreasuryFeeBps: reservationTreasuryFeeBpsProp,
+  reservationCreatorFeeBps: reservationCreatorFeeBpsProp,
 }: TradeSocialProofTokenWorkspaceProps = {}) {
   const [timeframe, setTimeframe] = useState<Timeframe>('1D');
   const [bottomTab, setBottomTab] = useState('transactions');
 
   const profileRibbon = profileRibbonProp ?? null;
   const token = tokenProp;
-  const stats = statsProp ?? [];
   const trades = tradesProp ?? [];
   const reservations = reservationsProp ?? [];
   const formerReservations = formerReservationsProp ?? [];
   const holders = holdersProp ?? [];
   const chartSeries = chartSeriesProp ?? [];
 
+  const creatorDisplayName = creatorDisplayNameProp ?? null;
   const displayName = token?.name?.trim() || 'Social proof tokens';
   const displaySymbol = token?.symbol?.trim() || '—';
 
@@ -1328,6 +1681,9 @@ export function TradeSocialProofTokenWorkspace({
   const usdPerMysoReservationQuote = usdPerMysoReservationQuoteProp ?? null;
   const walletMysoAvailable = walletMysoAvailableProp ?? null;
   const isSptActive = sptIsActiveProp ?? profileRibbon?.isActive ?? null;
+  const reservationPlatformFeeBps = reservationPlatformFeeBpsProp ?? null;
+  const reservationTreasuryFeeBps = reservationTreasuryFeeBpsProp ?? null;
+  const reservationCreatorFeeBps = reservationCreatorFeeBpsProp ?? null;
 
   const sidePanelMode = useMemo(
     () =>
@@ -1356,6 +1712,13 @@ export function TradeSocialProofTokenWorkspace({
     (changeLabel?.trim() && quoteParsedPct == null ? changeLabel.trim() : null) ??
     'Latest quote';
 
+  const formattedUsdPrice = formatSptUsdPriceLabel(quoteDisplayPrice);
+  const isReservationPhase = sidePanelMode === 'simple';
+  const show24hChange = sidePanelMode === 'full' && showTradingQuote;
+
+  const asideWidthClass =
+    'w-full shrink-0 lg:w-[min(100%,380px)] xl:w-[400px]';
+
   return (
     <div
       className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain bg-background font-satoshi text-foreground"
@@ -1363,108 +1726,109 @@ export function TradeSocialProofTokenWorkspace({
     >
       <div
         className={cn(
-          'mx-auto flex w-full max-w-6xl flex-col gap-5 md:gap-6 xl:max-w-7xl',
-          'px-4 py-5 sm:px-6 md:py-6'
+          'mx-auto w-full max-w-6xl px-4 pb-8 pt-3 sm:px-6 sm:pt-4 md:pt-5 xl:max-w-7xl',
+          'flex flex-col gap-4 md:gap-5',
+          'lg:flex-row lg:items-start lg:gap-x-5 lg:gap-y-0'
         )}
       >
-        <SptProfileHeaderBlock
-          displayName={displayName}
-          displaySymbol={displaySymbol}
-          profilePhotoUrl={profilePhotoUrl ?? null}
-          profileRibbon={profileRibbon}
-          reservationFillPercent={reservationFillPercent}
-          showTradingQuote={showTradingQuote}
-          quoteDisplayPrice={quoteDisplayPrice}
-          quoteSubline={quoteSubline}
-          quotePctChipValue={quotePctChipValue}
-        />
+        <div className="flex min-h-0 min-w-0 w-full flex-1 flex-col gap-3">
+          <SptWorkspacePriceBand
+            formattedUsdPrice={formattedUsdPrice}
+            isReservationPhase={isReservationPhase}
+            show24hChange={show24hChange}
+            quotePctChipValue={quotePctChipValue}
+            quoteSubline={quoteSubline}
+          />
 
-        <div
-          className={cn(
-            'flex w-full min-w-0 flex-col gap-6 lg:flex-row lg:items-start lg:gap-8'
-          )}
-        >
-          <div className="min-w-0 w-full flex-1">
-            {isSptActive === true ? (
-              <section className={cn(tradeSptRoundedPanelClass, 'p-3 sm:p-4')}>
-                <PriceChartBlock
-                  timeframe={timeframe}
-                  onTimeframeChange={setTimeframe}
-                  chartSeries={chartSeries}
-                />
-              </section>
-            ) : null}
+          {isSptActive === true ? (
+            <section className={cn(tradeSptRoundedPanelClass, 'p-3 sm:p-4')}>
+              <PriceChartBlock
+                timeframe={timeframe}
+                onTimeframeChange={setTimeframe}
+                chartSeries={chartSeries}
+              />
+            </section>
+          ) : null}
 
-            <div
-              className={cn(
-                'space-y-6 pb-10',
-                isSptActive === true ? 'mt-8' : 'mt-0'
-              )}
+          <div className={cn('space-y-3', isSptActive === true ? 'mt-0 md:mt-0.5' : 'mt-0')}>
+            <section className={cn(tradeSptRoundedPanelClass, 'space-y-3')}>
+              <AboutBlock
+                token={token}
+                websiteUrl={websiteUrl}
+                profileRibbon={profileRibbon}
+              />
+            </section>
+            <section
+              className={tradeSptRoundedPanelShellClass}
+              aria-label="Transactions and reservations"
             >
-              <section className={cn(tradeSptRoundedPanelClass, 'space-y-3')}>
-                <StatGrid stats={stats} />
-              </section>
-              <section className={cn(tradeSptRoundedPanelClass, 'space-y-3')}>
-                <AboutBlock
-                  token={token}
-                  websiteUrl={websiteUrl}
-                  profileRibbon={profileRibbon}
-                />
-              </section>
-              <section
-                className={cn(tradeSptRoundedPanelClass, 'space-y-4')}
-                aria-label="Transactions and reservations"
-              >
+              <div className="pt-2 sm:pt-2.5">
                 <Tabs
                   tabs={bottomTabs}
                   activeTab={bottomTab}
                   onTabChange={setBottomTab}
                   aria-label="Token activity"
-                  listClassName="gap-4 pb-1"
-                  triggerClassName="px-1 py-2 text-sm font-medium"
+                  tabStripInsetClassName="px-4 sm:px-5"
+                  listClassName="gap-4 pb-1.5"
+                  triggerClassName="px-1 py-1 text-sm font-medium"
                 />
-                {bottomTab === 'transactions' ? (
-                  <TradeHistoryTable rows={[...trades]} />
-                ) : bottomTab === 'reservations' ? (
-                  <ReservationsHistoryTable rows={[...reservations]} />
-                ) : bottomTab === 'former' ? (
-                  <ReservationsHistoryTable rows={[...formerReservations]} />
-                ) : (
-                  <HoldersTable rows={holders} />
-                )}
-              </section>
-            </div>
-          </div>
-
-          <aside
-            className={cn(
-              'w-full shrink-0 self-start bg-transparent',
-              'lg:w-[min(100%,380px)] xl:w-[400px]'
-            )}
-            aria-label={sidePanelMode === 'simple' ? 'Reservation' : 'Swap'}
-          >
-            {sidePanelMode === 'none' ? (
-              <div className={tradeSptEmptyAsideClass}>
-                <p className="text-sm font-medium text-foreground">No reservation or trading</p>
-                <p className="mt-2 text-xs leading-relaxed text-[var(--muted-foreground)]">
-                  This token does not have an open reservation pool or live trading pool yet, so swap
-                  and reserve actions are unavailable.
-                </p>
               </div>
-            ) : sidePanelMode === 'simple' ? (
-              <SimpleReservationAmountCard
-                walletMysoAvailable={walletMysoAvailable}
-                maxReservationMyso={maxIndividualReservationMyso}
-                usdPerMyso={usdPerMysoReservationQuote}
-              />
-            ) : (
-              <SocialProofSwapCard
-                sellSymbol={displaySymbol === '—' ? 'Token' : displaySymbol}
-                tradingEnabled={tradingEnabled}
-              />
-            )}
-          </aside>
+              {bottomTab === 'transactions' ? (
+                <TradeHistoryTable rows={[...trades]} />
+              ) : bottomTab === 'reservations' ? (
+                <ReservationsHistoryTable rows={[...reservations]} />
+              ) : bottomTab === 'former' ? (
+                <ReservationsHistoryTable rows={[...formerReservations]} />
+              ) : (
+                <HoldersTable rows={holders} />
+              )}
+            </section>
+          </div>
         </div>
+
+        <aside
+          className={cn(
+            'flex w-full flex-col gap-0 bg-transparent lg:shrink-0',
+            asideWidthClass
+          )}
+          aria-label={sidePanelMode === 'simple' ? 'Reservation' : 'Swap'}
+        >
+          <SptProfileIdentityCard
+            creatorDisplayName={creatorDisplayName}
+            displayName={displayName}
+            displaySymbol={displaySymbol}
+            coverPhotoUrl={coverPhotoUrl ?? null}
+            profilePhotoUrl={profilePhotoUrl ?? null}
+            profileRibbon={profileRibbon}
+            reservationFillPercent={reservationFillPercent}
+            className="rounded-b-none"
+          />
+          {sidePanelMode === 'none' ? (
+            <div className={cn(tradeSptEmptyAsideClass, 'rounded-t-none border-t-0')}>
+              <p className="text-sm font-medium text-foreground">No reservation or trading</p>
+              <p className="mt-2 text-xs leading-relaxed text-[var(--muted-foreground)]">
+                This token does not have an open reservation pool or live trading pool yet, so swap
+                and reserve actions are unavailable.
+              </p>
+            </div>
+          ) : sidePanelMode === 'simple' ? (
+            <SimpleReservationAmountCard
+              walletMysoAvailable={walletMysoAvailable}
+              maxReservationMyso={maxIndividualReservationMyso}
+              usdPerMyso={usdPerMysoReservationQuote}
+              reservationPlatformFeeBps={reservationPlatformFeeBps}
+              reservationTreasuryFeeBps={reservationTreasuryFeeBps}
+              reservationCreatorFeeBps={reservationCreatorFeeBps}
+              className="rounded-t-none border-t-0"
+            />
+          ) : (
+            <SocialProofSwapCard
+              sellSymbol={displaySymbol === '—' ? 'Token' : displaySymbol}
+              tradingEnabled={tradingEnabled}
+              className="rounded-t-none border-t-0"
+            />
+          )}
+        </aside>
       </div>
     </div>
   );

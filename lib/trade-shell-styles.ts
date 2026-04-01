@@ -32,6 +32,11 @@ const tradeSptSurfaceBase = cn(
 export const tradeSptRoundedPanelClass = cn(tradeSptSurfaceBase, 'p-4 sm:p-5');
 
 /**
+ * Same shell as {@link tradeSptRoundedPanelClass} but no padding — use with a padded header + full-bleed table.
+ */
+export const tradeSptRoundedPanelShellClass = cn(tradeSptSurfaceBase, 'overflow-hidden');
+
+/**
  * Reserve column: slightly stronger primary wash so it reads apart from the swap card.
  */
 export const tradeSptTallCardReserveClass = cn(
@@ -62,13 +67,9 @@ export const tradeSptTallCardClass = tradeSptTallCardReserveClass;
 export const tradeSptEmptyAsideClass = cn(tradeSptSurfaceBase, 'p-5 text-center');
 
 /**
- * Inset table/list inside an SPT panel — subtle border tint so it lifts off the card.
+ * Table region inside an SPT panel — no border; outer card supplies the only frame.
  */
-export const tradeSptTableWellClass = cn(
-  'overflow-hidden rounded-lg border border-primary/[0.12]',
-  'bg-gradient-to-b from-muted/30 to-muted/14',
-  'dark:border-primary/[0.14] dark:from-muted/16 dark:to-muted/6'
-);
+export const tradeSptTableWellClass = cn('min-w-0 overflow-x-auto');
 
 /**
  * Centered empty / loading shells for full-width trade routes (e.g. SPT gate states).

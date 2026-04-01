@@ -247,11 +247,12 @@ export function TradeSocialProofTokenContainer({
       ) : null}
       <TradeSocialProofTokenWorkspace
         token={mapped.token}
+        creatorDisplayName={mapped.creatorDisplayName}
         profilePhotoUrl={mapped.profilePhotoUrl}
+        coverPhotoUrl={mapped.coverPhotoUrl}
         websiteUrl={mapped.websiteUrl}
         reservationFillPercent={mapped.reservationFillPercent}
         profileRibbon={mapped.profileRibbon}
-        stats={mapped.stats}
         trades={mapped.trades}
         reservations={mapped.reservations}
         formerReservations={mapped.formerReservations}
@@ -268,6 +269,9 @@ export function TradeSocialProofTokenContainer({
         usdPerMysoReservationQuote={mapped.usdPerMysoReservationQuote}
         walletMysoAvailable={walletMysoAvailable}
         sptIsActive={mapped.sptIsActive}
+        reservationPlatformFeeBps={mapped.reservationPlatformFeeBps}
+        reservationTreasuryFeeBps={mapped.reservationTreasuryFeeBps}
+        reservationCreatorFeeBps={mapped.reservationCreatorFeeBps}
       />
     </div>
   );

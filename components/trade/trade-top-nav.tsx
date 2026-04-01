@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { TradeNavFundsBar } from '@/components/trade/trade-nav-funds-bar';
 import { TradeNavProfileMenu } from '@/components/trade/trade-nav-profile-menu';
 import { Button } from '@/components/ui/button';
-import { Kbd, KbdGroup } from '@/components/ui/kbd';
+import { Kbd } from '@/components/ui/kbd';
 import {
   SlidingSegmentTabs,
   type SlidingSegmentItem,
@@ -32,10 +32,6 @@ export type { TradeNavSegment };
 
 /** Matches order book rail / buy–sell segment triggers; active color comes from sliding-segment-tabs. */
 const tradeNavSegmentTriggerBase = 'px-2 py-0 text-[13px] leading-none';
-
-/** Search pill width cap; scales down inside the flex gap between tabs and wallet. */
-const tradeNavSearchWidthClass =
-  'w-[min(100%,14rem)] sm:w-[min(100%,17rem)] md:w-[min(100%,21rem)]';
 
 function tradeNavSegmentItems(): SlidingSegmentItem[] {
   return [
@@ -70,23 +66,27 @@ function TradeSpotlightSearchTrigger({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-11 w-full max-w-full items-center gap-2 rounded-full border border-trade-shell bg-muted/50 px-3.5 text-left text-[13px] text-[var(--muted-foreground)]',
+        'flex h-11 max-w-full items-center rounded-full border border-trade-shell bg-muted/50 text-left text-[13px] text-[var(--muted-foreground)]',
+        'w-full justify-start gap-2 px-3.5',
+        'sm:rounded-xl sm:w-11 sm:shrink-0 sm:justify-center sm:gap-0 sm:px-0',
+        'lg:rounded-full lg:w-[min(100%,14rem)] lg:justify-start lg:gap-2 lg:px-3.5 xl:w-[min(100%,21rem)]',
         'shadow-[0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-muted/70 hover:text-foreground',
         'dark:bg-muted/30 dark:hover:bg-muted/45',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className
       )}
-      aria-label="Open search: tokens, pools, and wallets"
+      aria-label="Open search: tokens, pools, and wallets. Press / anywhere outside a field."
     >
       <Search className="shrink-0 opacity-65" size={16} strokeWidth={1.75} aria-hidden />
-      <span className="min-w-0 flex-1 truncate">Search tokens, pools, and wallets</span>
-      <KbdGroup
-        className="hidden shrink-0 sm:inline-flex"
-        aria-label="Keyboard shortcut: Command-K"
+      <span className="min-w-0 flex-1 truncate sm:hidden lg:block">
+        Search tokens, pools, and wallets
+      </span>
+      <Kbd
+        className="hidden h-5 min-w-[1.25rem] shrink-0 justify-center px-1 py-0 font-mono text-[9px] leading-none lg:inline-flex"
+        aria-hidden
       >
-        <Kbd aria-hidden>⌘</Kbd>
-        <Kbd aria-hidden>K</Kbd>
-      </KbdGroup>
+        /
+      </Kbd>
     </button>
   );
 }
@@ -372,10 +372,7 @@ export function TradeTopNav({
             <>
               <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-1">
                 {onOpenTradeSearch ? (
-                  <TradeSpotlightSearchTrigger
-                    onClick={onOpenTradeSearch}
-                    className={cn('max-w-none shrink-0', tradeNavSearchWidthClass)}
-                  />
+                  <TradeSpotlightSearchTrigger onClick={onOpenTradeSearch} className="max-w-none" />
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center justify-end">
@@ -387,10 +384,7 @@ export function TradeTopNav({
               <div className="min-h-0 min-w-0 flex-1" aria-hidden />
               <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 sm:gap-3">
                 {onOpenTradeSearch ? (
-                  <TradeSpotlightSearchTrigger
-                    onClick={onOpenTradeSearch}
-                    className={cn('max-w-none shrink-0', tradeNavSearchWidthClass)}
-                  />
+                  <TradeSpotlightSearchTrigger onClick={onOpenTradeSearch} className="max-w-none" />
                 ) : null}
                 <TradeNavAuthActions {...authProps} />
               </div>

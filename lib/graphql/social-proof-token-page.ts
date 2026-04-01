@@ -40,6 +40,7 @@ export const SOCIAL_PROOF_TOKEN_PAGE_QUERY = /* GraphQL */ `
       bio
       website
       profilePhoto
+      coverPhoto
       followersCount
       followingCount
       postCount
@@ -166,6 +167,7 @@ export const SOCIAL_PROOF_TOKEN_PAGE_QUERY = /* GraphQL */ `
     }
 
     sptConfiguration {
+      updatedBy
       postThreshold
       profileThreshold
       maxIndividualReservationBps
@@ -187,6 +189,7 @@ export const SOCIAL_PROOF_TOKEN_PAGE_QUERY = /* GraphQL */ `
       maxHoldPercentBps
       tradingEnabled
       updatedAt
+      transactionId
     }
   }
   ${SPT_PAGE_FRAGMENTS}
@@ -274,6 +277,7 @@ export interface SocialProofTokenPageProfile {
   bio: string | null;
   website: string | null;
   profilePhoto: string | null;
+  coverPhoto: string | null;
   followersCount: number | null;
   followingCount: number | null;
   postCount: number | null;
@@ -343,6 +347,7 @@ export interface SocialProofTokenPageSptPool {
 }
 
 export interface SocialProofTokenPageConfiguration {
+  updatedBy: SptScalar;
   postThreshold: SptScalar;
   profileThreshold: SptScalar;
   maxIndividualReservationBps: SptScalar;
@@ -364,6 +369,7 @@ export interface SocialProofTokenPageConfiguration {
   maxHoldPercentBps: SptScalar;
   tradingEnabled: boolean | null;
   updatedAt: SptScalar;
+  transactionId: SptScalar;
 }
 
 export interface SocialProofTokenPageQueryData {
