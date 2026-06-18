@@ -1,4 +1,4 @@
-import { orderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import { orderbookTradingNetwork } from '@/lib/orderbook/config';
 import { fetchRegisteredBalanceManagerIds } from '@/lib/orderbook/runtime';
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
 import type { NetworkType } from '@/lib/network-utils';
@@ -12,7 +12,7 @@ export async function pollRegisteredBalanceManagerIdsAfterTx(
   ownerAddress: string,
   maxWaitMs = 90_000
 ): Promise<{ timedOut: boolean; ids: string[]; pollError: string | null }> {
-  const ob = orderbookRuntimeNetwork(network);
+  const ob = orderbookTradingNetwork(network);
   if (!ob) {
     return { timedOut: false, ids: [], pollError: null };
   }

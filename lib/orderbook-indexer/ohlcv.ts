@@ -1,4 +1,5 @@
 import type { CandlestickData, UTCTimestamp } from 'lightweight-charts';
+import type { NetworkType } from '@/lib/network-utils';
 import { z } from 'zod';
 
 export const OHLCV_INTERVALS = [
@@ -29,11 +30,59 @@ const ohlcvResponseSchema = z.object({
 
 export type IndexerCandleTuple = z.infer<typeof candleRowSchema>;
 
+function trimIndexerEnv(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Public indexer host when tier-specific overrides are omitted (HTTPS, no trailing slash). */
+export const ORDERBOOK_PUBLIC_INDEXER_MAINNET = 'https://orderbook.mainnet.mysocial.network';
+export const ORDERBOOK_PUBLIC_INDEXER_TESTNET = 'https://orderbook.testnet.mysocial.network';
+
+/**
+ * Resolved HTTP origin for trade rails (OHLCV, trades, depth, pools) on the user's selected tier.
+ * Localnet returns '' unless `NEXT_PUBLIC_ORDERBOOK_INDEXER_URL` / `NEXT_PUBLIC_ORDERBOOK_INDEXER_LOCALNET_URL` is set.
+ */
+export function getOrderbookIndexerRestBase(network: NetworkType): string {
+  const generic = trimIndexerEnv(process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_URL);
+
+  if (network === 'mainnet') {
+    const o =
+      trimIndexerEnv(process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_MAINNET_URL) || generic;
+    if (o) return o.replace(/\/$/, '');
+    return ORDERBOOK_PUBLIC_INDEXER_MAINNET;
+  }
+
+  if (network === 'testnet') {
+    const o =
+      trimIndexerEnv(process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_TESTNET_URL) || generic;
+    if (o) return o.replace(/\/$/, '');
+    return ORDERBOOK_PUBLIC_INDEXER_TESTNET;
+  }
+
+  const o = trimIndexerEnv(process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_LOCALNET_URL) || generic;
+  return o.replace(/\/$/, '');
+}
+
+export function orderbookIndexerNotConfiguredMessage(): string {
+  return (
+    'Orderbook indexer URL is not configured for this network. Set NEXT_PUBLIC_ORDERBOOK_INDEXER_URL or ' +
+    'NEXT_PUBLIC_ORDERBOOK_INDEXER_LOCALNET_URL / _TESTNET / _MAINNET (see .env.example).'
+  );
+}
+
+/** Trade tape empty-state guidance when indexer base is unresolved for current tier (localnet unset, etc.). */
+export function tradeTapeIndexerUnsetDetail(): string {
+  return (
+    'Set NEXT_PUBLIC_ORDERBOOK_INDEXER_URL or tier NEXT_PUBLIC_ORDERBOOK_INDEXER_LOCALNET_URL / _TESTNET / ' +
+    '_MAINNET (see .env.example; e.g. http://127.0.0.1:9008/ for local) so the app can call GET /trades on the indexer.'
+  );
+}
+
+/**
+ * Legacy global indexer URL only (no tier splitting). Prefer `getOrderbookIndexerRestBase`.
+ */
 export function readOrderbookIndexerBaseUrl(): string {
-  return (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_URL
-    ? process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_URL
-    : ''
-  ).trim();
+  return trimIndexerEnv(process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_URL);
 }
 
 /** Ensures `new URL(relative, base)` resolves under the indexer root (handles `base` with or without trailing slash). */
@@ -55,7 +104,9 @@ export function buildPoolOhlcvUrl(
   poolName: string,
   query: {
     interval: OhlcvInterval;
+    /** `start_time` query — must match server: epoch **milliseconds** (see myso-orderbook-server `reader.rs`). */
     startTime?: number;
+    /** `end_time` query — epoch **milliseconds**. */
     endTime?: number;
     limit?: number;
   }
@@ -89,17 +140,21 @@ export type FetchPoolOhlcvResult =
   | { ok: true; data: CandlestickData[] }
   | { ok: false; error: string };
 
+/** `GET {base}ohclv/{pool}` (path spelled `ohclv`). Response `{ candles: [ [ms, o,h,l,c, vol], … ] }`. */
 export async function fetchPoolOhlcv(input: {
+  network: NetworkType;
   poolName: string;
   interval: OhlcvInterval;
+  /** Maps to `start_time` — epoch **milliseconds** (server SQL uses ms). */
   startTime?: number;
+  /** Maps to `end_time` — epoch **milliseconds**. */
   endTime?: number;
   limit?: number;
   signal?: AbortSignal;
 }): Promise<FetchPoolOhlcvResult> {
-  const base = readOrderbookIndexerBaseUrl();
+  const base = getOrderbookIndexerRestBase(input.network);
   if (!base) {
-    return { ok: false, error: 'Orderbook indexer URL is not configured (NEXT_PUBLIC_ORDERBOOK_INDEXER_URL).' };
+    return { ok: false, error: orderbookIndexerNotConfiguredMessage() };
   }
 
   const url = buildPoolOhlcvUrl(base, input.poolName, {

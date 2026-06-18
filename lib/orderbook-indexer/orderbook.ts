@@ -1,5 +1,10 @@
 import type { OrderBookSnapshot } from '@/lib/trade/orderbook-types';
-import { indexerOriginPathPrefix, readOrderbookIndexerBaseUrl } from '@/lib/orderbook-indexer/ohlcv';
+import type { NetworkType } from '@/lib/network-utils';
+import {
+  getOrderbookIndexerRestBase,
+  indexerOriginPathPrefix,
+  orderbookIndexerNotConfiguredMessage,
+} from '@/lib/orderbook-indexer/ohlcv';
 import { z } from 'zod';
 
 const levelSchema = z.object({
@@ -43,14 +48,15 @@ function normalizeSnapshot(parsed: z.infer<typeof orderbookResponseSchema>): Ord
 }
 
 export async function fetchPoolOrderBook(input: {
+  network: NetworkType;
   poolName: string;
   signal?: AbortSignal;
 }): Promise<FetchPoolOrderBookResult> {
-  const base = readOrderbookIndexerBaseUrl();
+  const base = getOrderbookIndexerRestBase(input.network);
   if (!base) {
     return {
       ok: false,
-      error: 'Orderbook indexer URL is not configured (NEXT_PUBLIC_ORDERBOOK_INDEXER_URL).',
+      error: orderbookIndexerNotConfiguredMessage(),
     };
   }
 

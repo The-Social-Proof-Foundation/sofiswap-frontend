@@ -197,3 +197,124 @@ export function isSponsoredGasAllowedFromCookies(
 ): boolean {
   return getCurrentNetworkFromCookies(cookieHeader) !== 'localnet';
 }
+
+/** Dispatched on `window` after the profile Environment picker changes tier. */
+export const SOFISWAP_SELECTED_NETWORK_CHANGE_EVENT =
+  'sofiswap-selected-network-change';
+
+const DEFAULT_MAINNET_AUTH_ORIGIN = 'https://auth.mainnet.mysocial.network';
+const DEFAULT_MAINNET_SALT_ORIGIN = 'https://salt.mainnet.mysocial.network';
+const DEFAULT_TESTNET_AUTH_ORIGIN = 'https://auth.testnet.mysocial.network';
+const DEFAULT_TESTNET_SALT_ORIGIN = 'https://salt.testnet.mysocial.network';
+
+function trimTrailingSlash(url: string | undefined): string {
+  return typeof url === 'string' ? url.trim().replace(/\/$/, '') : '';
+}
+
+function trimEnv(value: string | undefined): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * Login-with-MySocial authorize host. When `NEXT_PUBLIC_MYSOCIAL_AUTH_ORIGIN` is set, it pins
+ * all tiers (legacy single-network deploys).
+ */
+export function getMySocialAuthOrigin(network: NetworkType): string {
+  const globalOrigin = trimTrailingSlash(process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_ORIGIN);
+  if (globalOrigin) return globalOrigin;
+
+  if (network === 'mainnet') {
+    return (
+      trimTrailingSlash(process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_ORIGIN_MAINNET) ||
+      DEFAULT_MAINNET_AUTH_ORIGIN
+    );
+  }
+  if (network === 'testnet') {
+    return (
+      trimTrailingSlash(process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_ORIGIN_TESTNET) ||
+      DEFAULT_TESTNET_AUTH_ORIGIN
+    );
+  }
+  return (
+    trimTrailingSlash(process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_ORIGIN_LOCALNET) ||
+    DEFAULT_TESTNET_AUTH_ORIGIN
+  );
+}
+
+/**
+ * Salt REST API origin for `/api/mysocial/*` forwarding. Same global pin rules:
+ * `MYSOCIAL_AUTH_API_BASE_URL` or `NEXT_PUBLIC_MYSOCIAL_AUTH_API_BASE_URL` overrides all tiers.
+ * Localnet defaults to testnet Salt unless `NEXT_PUBLIC_MYSOCIAL_AUTH_API_LOCALNET_URL` etc. set.
+ */
+export function getMySocialSaltApiBaseUrl(network: NetworkType): string {
+  const globalSalt =
+    trimTrailingSlash(process.env.MYSOCIAL_AUTH_API_BASE_URL) ||
+    trimTrailingSlash(process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_API_BASE_URL);
+  if (globalSalt) return globalSalt;
+
+  if (network === 'mainnet') {
+    return (
+      trimTrailingSlash(process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_API_MAINNET_URL) ||
+      DEFAULT_MAINNET_SALT_ORIGIN
+    );
+  }
+  if (network === 'testnet') {
+    return (
+      trimTrailingSlash(process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_API_TESTNET_URL) ||
+      DEFAULT_TESTNET_SALT_ORIGIN
+    );
+  }
+  return (
+    trimTrailingSlash(process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_API_LOCALNET_URL) ||
+    DEFAULT_TESTNET_SALT_ORIGIN
+  );
+}
+
+/** Gas pool REST base URL (no path). Mainnet/testnet only; returns null on localnet. */
+export function getGasPoolBaseUrlForNetwork(network: NetworkType): string | null {
+  const legacy = trimEnv(process.env.NEXT_PUBLIC_GAS_POOL_URL);
+  if (network === 'mainnet') {
+    const v = trimEnv(process.env.NEXT_PUBLIC_GAS_POOL_URL_MAINNET);
+    return v || legacy || null;
+  }
+  if (network === 'testnet') {
+    const v = trimEnv(process.env.NEXT_PUBLIC_GAS_POOL_URL_TESTNET);
+    return v || legacy || null;
+  }
+  return null;
+}
+
+export function getGasPoolBearerTokenForNetwork(network: NetworkType): string | null {
+  const legacy = trimEnv(process.env.GAS_POOL_TOKEN);
+  if (network === 'mainnet') {
+    const t = trimEnv(process.env.GAS_POOL_TOKEN_MAINNET);
+    return t || legacy || null;
+  }
+  if (network === 'testnet') {
+    const t = trimEnv(process.env.GAS_POOL_TOKEN_TESTNET);
+    return t || legacy || null;
+  }
+  return null;
+}
+
+export function buildGasPoolReserveHttpUrl(normalizedGasPoolBase: string): string {
+  const gasPoolUrl = normalizedGasPoolBase.trim();
+  const hasV1 = gasPoolUrl.includes('/v1/') || gasPoolUrl.endsWith('/v1');
+  const apiPath = hasV1 ? '/reserve_gas' : '/v1/reserve_gas';
+  return `${gasPoolUrl}${apiPath}`;
+}
+
+export function buildGasPoolExecuteHttpUrl(normalizedGasPoolBase: string): string {
+  const gasPoolUrl = normalizedGasPoolBase.trim();
+  const hasV1 = gasPoolUrl.includes('/v1/') || gasPoolUrl.endsWith('/v1');
+  const apiPath = hasV1 ? '/execute_tx' : '/v1/execute_tx';
+  return `${gasPoolUrl}${apiPath}`;
+}
+
+export function normalizeGasPoolBaseUrl(url: string): string {
+  let gasPoolUrl = url.trim();
+  if (!gasPoolUrl.startsWith('http://') && !gasPoolUrl.startsWith('https://')) {
+    gasPoolUrl = `https://${gasPoolUrl}`;
+  }
+  return gasPoolUrl.replace(/\/$/, '');
+}

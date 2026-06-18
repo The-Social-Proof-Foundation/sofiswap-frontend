@@ -8,8 +8,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { fetchPlatformUserAccessGate } from '@/lib/graphql/profile-portfolio-overview';
-import { orderbookRuntimeNetwork } from '@/lib/orderbook-config';
-import { fetchRegisteredBalanceManagerIds } from '@/lib/orderbook/runtime';
+import { orderbookTradingNetwork } from '@/lib/orderbook/config';
+import {
+  fetchBalanceManagerSampleBalances,
+  fetchRegisteredBalanceManagerIds,
+  logBalanceManagerSampleBalancesToConsole,
+  pickPrimaryBalanceManagerId,
+} from '@/lib/orderbook/runtime';
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
 import { getClientSelectedNetwork } from '@/lib/network-utils';
 import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
@@ -137,7 +142,7 @@ function CallbackContent() {
         console.info('[auth/callback] handleRedirectCallback finished');
 
         try {
-          const cfg = getSofiSwapPlatformConfig();
+          const cfg = getSofiSwapPlatformConfig(getClientSelectedNetwork());
           const session = await auth.getSession();
           const addr = session ? resolveDisplayAddress(session) : null;
           const network = getClientSelectedNetwork();
@@ -156,7 +161,7 @@ function CallbackContent() {
               '[auth/callback] platform prefetch skipped — could not resolve MySo address from session'
             );
           } else {
-            const obNet = orderbookRuntimeNetwork(network);
+            const obNet = orderbookTradingNetwork(network);
             const bmPromise =
               obNet != null
                 ? fetchRegisteredBalanceManagerIds(getMySoJsonRpcClient(network), addr)
@@ -176,6 +181,22 @@ function CallbackContent() {
                 balanceManagerCount: bm.ids.length,
                 error: bm.error,
               });
+              if (!bm.error && bm.ids.length > 0) {
+                const primary = pickPrimaryBalanceManagerId(bm.ids);
+                    if (primary) {
+                    try {
+                      const snapshot = await fetchBalanceManagerSampleBalances({
+                        jsonRpcClient: getMySoJsonRpcClient(network),
+                        simulationSender: addr,
+                        balanceManagerObjectId: primary,
+                        network,
+                      });
+                    logBalanceManagerSampleBalancesToConsole(snapshot);
+                  } catch (snapErr) {
+                    console.warn('[auth/callback] balance manager snapshot failed', snapErr);
+                  }
+                }
+              }
             }
 
             if (res.errors?.length) {

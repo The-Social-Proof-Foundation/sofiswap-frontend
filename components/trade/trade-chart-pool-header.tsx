@@ -5,11 +5,14 @@ import Image from 'next/image';
 import { useMemo, type KeyboardEvent, type MouseEvent } from 'react';
 
 import { ProfileMenuWalletCopyRow } from '@/components/trade/trade-nav-profile-menu';
+import { usePoolOnchainMeta } from '@/hooks/usePoolOnchainMeta';
+import { orderbookRuntimeNetwork } from '@/lib/orderbook/config';
 import { useNetwork } from '@/lib/network-provider';
 import {
   pairLabelForPoolKey,
   poolOnChainAddressForKey,
   poolTickerForKey,
+  spotAssetSymbolDisplay,
 } from '@/lib/trade/trade-pool-catalog';
 import { cn } from '@/lib/utils';
 
@@ -71,11 +74,18 @@ export function TradeChartPoolHeader({
   onPoolPickerOpen?: () => void;
 }) {
   const { currentNetwork } = useNetwork();
+  const obNet = orderbookRuntimeNetwork(currentNetwork);
+  const poolOnchainMeta = usePoolOnchainMeta({
+    poolName,
+    obNet,
+    enabled: Boolean(poolName.trim() && obNet),
+  });
+
   const { base, quote, pairLabel, poolAddress } = useMemo(() => {
     const tick = poolTickerForKey(currentNetwork, poolName);
     return {
-      base: tick.base,
-      quote: tick.quote,
+      base: spotAssetSymbolDisplay(tick.base),
+      quote: spotAssetSymbolDisplay(tick.quote),
       pairLabel: pairLabelForPoolKey(currentNetwork, poolName),
       poolAddress: poolOnChainAddressForKey(currentNetwork, poolName),
     };
@@ -136,6 +146,17 @@ export function TradeChartPoolHeader({
                 <p className="text-xs text-[var(--muted-foreground)]">Pool address unavailable</p>
               )}
             </div>
+            {poolOnchainMeta.data && !poolOnchainMeta.error ? (
+              <p
+                className="mt-0.5 truncate text-[10px] tabular-nums text-[var(--muted-foreground)]"
+                title="On-chain pool book/trade params (simulated read)"
+              >
+                Tick {poolOnchainMeta.data.bookParams.tickSize.toPrecision(4)} · Min{' '}
+                {poolOnchainMeta.data.bookParams.minSize.toPrecision(4)} · Taker{' '}
+                {(poolOnchainMeta.data.tradeParams.takerFee * 100).toFixed(3)}% / maker{' '}
+                {(poolOnchainMeta.data.tradeParams.makerFee * 100).toFixed(3)}%
+              </p>
+            ) : null}
           </div>
 
           <ChevronDown

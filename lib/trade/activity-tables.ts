@@ -1,7 +1,7 @@
-import type { OrderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
 import type { NetworkType } from '@/lib/network-utils';
 
-import { poolTickerForKey } from '@/lib/trade/trade-pool-catalog';
+import { poolTickerForKey, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
 
 /**
  * Pool id → `BASE-QUOTE` for tables. When `network` is set, labels use SDK pool metadata (coin keys),
@@ -13,8 +13,10 @@ export function marketLabelFromPool(
 ): string {
   if (network === 'mainnet' || network === 'testnet' || network === 'localnet') {
     const { base, quote } = poolTickerForKey(network, poolName);
-    if (quote && quote !== '—') return `${base}-${quote}`;
-    return base;
+    if (quote && quote !== '—') {
+      return `${spotAssetSymbolDisplay(base)}-${spotAssetSymbolDisplay(quote)}`;
+    }
+    return spotAssetSymbolDisplay(base);
   }
   const parts = poolName.split('_').filter(Boolean);
   if (parts.length >= 2) {

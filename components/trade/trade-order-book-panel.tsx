@@ -10,7 +10,10 @@ import {
   formatCompactDecimal,
   formatOrderPrice,
 } from '@/lib/trade/orderbook-format';
-import type { OrderBookSnapshot } from '@/lib/trade/orderbook-types';
+import {
+  ORDERBOOK_DEFAULT_LEVELS_PER_SIDE,
+  type OrderBookSnapshot,
+} from '@/lib/trade/orderbook-types';
 import { useMemo } from 'react';
 
 const rowClass =
@@ -43,7 +46,7 @@ export function TradeOrderBookPanel({
   baseSymbol,
   quoteSymbol,
   snapshot,
-  maxLevelsPerSide = 14,
+  maxLevelsPerSide = ORDERBOOK_DEFAULT_LEVELS_PER_SIDE,
   isLoading,
   error,
 }: {

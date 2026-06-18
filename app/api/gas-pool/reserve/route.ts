@@ -3,7 +3,14 @@ import https from 'https';
 import axios from 'axios';
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { isSponsoredGasAllowedFromCookies } from '@/lib/network-utils';
+import {
+  buildGasPoolReserveHttpUrl,
+  getCurrentNetworkFromCookies,
+  getGasPoolBaseUrlForNetwork,
+  getGasPoolBearerTokenForNetwork,
+  isSponsoredGasAllowedFromCookies,
+  normalizeGasPoolBaseUrl,
+} from '@/lib/network-utils';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -40,27 +47,6 @@ function createHttpsAgent(): https.Agent {
   return new https.Agent(secureOptions);
 }
 
-function normalizeGasPoolBase(url: string): string {
-  let gasPoolUrl = url.trim();
-  if (!gasPoolUrl.startsWith('http://') && !gasPoolUrl.startsWith('https://')) {
-    gasPoolUrl = `https://${gasPoolUrl}`;
-  }
-  return gasPoolUrl.replace(/\/$/, '');
-}
-
-function reserveUrlFromEnv(): string {
-  const gasPoolUrlEnv = process.env.NEXT_PUBLIC_GAS_POOL_URL;
-  if (!gasPoolUrlEnv?.trim()) {
-    throw new Error(
-      'Gas pool service URL is not configured. Set NEXT_PUBLIC_GAS_POOL_URL.'
-    );
-  }
-  const gasPoolUrl = normalizeGasPoolBase(gasPoolUrlEnv);
-  const hasV1 = gasPoolUrl.includes('/v1/') || gasPoolUrl.endsWith('/v1');
-  const apiPath = hasV1 ? '/reserve_gas' : '/v1/reserve_gas';
-  return `${gasPoolUrl}${apiPath}`;
-}
-
 export async function OPTIONS() {
   return new Response(null, {
     status: 200,
@@ -71,6 +57,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
+    const network = getCurrentNetworkFromCookies(cookieHeader);
     if (!isSponsoredGasAllowedFromCookies(cookieHeader)) {
       const msg =
         'Sponsored transactions are not available on localnet. Please ensure you have sufficient MySo balance to pay for gas.';
@@ -89,24 +76,31 @@ export async function POST(request: NextRequest) {
       '  Reserve Duration:',
       (body as { reserve_duration_secs?: unknown }).reserve_duration_secs
     );
+    console.log('  Network:', network);
 
-    if (!process.env.NEXT_PUBLIC_GAS_POOL_URL?.trim()) {
+    const baseRaw = getGasPoolBaseUrlForNetwork(network);
+    if (!baseRaw?.trim()) {
       console.error(
-        '❌ [Gas Pool Reserve] Missing NEXT_PUBLIC_GAS_POOL_URL environment variable'
+        `❌ [Gas Pool Reserve] No URL for network="${network}". Set NEXT_PUBLIC_GAS_POOL_URL or NEXT_PUBLIC_GAS_POOL_URL_${
+          network === 'mainnet' ? 'MAINNET' : 'TESTNET'
+        }.`
       );
       throw new Error(
         'Gas pool service URL is not configured. Please contact support.'
       );
     }
 
-    if (!process.env.GAS_POOL_TOKEN) {
-      console.error('❌ [Gas Pool Reserve] Missing GAS_POOL_TOKEN environment variable');
+    const token = getGasPoolBearerTokenForNetwork(network);
+    if (!token) {
+      console.error(
+        `❌ [Gas Pool Reserve] Missing gas pool token for network="${network}"`
+      );
       throw new Error(
         'Gas pool authentication token is not configured. Please contact support.'
       );
     }
 
-    const reserveUrl = reserveUrlFromEnv();
+    const reserveUrl = buildGasPoolReserveHttpUrl(normalizeGasPoolBaseUrl(baseRaw));
     console.log('🛢️ [Gas Pool Reserve] Calling gas pool service:', reserveUrl);
 
     const controller = new AbortController();
@@ -126,7 +120,7 @@ export async function POST(request: NextRequest) {
 
       const axiosResponse = await axios.post(reserveUrl, body, {
         headers: {
-          Authorization: `Bearer ${process.env.GAS_POOL_TOKEN}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         httpsAgent,
@@ -207,8 +201,12 @@ export async function POST(request: NextRequest) {
     ) {
       errorMessage =
         'Gas pool API endpoint does not accept POST method. The endpoint path or method may be incorrect. Please verify the gas pool API configuration.';
-      const base = process.env.NEXT_PUBLIC_GAS_POOL_URL?.trim();
-      errorDetails = `Method Not Allowed (405): ${err.message}. Endpoint: ${base ? `${normalizeGasPoolBase(base)}/v1/reserve_gas` : 'unknown'}`;
+      const base = getGasPoolBaseUrlForNetwork(
+        getCurrentNetworkFromCookies(request.headers.get('cookie'))
+      );
+      errorDetails = `Method Not Allowed (405): ${err.message}. Endpoint: ${
+        base ? `${normalizeGasPoolBaseUrl(base)}/v1/reserve_gas` : 'unknown'
+      }`;
     } else if (
       err.code === 'EPROTO' ||
       err.message?.includes('SSL') ||

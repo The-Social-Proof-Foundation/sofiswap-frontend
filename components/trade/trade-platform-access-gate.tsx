@@ -123,7 +123,7 @@ export function TradePlatformAccessGate({
   const effectiveOrderbookSkipped =
     orderbookSkipped || !verifyOrderbookTradingSetup;
 
-  const config = useMemo(() => getSofiSwapPlatformConfig(), []);
+  const config = useMemo(() => getSofiSwapPlatformConfig(currentNetwork), [currentNetwork]);
   const [mode, setMode] = useState<GateMode>('idle');
   const [joinOpen, setJoinOpen] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
@@ -491,11 +491,12 @@ export function TradePlatformAccessGate({
     }
   }, [config, currentNetwork, displayAddress, keypair, runCheck, refreshTradingSetup]);
 
-  const onJoinDismissSignOut = useCallback(async () => {
+  /** Close join prompt without signing out (e.g. switch network in header). Resets when network or account changes. */
+  const onJoinDismiss = useCallback(() => {
     setJoinOpen(false);
     setMode('idle');
-    await signOut({ redirectTo: '/' });
-  }, [signOut]);
+    joinPromptDismissedRef.current = true;
+  }, []);
 
   const onRepairDismiss = useCallback(() => {
     setRepairOpen(false);
@@ -615,9 +616,9 @@ export function TradePlatformAccessGate({
           variant="ghost"
           size="icon"
           className="absolute right-4 top-4 z-10 text-[var(--muted-foreground)] hover:bg-transparent hover:text-foreground"
-          aria-label="Sign out and return home"
+          aria-label="Close"
           disabled={joinPending}
-          onClick={() => void onJoinDismissSignOut()}
+          onClick={onJoinDismiss}
         >
           <X className="h-4 w-4" />
         </Button>
@@ -635,7 +636,7 @@ export function TradePlatformAccessGate({
             keys can sign the join transaction.
           </p>
         ) : null}
-        <DialogFooter className="sm:justify-stretch">
+        <DialogFooter className="flex-col gap-2 sm:justify-stretch">
           <Button
             type="button"
             className="w-full"
@@ -643,6 +644,9 @@ export function TradePlatformAccessGate({
             onClick={() => void onJoin()}
           >
             {joinPending ? 'Joining…' : 'Join platform'}
+          </Button>
+          <Button type="button" variant="ghost" className="w-full" disabled={joinPending} onClick={onJoinDismiss}>
+            Not now
           </Button>
         </DialogFooter>
       </DialogContent>

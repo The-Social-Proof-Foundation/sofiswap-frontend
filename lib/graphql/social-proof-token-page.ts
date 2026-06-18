@@ -56,8 +56,6 @@ export const SOCIAL_PROOF_TOKEN_PAGE_QUERY = /* GraphQL */ `
         poolId
         tokenAddress
         isActive
-        name
-        symbol
         tokenType
         owner
         createdAt
@@ -112,8 +110,6 @@ export const SOCIAL_PROOF_TOKEN_PAGE_QUERY = /* GraphQL */ `
 
     sptPool(id: $poolId) {
       poolId
-      name
-      symbol
       tokenType
       price
       priceChange24H
@@ -247,8 +243,6 @@ export interface SocialProofTokenPageProfileSocialProofToken {
   poolId: string | null;
   tokenAddress: string | null;
   isActive: boolean | null;
-  name: string | null;
-  symbol: string | null;
   tokenType: string | null;
   owner: string | null;
   createdAt: SptScalar;
@@ -326,8 +320,6 @@ export interface SocialProofTokenPagePoolFormerReservationHolder {
 
 export interface SocialProofTokenPageSptPool {
   poolId: string | null;
-  name: string | null;
-  symbol: string | null;
   tokenType: string | null;
   price: SptScalar;
   priceChange24H: SptScalar;

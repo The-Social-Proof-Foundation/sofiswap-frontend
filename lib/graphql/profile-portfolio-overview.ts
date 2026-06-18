@@ -94,8 +94,6 @@ export const PROFILE_PORTFOLIO_OVERVIEW_QUERY = /* GraphQL */ `
       }
       socialProofToken {
         poolId
-        symbol
-        name
         tokenAddress
         tokenType
         createdAt
@@ -185,8 +183,6 @@ export interface ProfilePortfolioSelectedBadge {
 
 export interface ProfilePortfolioSocialProofToken {
   poolId: string;
-  symbol: string;
-  name: string;
   tokenAddress: string;
   tokenType: string;
   createdAt: string;

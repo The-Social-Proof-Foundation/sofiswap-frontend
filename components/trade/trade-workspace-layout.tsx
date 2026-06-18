@@ -21,10 +21,12 @@ import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { usePoolOrderBook } from '@/hooks/usePoolOrderBook';
 import { usePoolTrades } from '@/hooks/usePoolTrades';
 import { useTradingSetupStatus } from '@/hooks/useTradingSetupStatus';
-import { orderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import { orderbookTradingNetwork } from '@/lib/orderbook/config';
+import { getOrderbookIndexerRestBase, tradeTapeIndexerUnsetDetail } from '@/lib/orderbook-indexer/ohlcv';
 import { useNetwork } from '@/lib/network-provider';
 import { executeCancelPoolOrder } from '@/lib/tx/cancel-order';
-import { poolTickerForKey } from '@/lib/trade/trade-pool-catalog';
+import { poolTickerForKey, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
+import { ORDERBOOK_DEFAULT_LEVELS_PER_SIDE } from '@/lib/trade/orderbook-types';
 import { tradeRailSegmentListClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
 import { ArrowRightToLine, Menu } from 'lucide-react';
@@ -55,7 +57,7 @@ function OpenTradesSection({
   poolName: string;
 }) {
   const { currentNetwork } = useNetwork();
-  const obNet = orderbookRuntimeNetwork(currentNetwork);
+  const tradeOb = orderbookTradingNetwork(currentNetwork);
   const {
     isAuthenticated,
     isLoading: authLoading,
@@ -84,13 +86,13 @@ function OpenTradesSection({
     refresh: refreshOpenOrders,
   } = useAccountOpenOrders({
     poolName,
-    obNet,
+    obNet: tradeOb,
     primaryBalanceManagerId: tradingSetup.primaryBalanceManagerId,
     enabled:
       openOrdersTabActive &&
       isAuthenticated &&
       !authLoading &&
-      Boolean(obNet) &&
+      Boolean(tradeOb) &&
       Boolean(tradingSetup.primaryBalanceManagerId),
   });
 
@@ -103,6 +105,16 @@ function OpenTradesSection({
     poolName,
     enabled: Boolean(poolName.trim()),
   });
+
+  const tradeTapeEmptyDetail = useMemo(() => {
+    if (!getOrderbookIndexerRestBase(currentNetwork)) {
+      return tradeTapeIndexerUnsetDetail();
+    }
+    if (process.env.NODE_ENV === 'development') {
+      return 'If this stays empty, ensure the indexer has a pools row for this market name and order_fills is populated.';
+    }
+    return undefined;
+  }, [currentNetwork]);
 
   const tradeHistoryCount = poolTrades.length;
 
@@ -140,9 +152,10 @@ function OpenTradesSection({
 
   const onCancelOrder = useCallback(
     async (orderId: string) => {
-      if (!obNet) {
+      const tradeOb = orderbookTradingNetwork(currentNetwork);
+      if (!tradeOb) {
         toast.error('Cancel unavailable', {
-          description: 'Orderbook is not available on this network.',
+          description: 'Order cancel is not available on localnet.',
         });
         return;
       }
@@ -163,7 +176,7 @@ function OpenTradesSection({
       try {
         await executeCancelPoolOrder({
           network: currentNetwork,
-          obNet,
+          obNet: tradeOb,
           poolKey: poolName.trim(),
           orderId,
           balanceManagerObjectId: managerId,
@@ -182,7 +195,6 @@ function OpenTradesSection({
       }
     },
     [
-      obNet,
       displayAddress,
       keypair,
       tradingSetup.primaryBalanceManagerId,
@@ -224,7 +236,7 @@ function OpenTradesSection({
           openOrdersTabActive &&
           isAuthenticated &&
           !authLoading &&
-          obNet &&
+          tradeOb &&
           tradingSetup.isLoading ? (
             <TradePanelCenteredStateFrame>
               <TradePanelCenteredState
@@ -233,7 +245,7 @@ function OpenTradesSection({
                 message=""
               />
             </TradePanelCenteredStateFrame>
-          ) : openOrdersTabActive && isAuthenticated && !authLoading && obNet && tradingSetup.error ? (
+          ) : openOrdersTabActive && isAuthenticated && !authLoading && tradeOb && tradingSetup.error ? (
             <TradePanelCenteredStateFrame>
               <TradePanelCenteredState
                 headline="Trading setup unavailable"
@@ -257,7 +269,7 @@ function OpenTradesSection({
             <TradeOpenOrdersTable
               rows={openOrderRows}
               onCancelOrder={
-                obNet && keypair && tradingSetup.primaryBalanceManagerId ? onCancelOrder : undefined
+                tradeOb && keypair && tradingSetup.primaryBalanceManagerId ? onCancelOrder : undefined
               }
               cancelingOrderId={cancelingOrderId}
             />
@@ -281,6 +293,7 @@ function OpenTradesSection({
               trades={poolTrades}
               isLoading={poolTradesLoading}
               error={poolTradesError}
+              emptyDetail={tradeTapeEmptyDetail}
             />
           )
         ) : null}
@@ -319,7 +332,10 @@ function OrderBookSection({
 
   const { baseSymbol, quoteSymbol } = useMemo(() => {
     const { base, quote } = poolTickerForKey(currentNetwork, poolName);
-    return { baseSymbol: base, quoteSymbol: quote };
+    return {
+      baseSymbol: spotAssetSymbolDisplay(base),
+      quoteSymbol: spotAssetSymbolDisplay(quote),
+    };
   }, [currentNetwork, poolName]);
 
   const showOrderbookLadder = segment === 'orderbook';
@@ -336,6 +352,16 @@ function OrderBookSection({
     error: tradesError,
     isLoading: tradesLoading,
   } = usePoolTrades({ poolName, enabled: showTradeTape });
+
+  const tradeTapeEmptyDetail = useMemo(() => {
+    if (!getOrderbookIndexerRestBase(currentNetwork)) {
+      return tradeTapeIndexerUnsetDetail();
+    }
+    if (process.env.NODE_ENV === 'development') {
+      return 'If this stays empty, ensure the indexer has a pools row for this market name and order_fills is populated.';
+    }
+    return undefined;
+  }, [currentNetwork]);
 
   const trades = useMemo(() => [...tradesRaw].reverse(), [tradesRaw]);
 
@@ -380,10 +406,15 @@ function OrderBookSection({
             snapshot={orderBook}
             isLoading={orderBookLoading}
             error={orderBookError}
-            maxLevelsPerSide={14}
+            maxLevelsPerSide={ORDERBOOK_DEFAULT_LEVELS_PER_SIDE}
           />
         ) : (
-          <TradeHistoryPanel trades={trades} isLoading={tradesLoading} error={tradesError} />
+          <TradeHistoryPanel
+            trades={trades}
+            isLoading={tradesLoading}
+            error={tradesError}
+            emptyDetail={tradeTapeEmptyDetail}
+          />
         )}
       </div>
     </div>

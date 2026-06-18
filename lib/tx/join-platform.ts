@@ -1,4 +1,8 @@
-import type { MySoTransactionBlockResponse } from '@socialproof/myso/jsonRpc';
+import type {
+  DryRunTransactionBlockResponse,
+  MySoJsonRpcClient,
+  MySoTransactionBlockResponse,
+} from '@socialproof/myso/jsonRpc';
 import type { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 import { Transaction } from '@socialproof/myso/transactions';
 
@@ -6,9 +10,9 @@ import { augmentRegisterBalanceManagerError } from '@/lib/orderbook/balance-mana
 import { resolveCreatedBalanceManagerObjectId } from '@/lib/orderbook/balance-manager-effects';
 import {
   getResolvedOrderbookDeployment,
-  orderbookRuntimeNetwork,
+  orderbookTradingNetwork,
   tradingSetupBundledWithJoin,
-} from '@/lib/orderbook-config';
+} from '@/lib/orderbook/config';
 import {
   appendCreateAndShareBalanceManagerMoves,
   appendRegisterBalanceManagerMove,
@@ -25,6 +29,70 @@ import {
   writePendingBalanceManagerRegister,
 } from '@/lib/trading-setup-pending-storage';
 import { executeTransactionWithSmartGas } from '@/lib/transaction-utils';
+
+/**
+ * `platform::join_platform` abort when the sender is already in the platform membership set.
+ * Keep in sync with the published Move package (see module `platform`).
+ */
+const JOIN_PLATFORM_ABORT_ALREADY_MEMBER = 3;
+
+type JoinPlatformEffects = NonNullable<DryRunTransactionBlockResponse['effects']> & {
+  abortError?: { function?: string; error_code?: number };
+};
+
+function dryRunIndicatesJoinAlreadyComplete(dry: DryRunTransactionBlockResponse): boolean {
+  const effects = dry.effects as JoinPlatformEffects | undefined;
+  if (!effects || effects.status?.status === 'success') return false;
+
+  const ae = effects.abortError;
+  if (
+    ae?.function === 'join_platform' &&
+    ae.error_code === JOIN_PLATFORM_ABORT_ALREADY_MEMBER
+  ) {
+    return true;
+  }
+
+  const status = effects.status as { status?: string; error?: string } | undefined;
+  const err = `${status?.error ?? ''} ${dry.executionErrorSource ?? ''}`;
+  if (!/join_platform/i.test(err)) return false;
+  return (
+    /\),\s*3\)\s+in\s+command/i.test(err) ||
+    /abort code:\s*[, ]?\s*3\b/i.test(err) ||
+    /error_code['"]?\s*:\s*3\b/.test(err)
+  );
+}
+
+/**
+ * Dry-run `join_platform` alone. Returns whether the real PTB should include that move.
+ * When the wallet is already a member (GraphQL can still lag behind), the chain aborts with code 3;
+ * omitting the call avoids failing the bundled BalanceManager setup in the same transaction.
+ */
+async function shouldIncludeJoinPlatformMove(
+  client: MySoJsonRpcClient,
+  senderAddress: string,
+  config: SofiSwapPlatformConfig
+): Promise<boolean> {
+  const tx = new Transaction();
+  tx.setSender(senderAddress);
+  appendJoinPlatformMoves(tx, config);
+  const bytes = await tx.build({ client });
+  const dry = await client.dryRunTransactionBlock({ transactionBlock: bytes });
+  if (dry.effects?.status?.status === 'success') return true;
+  if (dryRunIndicatesJoinAlreadyComplete(dry)) return false;
+  const st = dry.effects?.status as { status?: string; error?: string } | undefined;
+  throw new Error(
+    st?.error ||
+      dry.executionErrorSource ||
+      'join_platform dry run failed — check platform env ids and access rules.'
+  );
+}
+
+function noopJoinSuccessResponse(): MySoTransactionBlockResponse {
+  return {
+    digest: '',
+    effects: { status: { status: 'success' } } as MySoTransactionBlockResponse['effects'],
+  };
+}
 
 /** Append `join_platform` Move calls only — caller sets `setSender`. */
 export function appendJoinPlatformMoves(
@@ -74,7 +142,7 @@ export async function signAndExecuteJoinPlatform(input: {
 }): Promise<MySoTransactionBlockResponse> {
   const { network, signer, senderAddress, config } = input;
   const client = getMySoJsonRpcClient(network);
-  const obNet = orderbookRuntimeNetwork(network);
+  const obNet = orderbookTradingNetwork(network);
   const executeOpts = { showEffects: true, showObjectChanges: true } as const;
 
   let shouldAttachBalanceManagerCreate =
@@ -90,13 +158,24 @@ export async function signAndExecuteJoinPlatform(input: {
     }
   }
 
+  const includeJoin = await shouldIncludeJoinPlatformMove(client, senderAddress, config);
+  const willAttachBalanceManager = Boolean(shouldAttachBalanceManagerCreate && obNet);
+
+  if (!includeJoin && !willAttachBalanceManager) {
+    const response = noopJoinSuccessResponse();
+    assertJoinTransactionSucceeded(response);
+    return response;
+  }
+
   const response = await executeTransactionWithSmartGas({
     network,
     client,
     signer,
     sender: senderAddress,
     build: (tx) => {
-      appendJoinPlatformMoves(tx, config);
+      if (includeJoin) {
+        appendJoinPlatformMoves(tx, config);
+      }
       if (shouldAttachBalanceManagerCreate && obNet) {
         appendCreateAndShareBalanceManagerMoves(tx, obNet, senderAddress);
       }
@@ -104,12 +183,14 @@ export async function signAndExecuteJoinPlatform(input: {
     executeOptions: executeOpts,
   });
   assertJoinTransactionSucceeded(response);
-  await client.waitForTransaction({
-    digest: response.digest,
-    options: { showEffects: true },
-    timeout: 120_000,
-    pollInterval: 1_500,
-  });
+  if (response.digest) {
+    await client.waitForTransaction({
+      digest: response.digest,
+      options: { showEffects: true },
+      timeout: 120_000,
+      pollInterval: 1_500,
+    });
+  }
 
   if (tradingSetupBundledWithJoin() && obNet && skipBalanceManagerRegister) {
     return response;

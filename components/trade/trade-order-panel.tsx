@@ -7,7 +7,7 @@
 
 import { Button } from '@/components/ui/button';
 import { useNetwork } from '@/lib/network-provider';
-import { poolTickerForKey } from '@/lib/trade/trade-pool-catalog';
+import { poolTickerForKey, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
 import { cn } from '@/lib/utils';
 import { TextMorph } from 'torph/react';
 import { useCallback, useId, useMemo, useState } from 'react';
@@ -151,7 +151,10 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
   const { currentNetwork } = useNetwork();
   const { baseSymbol, quoteSymbol } = useMemo(() => {
     const t = poolTickerForKey(currentNetwork, poolName);
-    return { baseSymbol: t.base, quoteSymbol: t.quote };
+    return {
+      baseSymbol: spotAssetSymbolDisplay(t.base),
+      quoteSymbol: spotAssetSymbolDisplay(t.quote),
+    };
   }, [currentNetwork, poolName]);
   const baseId = useId();
   const amountInputId = `${baseId}-amount`;

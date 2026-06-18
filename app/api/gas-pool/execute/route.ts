@@ -3,7 +3,14 @@ import https from 'https';
 import axios from 'axios';
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { isSponsoredGasAllowedFromCookies } from '@/lib/network-utils';
+import {
+  buildGasPoolExecuteHttpUrl,
+  getCurrentNetworkFromCookies,
+  getGasPoolBaseUrlForNetwork,
+  getGasPoolBearerTokenForNetwork,
+  isSponsoredGasAllowedFromCookies,
+  normalizeGasPoolBaseUrl,
+} from '@/lib/network-utils';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -40,25 +47,6 @@ function createHttpsAgent(): https.Agent {
   return new https.Agent(secureOptions);
 }
 
-function normalizeGasPoolBase(url: string): string {
-  let gasPoolUrl = url.trim();
-  if (!gasPoolUrl.startsWith('http://') && !gasPoolUrl.startsWith('https://')) {
-    gasPoolUrl = `https://${gasPoolUrl}`;
-  }
-  return gasPoolUrl.replace(/\/$/, '');
-}
-
-function executeUrlFromEnv(): string {
-  const gasPoolUrlEnv = process.env.NEXT_PUBLIC_GAS_POOL_URL?.trim();
-  if (!gasPoolUrlEnv) {
-    throw new Error('NEXT_PUBLIC_GAS_POOL_URL environment variable is not set');
-  }
-  const gasPoolUrl = normalizeGasPoolBase(gasPoolUrlEnv);
-  const hasV1 = gasPoolUrl.includes('/v1/') || gasPoolUrl.endsWith('/v1');
-  const apiPath = hasV1 ? '/execute_tx' : '/v1/execute_tx';
-  return `${gasPoolUrl}${apiPath}`;
-}
-
 export async function OPTIONS() {
   return new Response(null, {
     status: 200,
@@ -80,36 +68,43 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    const network = getCurrentNetworkFromCookies(cookieHeader);
 
     console.log('🚀 [Gas Pool Execute] Request Details:');
     console.log('  Reservation ID:', (body as { reservation_id?: unknown }).reservation_id);
     console.log('  TX Bytes Length:', (body as { tx_bytes?: string }).tx_bytes?.length || 0);
     console.log('  User Sig Length:', (body as { user_sig?: string }).user_sig?.length || 0);
+    console.log('  Network:', network);
 
-    const gasPoolUrlEnv = process.env.NEXT_PUBLIC_GAS_POOL_URL?.trim();
-    if (!gasPoolUrlEnv) {
-      console.error('❌ NEXT_PUBLIC_GAS_POOL_URL environment variable is not set');
+    const baseRaw = getGasPoolBaseUrlForNetwork(network);
+    if (!baseRaw) {
+      console.error(
+        `❌ [Gas Pool Execute] No gas pool URL for network="${network}". Set NEXT_PUBLIC_GAS_POOL_URL or NEXT_PUBLIC_GAS_POOL_URL_${network === 'mainnet' ? 'MAINNET' : 'TESTNET'}.`
+      );
       return NextResponse.json(
         { error: 'Gas pool URL configuration error' },
         { status: 500, headers: { ...jsonHeaders } }
       );
     }
 
-    if (!process.env.GAS_POOL_TOKEN) {
-      console.error('❌ [Gas Pool Execute] Missing GAS_POOL_TOKEN environment variable');
+    const token = getGasPoolBearerTokenForNetwork(network);
+    if (!token) {
+      console.error(
+        `❌ [Gas Pool Execute] Missing gas pool token for network="${network}"`
+      );
       return NextResponse.json(
         { error: 'Gas pool authentication token is not configured.' },
         { status: 500, headers: { ...jsonHeaders } }
       );
     }
 
-    const executeUrl = executeUrlFromEnv();
+    const executeUrl = buildGasPoolExecuteHttpUrl(normalizeGasPoolBaseUrl(baseRaw));
 
     const httpsAgent = createHttpsAgent();
 
     const axiosResponse = await axios.post(executeUrl, body, {
       headers: {
-        Authorization: `Bearer ${process.env.GAS_POOL_TOKEN}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       httpsAgent,

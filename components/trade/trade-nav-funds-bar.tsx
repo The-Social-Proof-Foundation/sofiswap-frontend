@@ -11,6 +11,13 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import { useMySocialAuth } from '@/hooks/useMySocialAuth';
+import { useTradingSetupStatus } from '@/hooks/useTradingSetupStatus';
+import {
+  BALANCE_MANAGER_SAMPLE_COIN_KEYS,
+  type BalanceManagerSampleCoinEntry,
+} from '@/lib/orderbook/runtime';
+import { useNetwork } from '@/lib/network-provider';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -58,7 +65,59 @@ function ManageFundsMenuRow({
   );
 }
 
+function formatSpotEntryLine(coinKey: string, entry: BalanceManagerSampleCoinEntry | undefined): string {
+  if (!entry) return `${coinKey}: —`;
+  if (entry.ok) return `${coinKey} ${entry.humanBalance}`;
+  return `${coinKey}: unavailable`;
+}
+
 export function TradeNavFundsBar() {
+  const { currentNetwork } = useNetwork();
+  const { isAuthenticated, displayAddress, isLoading: authLoading } = useMySocialAuth();
+  const trading = useTradingSetupStatus({
+    isAuthenticated,
+    displayAddress,
+    authLoading,
+    network: currentNetwork,
+    enabled: isAuthenticated && !authLoading,
+  });
+
+  const spotHeaderContent = (() => {
+    if (displayAddress == null) {
+      return { primary: '—' as string, secondary: 'Sign in to view balances' };
+    }
+    if (trading.orderbookSkipped) {
+      return {
+        primary: '—',
+        secondary: 'Spot balances require mainnet or testnet',
+      };
+    }
+    if (trading.isLoading && trading.balanceManagerIds.length === 0) {
+      return { primary: '…', secondary: 'Checking registry…' };
+    }
+    if (trading.error) {
+      return { primary: '—', secondary: trading.error };
+    }
+    if (!trading.primaryBalanceManagerId) {
+      return {
+        primary: '—',
+        secondary: 'No balance manager on the orderbook registry yet',
+      };
+    }
+    if (trading.balanceManagerBalancesLoading && !trading.balanceManagerBalances) {
+      return { primary: '…', secondary: 'Loading spot balances…' };
+    }
+    if (trading.balanceManagerBalancesError) {
+      return { primary: '—', secondary: trading.balanceManagerBalancesError };
+    }
+    const byCoin = trading.balanceManagerBalances?.byCoin;
+    const lines = BALANCE_MANAGER_SAMPLE_COIN_KEYS.map((k) => formatSpotEntryLine(k, byCoin?.[k]));
+    return {
+      primary: lines.join(' · '),
+      secondary: 'Balance manager spot balances',
+    };
+  })();
+
   return (
     <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
       <Button
@@ -108,18 +167,21 @@ export function TradeNavFundsBar() {
               'bg-muted/40 dark:bg-zinc-800/75'
             )}
           >
-            <p className="text-xs font-medium text-[var(--muted-foreground)]">Total balance</p>
+            <p className="text-xs font-medium text-[var(--muted-foreground)]">Spot balances</p>
             <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <span className="text-2xl font-bold tabular-nums tracking-tight text-foreground">
-                $83.14
+              <span className="min-w-0 flex-1 text-lg font-bold tabular-nums tracking-tight text-foreground sm:text-xl">
+                {spotHeaderContent.primary}
               </span>
               <span
-                className="text-xs font-medium tabular-nums text-rose-500 dark:text-rose-400"
-                aria-label="One day change down 10 cents, 0.12 percent"
+                className="text-xs font-medium tabular-nums text-[var(--muted-foreground)]"
+                aria-hidden
               >
-                ↘ $0.10 (0.12%) 1D
+                —
               </span>
             </div>
+            <p className="mt-1 text-[11px] leading-snug text-[var(--muted-foreground)]">
+              {spotHeaderContent.secondary}
+            </p>
           </div>
           <div className="p-1.5">
             <ManageFundsMenuRow

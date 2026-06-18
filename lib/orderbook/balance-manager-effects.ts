@@ -1,5 +1,7 @@
 import type { MySoJsonRpcClient, MySoTransactionBlockResponse } from '@socialproof/myso/jsonRpc';
 
+import { ORDERBOOK_DEPLOYMENT_ENV_HINT } from '@/lib/orderbook/config';
+
 function isBalanceManagerCreatedType(objectType: string): boolean {
   return objectType.toLowerCase().includes('::balance_manager::balancemanager');
 }
@@ -121,7 +123,7 @@ export async function resolveCreatedBalanceManagerObjectId(
   const id = findCreatedBalanceManagerObjectId(orderbookPackageId, block);
   if (!id) {
     throw new Error(
-      'Could not find a created BalanceManager in this transaction. Confirm NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_* and NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_* are a matching pair from the same on-chain deployment.'
+      `Could not find a created BalanceManager in this transaction. ${ORDERBOOK_DEPLOYMENT_ENV_HINT}`
     );
   }
   return id;

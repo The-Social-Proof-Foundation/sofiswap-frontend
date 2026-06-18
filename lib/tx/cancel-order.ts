@@ -5,7 +5,7 @@ import {
   getOrderbookUserClient,
   TRADE_BALANCE_MANAGER_KEY,
 } from '@/lib/orderbook/orderbook-read-client';
-import type { OrderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
 import type { NetworkType } from '@/lib/network-utils';
 import { executeTransactionWithSmartGas } from '@/lib/transaction-utils';

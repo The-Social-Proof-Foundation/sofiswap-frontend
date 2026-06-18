@@ -9,9 +9,10 @@ import { normalizeMySoAddress } from '@socialproof/myso/utils';
 import { mainnetCoins, testnetCoins } from '@socialproof/orderbook';
 
 import {
+  augmentOrderbookRegistryInspectError,
   getResolvedOrderbookDeployment,
   type OrderbookRuntimeNetwork,
-} from '@/lib/orderbook-config';
+} from '@/lib/orderbook/config';
 
 export interface BalanceManagerIdsResult {
   ids: string[];
@@ -60,11 +61,8 @@ export async function fetchRegisteredBalanceManagerIds(
       .map((id) => normalizeMySoAddress(id));
     return { ids, error: null };
   } catch (e) {
-    let msg = e instanceof Error ? e.message : String(e);
-    if (/borrow_child_object|dynamic_field::borrow/i.test(msg)) {
-      msg = `${msg} — Registry/package IDs may not match this chain, or the registry balance-manager map was not initialized. Check NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_* and NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_* (pair from the same deploy) and network selection.`;
-    }
-    return { ids: [], error: msg };
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ids: [], error: augmentOrderbookRegistryInspectError(msg) };
   }
 }
 
@@ -74,38 +72,83 @@ export function pickPrimaryBalanceManagerId(ids: string[]): string | null {
 }
 
 /** Coin keys to sample for dev console logging (both networks define these in the SDK). */
-const BALANCE_LOG_COIN_KEYS = ['MYSO', 'MYUSD'] as const;
+export const BALANCE_MANAGER_SAMPLE_COIN_KEYS = ['MYSO', 'MYUSD'] as const;
+
+export type BalanceManagerSampleCoinKey = (typeof BALANCE_MANAGER_SAMPLE_COIN_KEYS)[number];
+
+export type BalanceManagerSampleCoinEntry =
+  | { ok: true; coinType: string; humanBalance: number }
+  | { ok: false; error: string };
+
+export interface BalanceManagerSampleBalancesResult {
+  network: OrderbookRuntimeNetwork;
+  orderbookPackageId: string;
+  balanceManagerAddress: string;
+  byCoin: Partial<Record<BalanceManagerSampleCoinKey, BalanceManagerSampleCoinEntry>>;
+}
+
+const balanceSampleInflight = new Map<string, Promise<BalanceManagerSampleBalancesResult>>();
+
+function balanceSampleCacheKey(
+  rpcNetwork: string,
+  sender: string,
+  balanceManagerObjectId: string
+): string {
+  return `${rpcNetwork}:${sender}:${balanceManagerObjectId}`;
+}
 
 /**
- * Dev-friendly log of the primary balance manager object id and sampled on-chain balances.
- * Per-coin reads may fail (e.g. abort) — failures are still recorded in the logged object.
+ * Reads MYSO / MYUSD vault balances on the BalanceManager via dev-inspect (same path as console logging).
+ * Concurrent calls share one in-flight promise per (RPC network, sender, manager id).
  */
-export async function logBalanceManagerSnapshotToConsole(input: {
+export function fetchBalanceManagerSampleBalances(input: {
   jsonRpcClient: MySoJsonRpcClient;
-  /** Sender for dev-inspect / PTB simulation (MySo RPC). */
   simulationSender: string;
   balanceManagerObjectId: string;
   network: OrderbookRuntimeNetwork;
-}): Promise<void> {
+}): Promise<BalanceManagerSampleBalancesResult> {
+  const sender = normalizeMySoAddress(input.simulationSender);
+  const key = balanceSampleCacheKey(
+    input.jsonRpcClient.network,
+    sender,
+    input.balanceManagerObjectId
+  );
+  const existing = balanceSampleInflight.get(key);
+  if (existing) return existing;
+
+  const promise = fetchBalanceManagerSampleBalancesImpl({ ...input, simulationSender: sender }).finally(
+    () => {
+      balanceSampleInflight.delete(key);
+    }
+  );
+  balanceSampleInflight.set(key, promise);
+  return promise;
+}
+
+async function fetchBalanceManagerSampleBalancesImpl(input: {
+  jsonRpcClient: MySoJsonRpcClient;
+  simulationSender: string;
+  balanceManagerObjectId: string;
+  network: OrderbookRuntimeNetwork;
+}): Promise<BalanceManagerSampleBalancesResult> {
   const { jsonRpcClient, simulationSender, balanceManagerObjectId, network } = input;
-  const sender = normalizeMySoAddress(simulationSender);
   const { orderbookPackageId } = getResolvedOrderbookDeployment(network);
   const coinMap = network === 'mainnet' ? mainnetCoins : testnetCoins;
-  const balances: Record<string, { coinType: string; balance: number } | { error: string }> = {};
+  const byCoin: Partial<Record<BalanceManagerSampleCoinKey, BalanceManagerSampleCoinEntry>> = {};
 
-  for (const coinKey of BALANCE_LOG_COIN_KEYS) {
+  for (const coinKey of BALANCE_MANAGER_SAMPLE_COIN_KEYS) {
     if (!Object.hasOwn(coinMap, coinKey)) continue;
     const coin = coinMap[coinKey as keyof typeof coinMap];
     try {
       const tx = new Transaction();
-      tx.setSender(sender);
+      tx.setSender(simulationSender);
       tx.moveCall({
         target: `${orderbookPackageId}::balance_manager::balance`,
         arguments: [tx.object(balanceManagerObjectId)],
         typeArguments: [coin.type],
       });
       const inspect = await jsonRpcClient.devInspectTransactionBlock({
-        sender,
+        sender: simulationSender,
         transactionBlock: tx,
       });
       if (inspect.error) {
@@ -118,21 +161,93 @@ export async function logBalanceManagerSnapshotToConsole(input: {
       const raw = new Uint8Array(rawTuple[0]);
       const parsedBalance = bcs.U64.parse(raw);
       const adjusted = Number(parsedBalance) / coin.scalar;
-      balances[coinKey] = {
+      byCoin[coinKey] = {
+        ok: true,
         coinType: coin.type,
-        balance: Number(adjusted.toFixed(9)),
+        humanBalance: Number(adjusted.toFixed(9)),
       };
     } catch (e) {
-      balances[coinKey] = { error: e instanceof Error ? e.message : String(e) };
+      byCoin[coinKey] = {
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      };
     }
   }
 
-  console.info('[SofiSwap] BalanceManager', {
+  return {
     network,
     orderbookPackageId,
     balanceManagerAddress: balanceManagerObjectId,
+    byCoin,
+  };
+}
+
+/** Console payload compatible with historical `[SofiSwap] BalanceManager` object shape. */
+function sampleBalancesToLegacyLogBalances(
+  result: BalanceManagerSampleBalancesResult
+): Record<string, { coinType: string; balance: number } | { error: string }> {
+  const balances: Record<string, { coinType: string; balance: number } | { error: string }> = {};
+  for (const key of BALANCE_MANAGER_SAMPLE_COIN_KEYS) {
+    const entry = result.byCoin[key];
+    if (!entry) continue;
+    if (entry.ok) {
+      balances[key] = { coinType: entry.coinType, balance: entry.humanBalance };
+    } else {
+      balances[key] = { error: entry.error };
+    }
+  }
+  return balances;
+}
+
+function formatSampleBalanceForSummary(entry: BalanceManagerSampleCoinEntry | undefined): string {
+  if (!entry) return '—';
+  if (entry.ok) return String(entry.humanBalance);
+  return 'error';
+}
+
+const balanceSampleLogCooldownMs = 1500;
+const balanceSampleLogLastAt = new Map<string, number>();
+
+function logDedupeKeyForSample(result: BalanceManagerSampleBalancesResult): string {
+  return `${result.network}:${result.balanceManagerAddress}`;
+}
+
+export function logBalanceManagerSampleBalancesToConsole(result: BalanceManagerSampleBalancesResult): void {
+  const key = logDedupeKeyForSample(result);
+  const now = Date.now();
+  const prev = balanceSampleLogLastAt.get(key);
+  if (prev !== undefined && now - prev < balanceSampleLogCooldownMs) {
+    return;
+  }
+  balanceSampleLogLastAt.set(key, now);
+
+  const balances = sampleBalancesToLegacyLogBalances(result);
+  console.info('[SofiSwap] BalanceManager', {
+    network: result.network,
+    orderbookPackageId: result.orderbookPackageId,
+    balanceManagerAddress: result.balanceManagerAddress,
     balances,
   });
+  console.info('[SofiSwap] BalanceManager spot balances', {
+    balanceManagerAddress: result.balanceManagerAddress,
+    MYSO: formatSampleBalanceForSummary(result.byCoin.MYSO),
+    MYUSD: formatSampleBalanceForSummary(result.byCoin.MYUSD),
+  });
+}
+
+/**
+ * Dev-friendly log of the primary balance manager object id and sampled on-chain balances.
+ * Per-coin reads may fail (e.g. abort) — failures are still recorded in the logged object.
+ */
+export async function logBalanceManagerSnapshotToConsole(input: {
+  jsonRpcClient: MySoJsonRpcClient;
+  /** Sender for dev-inspect / PTB simulation (MySo RPC). */
+  simulationSender: string;
+  balanceManagerObjectId: string;
+  network: OrderbookRuntimeNetwork;
+}): Promise<void> {
+  const result = await fetchBalanceManagerSampleBalances(input);
+  logBalanceManagerSampleBalancesToConsole(result);
 }
 
 /**

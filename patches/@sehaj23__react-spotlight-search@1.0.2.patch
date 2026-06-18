@@ -1,0 +1,100 @@
+diff --git a/dist/components/Spotlight.js b/dist/components/Spotlight.js
+index 7c01ddf60b1d696bdc3e00dd0f618f65cb7f7e0f..b798cd3a6df7388f057c2f0982afcc964a4c2f85 100644
+--- a/dist/components/Spotlight.js
++++ b/dist/components/Spotlight.js
+@@ -117,5 +117,5 @@ export var Spotlight = function (_a) {
+                                                 '& .MuiChip-label': {
+                                                     display: 'none'
+                                                 }
+-                                            } })) }))] }), item.id)); })] }))), query.trim() && displayItems.length === 0 && (_jsxs(Box, __assign({ className: "spotlight-no-results" }, { children: [_jsx(Box, __assign({ className: "spotlight-no-results-icon" }, { children: _jsx(Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), _jsx(Typography, __assign({ className: "spotlight-no-results-text" }, { children: "No results found" })), _jsx(Typography, __assign({ className: "spotlight-no-results-suggestion" }, { children: "Try different keywords or check your spelling" }))] }))), !query.trim() && (!showRecent || recentItems.length === 0 || !showInitialResults) && (_jsxs(Box, __assign({ className: "spotlight-empty-state" }, { children: [_jsx(Box, __assign({ className: "spotlight-empty-icon" }, { children: _jsx(Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), _jsx(Typography, __assign({ className: "spotlight-empty-text" }, { children: "Start typing to search" }))] })))] })) })) })));
++                                            } })) }))] }), item.id)); })] }))), query.trim() && displayItems.length === 0 && (_jsxs(Box, __assign({ className: "spotlight-no-results" }, { children: [_jsx(Box, __assign({ className: "spotlight-no-results-icon" }, { children: _jsx(Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), _jsx(Typography, __assign({ className: "spotlight-no-results-text" }, { children: "No results found" })), _jsx(Typography, __assign({ className: "spotlight-no-results-suggestion" }, { children: "Try different keywords or check your spelling" }))] }))), !query.trim() && (!showRecent || recentItems.length === 0 || !showInitialResults) && displayItems.length === 0 && (_jsxs(Box, __assign({ className: "spotlight-empty-state" }, { children: [_jsx(Box, __assign({ className: "spotlight-empty-icon" }, { children: _jsx(Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), _jsx(Typography, __assign({ className: "spotlight-empty-text" }, { children: "Start typing to search" }))] })))] })) })) })));
+ };
+diff --git a/dist/hooks/useSpotlight.js b/dist/hooks/useSpotlight.js
+index 4ca3ce34952d3963a8d298556c2a07a97f648f36..17b0ace04549c99a6797a1cb0ade730f2e30ccb2 100644
+--- a/dist/hooks/useSpotlight.js
++++ b/dist/hooks/useSpotlight.js
+@@ -57,13 +57,18 @@ export var useSpotlight = function (items, onSelect, maxResults) {
+     // Filter items based on query
+     var filteredItems = useMemo(function () {
+         if (!query.trim()) {
+-            return recentItems.slice(0, Math.min(maxResults, MAX_RECENT_ITEMS));
++            // Default package behavior only showed localStorage "recent" rows, so an empty
++            // history produced an empty list. Pin recents first, then fill from `items`.
++            var rec = recentItems.slice(0, Math.min(maxResults, MAX_RECENT_ITEMS));
++            var recIds = new Set(rec.map(function (r) { return r.id; }));
++            var rest = items.filter(function (i) { return !recIds.has(i.id); });
++            return __spreadArray(__spreadArray([], rec, true), rest, true).slice(0, maxResults);
+         }
+         var results = fuse.search(query);
+         return results
+             .slice(0, maxResults)
+             .map(function (result) { return result.item; });
+-    }, [query, fuse, recentItems, maxResults]);
++    }, [query, fuse, recentItems, maxResults, items]);
+     // Reset selected index when filtered items change
+     useEffect(function () {
+         setSelectedIndex(0);
+diff --git a/dist/index.esm.js b/dist/index.esm.js
+index a6698bc59e2e5efe14a432349d307297e45e8164..b34153fb526ee1cbd0f057d0b123a399887cd563 100644
+--- a/dist/index.esm.js
++++ b/dist/index.esm.js
+@@ -1873,13 +1873,16 @@ var useSpotlight = function (items, onSelect, maxResults) {
+     // Filter items based on query
+     var filteredItems = useMemo(function () {
+         if (!query.trim()) {
+-            return recentItems.slice(0, Math.min(maxResults, MAX_RECENT_ITEMS));
++            var rec = recentItems.slice(0, Math.min(maxResults, MAX_RECENT_ITEMS));
++            var recIds = new Set(rec.map(function (r) { return r.id; }));
++            var rest = items.filter(function (i) { return !recIds.has(i.id); });
++            return __spreadArray(__spreadArray([], rec, true), rest, true).slice(0, maxResults);
+         }
+         var results = fuse.search(query);
+         return results
+             .slice(0, maxResults)
+             .map(function (result) { return result.item; });
+-    }, [query, fuse, recentItems, maxResults]);
++    }, [query, fuse, recentItems, maxResults, items]);
+     // Reset selected index when filtered items change
+     useEffect(function () {
+         setSelectedIndex(0);
+@@ -2064,7 +2067,7 @@ var Spotlight = function (_a) {
+                                                 '& .MuiChip-label': {
+                                                     display: 'none'
+                                                 }
+-                                            } })) }))] }), item.id)); })] }))), query.trim() && displayItems.length === 0 && (jsxs(Box, __assign({ className: "spotlight-no-results" }, { children: [jsx(Box, __assign({ className: "spotlight-no-results-icon" }, { children: jsx(Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), jsx(Typography, __assign({ className: "spotlight-no-results-text" }, { children: "No results found" })), jsx(Typography, __assign({ className: "spotlight-no-results-suggestion" }, { children: "Try different keywords or check your spelling" }))] }))), !query.trim() && (!showRecent || recentItems.length === 0 || !showInitialResults) && (jsxs(Box, __assign({ className: "spotlight-empty-state" }, { children: [jsx(Box, __assign({ className: "spotlight-empty-icon" }, { children: jsx(Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), jsx(Typography, __assign({ className: "spotlight-empty-text" }, { children: "Start typing to search" }))] })))] })) })) })));
++                                            } })) }))] }), item.id)); })] }))), query.trim() && displayItems.length === 0 && (jsxs(Box, __assign({ className: "spotlight-no-results" }, { children: [jsx(Box, __assign({ className: "spotlight-no-results-icon" }, { children: jsx(Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), jsx(Typography, __assign({ className: "spotlight-no-results-text" }, { children: "No results found" })), jsx(Typography, __assign({ className: "spotlight-no-results-suggestion" }, { children: "Try different keywords or check your spelling" }))] }))), !query.trim() && (!showRecent || recentItems.length === 0 || !showInitialResults) && displayItems.length === 0 && (jsxs(Box, __assign({ className: "spotlight-empty-state" }, { children: [jsx(Box, __assign({ className: "spotlight-empty-icon" }, { children: jsx(Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), jsx(Typography, __assign({ className: "spotlight-empty-text" }, { children: "Start typing to search" }))] })))] })) })) })));
+ };
+ 
+ export { Spotlight, useSpotlight };
+diff --git a/dist/index.js b/dist/index.js
+index a7a35c51c924195cba40e368f7b0383d6e09de13..cff50838393822274c0429635d06c190ba7be221 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1875,13 +1875,16 @@ var useSpotlight = function (items, onSelect, maxResults) {
+     // Filter items based on query
+     var filteredItems = react.useMemo(function () {
+         if (!query.trim()) {
+-            return recentItems.slice(0, Math.min(maxResults, MAX_RECENT_ITEMS));
++            var rec = recentItems.slice(0, Math.min(maxResults, MAX_RECENT_ITEMS));
++            var recIds = new Set(rec.map(function (r) { return r.id; }));
++            var rest = items.filter(function (i) { return !recIds.has(i.id); });
++            return __spreadArray(__spreadArray([], rec, true), rest, true).slice(0, maxResults);
+         }
+         var results = fuse.search(query);
+         return results
+             .slice(0, maxResults)
+             .map(function (result) { return result.item; });
+-    }, [query, fuse, recentItems, maxResults]);
++    }, [query, fuse, recentItems, maxResults, items]);
+     // Reset selected index when filtered items change
+     react.useEffect(function () {
+         setSelectedIndex(0);
+@@ -2066,7 +2069,7 @@ var Spotlight = function (_a) {
+                                                 '& .MuiChip-label': {
+                                                     display: 'none'
+                                                 }
+-                                            } })) }))] }), item.id)); })] }))), query.trim() && displayItems.length === 0 && (jsxRuntime.jsxs(material.Box, __assign({ className: "spotlight-no-results" }, { children: [jsxRuntime.jsx(material.Box, __assign({ className: "spotlight-no-results-icon" }, { children: jsxRuntime.jsx(iconsMaterial.Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), jsxRuntime.jsx(material.Typography, __assign({ className: "spotlight-no-results-text" }, { children: "No results found" })), jsxRuntime.jsx(material.Typography, __assign({ className: "spotlight-no-results-suggestion" }, { children: "Try different keywords or check your spelling" }))] }))), !query.trim() && (!showRecent || recentItems.length === 0 || !showInitialResults) && (jsxRuntime.jsxs(material.Box, __assign({ className: "spotlight-empty-state" }, { children: [jsxRuntime.jsx(material.Box, __assign({ className: "spotlight-empty-icon" }, { children: jsxRuntime.jsx(iconsMaterial.Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), jsxRuntime.jsx(material.Typography, __assign({ className: "spotlight-empty-text" }, { children: "Start typing to search" }))] })))] })) })) })));
++                                            } })) }))] }), item.id)); })] }))), query.trim() && displayItems.length === 0 && (jsxRuntime.jsxs(material.Box, __assign({ className: "spotlight-no-results" }, { children: [jsxRuntime.jsx(material.Box, __assign({ className: "spotlight-no-results-icon" }, { children: jsxRuntime.jsx(iconsMaterial.Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), jsxRuntime.jsx(material.Typography, __assign({ className: "spotlight-no-results-text" }, { children: "No results found" })), jsxRuntime.jsx(material.Typography, __assign({ className: "spotlight-no-results-suggestion" }, { children: "Try different keywords or check your spelling" }))] }))), !query.trim() && (!showRecent || recentItems.length === 0 || !showInitialResults) && displayItems.length === 0 && (jsxRuntime.jsxs(material.Box, __assign({ className: "spotlight-empty-state" }, { children: [jsxRuntime.jsx(material.Box, __assign({ className: "spotlight-empty-icon" }, { children: jsxRuntime.jsx(iconsMaterial.Search, { sx: { fontSize: 48, opacity: 0.5 } }) })), jsxRuntime.jsx(material.Typography, __assign({ className: "spotlight-empty-text" }, { children: "Start typing to search" }))] })))] })) })) })));
+ };
+ 
+ exports.Spotlight = Spotlight;

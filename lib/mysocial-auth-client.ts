@@ -1,5 +1,12 @@
 import { createMySocialAuth, type MySocialAuth } from '@socialproof/mysocial-auth';
 
+import {
+  getClientSelectedNetwork,
+  getMySocialAuthOrigin,
+  getMySocialSaltApiBaseUrl,
+  type NetworkType,
+} from '@/lib/network-utils';
+
 /** Must match `SESSION_KEY` in `@socialproof/mysocial-auth` storage (sessionStorage). */
 export const SESSION_KEY = 'mysocial_auth_session';
 
@@ -10,6 +17,7 @@ export const MYSOCIAL_AUTH_BROADCAST_CHANNEL = 'mysocial-auth';
 export const MYSOCIAL_AUTH_BROADCAST_SESSION_EVENT = 'mysocial-auth-broadcast-session';
 
 let authInstance: MySocialAuth | null = null;
+let cachedAuthNetwork: NetworkType | null = null;
 
 function readClientId(): string {
   return (
@@ -78,24 +86,17 @@ function resolveAuthOptions(): {
     }
   }
 
-  const authOrigin = (
-    process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_ORIGIN ||
-    'https://auth.testnet.mysocial.network'
-  ).replace(/\/$/, '');
-
-  const remoteSaltApiBase = (
-    process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_API_BASE_URL ||
-    'https://salt.testnet.mysocial.network'
-  ).replace(/\/$/, '');
+  const network = getClientSelectedNetwork();
+  const authOrigin = getMySocialAuthOrigin(network);
 
   /**
-   * The browser must not call `remoteSaltApiBase` directly (CORS). The Next.js app forwards to
-   * that **exact** host from the server (`app/api/mysocial/[...path]`).
+   * The browser calls same-origin `/api/mysocial/*`; the server forwards to tier-specific Salt
+   * (`getMySocialSaltApiBaseUrl`).
    */
   const apiBaseUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin.replace(/\/$/, '')}/api/mysocial`
-      : remoteSaltApiBase;
+      : getMySocialSaltApiBaseUrl(network);
 
   return { clientId, apiBaseUrl, authOrigin, redirectUri, baseUrl };
 }
@@ -106,6 +107,7 @@ export function getMySocialAuthConfig() {
 
 export function resetMySocialAuthInstance() {
   authInstance = null;
+  cachedAuthNetwork = null;
 }
 
 /**
@@ -116,6 +118,7 @@ export function getMySocialAuth(): MySocialAuth {
     throw new Error('getMySocialAuth is only available in the browser');
   }
 
+  const network = getClientSelectedNetwork();
   const { clientId, apiBaseUrl, authOrigin, redirectUri } = resolveAuthOptions();
 
   if (!clientId) {
@@ -124,7 +127,7 @@ export function getMySocialAuth(): MySocialAuth {
     );
   }
 
-  if (!authInstance) {
+  if (!authInstance || cachedAuthNetwork !== network) {
     authInstance = createMySocialAuth({
       apiBaseUrl,
       authOrigin,
@@ -132,6 +135,7 @@ export function getMySocialAuth(): MySocialAuth {
       redirectUri,
       storage: 'session',
     });
+    cachedAuthNetwork = network;
   }
 
   return authInstance;

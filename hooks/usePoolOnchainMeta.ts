@@ -1,34 +1,31 @@
 'use client';
 
-import { useAdaptiveTradePollMs } from '@/hooks/useAdaptiveTradePollMs';
-import { getOrderbookIndexerRestBase } from '@/lib/orderbook-indexer/ohlcv';
-import { DEFAULT_POOL_TRADES_LIMIT, fetchPoolTrades } from '@/lib/orderbook-indexer/trades';
-import { useNetwork } from '@/lib/network-provider';
-import type { TradePrint } from '@/lib/trade/orderbook-types';
+import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
+import {
+  type PoolOnchainMeta,
+  fetchPoolOnchainMeta,
+} from '@/lib/orderbook/pool-meta-sdk';
 import { useCallback, useEffect, useState } from 'react';
 
-export type UsePoolTradesArgs = {
+export type UsePoolOnchainMetaArgs = {
   poolName: string;
-  tradeRows?: number;
+  obNet: OrderbookRuntimeNetwork | null;
   pollIntervalMs?: number;
   enabled?: boolean;
 };
 
-export function usePoolTrades({
+export function usePoolOnchainMeta({
   poolName,
-  tradeRows = DEFAULT_POOL_TRADES_LIMIT,
-  pollIntervalMs: pollIntervalMsProp,
+  obNet,
+  pollIntervalMs = 45_000,
   enabled = true,
-}: UsePoolTradesArgs): {
-  data: TradePrint[];
+}: UsePoolOnchainMetaArgs): {
+  data: PoolOnchainMeta | null;
   error: string | null;
   isLoading: boolean;
   refresh: () => void;
 } {
-  const { currentNetwork } = useNetwork();
-  const adaptiveMs = useAdaptiveTradePollMs(3000);
-  const pollIntervalMs = pollIntervalMsProp ?? adaptiveMs;
-  const [data, setData] = useState<TradePrint[]>([]);
+  const [data, setData] = useState<PoolOnchainMeta | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -38,16 +35,8 @@ export function usePoolTrades({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !poolName.trim()) {
-      setData([]);
-      setError(null);
-      setIsLoading(false);
-      return;
-    }
-
-    const indexerBase = getOrderbookIndexerRestBase(currentNetwork);
-    if (!indexerBase) {
-      setData([]);
+    if (!enabled || !poolName.trim() || !obNet) {
+      setData(null);
       setError(null);
       setIsLoading(false);
       return;
@@ -58,11 +47,10 @@ export function usePoolTrades({
     setError(null);
 
     const run = () => {
-      void fetchPoolTrades({
-        network: currentNetwork,
-        poolName: poolName.trim(),
+      void fetchPoolOnchainMeta({
+        obNet,
+        poolKey: poolName.trim(),
         signal: ac.signal,
-        limit: tradeRows > 0 ? tradeRows : DEFAULT_POOL_TRADES_LIMIT,
       })
         .then((res) => {
           if (ac.signal.aborted) return;
@@ -71,14 +59,14 @@ export function usePoolTrades({
             setData(res.data);
             setError(null);
           } else {
-            setData([]);
+            setData(null);
             setError(res.error);
           }
         })
         .catch((e) => {
           if (e instanceof DOMException && e.name === 'AbortError') return;
           setIsLoading(false);
-          setData([]);
+          setData(null);
           setError(e instanceof Error ? e.message : String(e));
         });
     };
@@ -88,11 +76,10 @@ export function usePoolTrades({
     const useInterval = pollIntervalMs != null && pollIntervalMs > 0;
     const interval = useInterval
       ? window.setInterval(() => {
-          void fetchPoolTrades({
-            network: currentNetwork,
-            poolName: poolName.trim(),
+          void fetchPoolOnchainMeta({
+            obNet,
+            poolKey: poolName.trim(),
             signal: ac.signal,
-            limit: tradeRows > 0 ? tradeRows : DEFAULT_POOL_TRADES_LIMIT,
           })
             .then((res) => {
               if (ac.signal.aborted) return;
@@ -100,13 +87,13 @@ export function usePoolTrades({
                 setData(res.data);
                 setError(null);
               } else {
-                setData([]);
+                setData(null);
                 setError(res.error);
               }
             })
             .catch((e) => {
               if (e instanceof DOMException && e.name === 'AbortError') return;
-              setData([]);
+              setData(null);
               setError(e instanceof Error ? e.message : String(e));
             });
         }, pollIntervalMs)
@@ -116,7 +103,7 @@ export function usePoolTrades({
       ac.abort();
       if (interval != null) window.clearInterval(interval);
     };
-  }, [enabled, poolName, tradeRows, pollIntervalMs, refreshNonce, currentNetwork]);
+  }, [enabled, poolName, obNet, pollIntervalMs, refreshNonce]);
 
   return { data, error, isLoading, refresh };
 }

@@ -245,7 +245,10 @@ export function TradeTopNav({
   } = useMySocialAuth();
 
   const { currentNetwork } = useNetwork();
-  const platformId = useMemo(() => getSofiSwapPlatformConfig()?.platformGraphqlId ?? null, []);
+  const platformId = useMemo(
+    () => getSofiSwapPlatformConfig(currentNetwork)?.platformGraphqlId ?? null,
+    [currentNetwork]
+  );
   const profileQueryAddress = isAuthenticated && !authLoading ? displayAddress : null;
   const { data: profileOverview } = useGraphqlProfileOverviewSWR(
     profileQueryAddress,

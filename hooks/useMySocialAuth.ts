@@ -30,6 +30,9 @@ import {
 import { clearGraphqlProfileCacheForPrefix } from '@/lib/graphql-profile-cache';
 import { clearTradeGateOkForPrefix } from '@/lib/trade-platform-gate-storage';
 import { keypairFromWalletCredentials } from '@/lib/wallet-credentials-keypair';
+import {
+  SOFISWAP_SELECTED_NETWORK_CHANGE_EVENT,
+} from '@/lib/network-utils';
 
 /**
  * Mobile, tablet, and coarse-pointer environments should use full-page redirect (no OAuth popup).
@@ -200,10 +203,13 @@ export function useMySocialAuth() {
       void syncSession();
     });
     const onBroadcast = () => void syncSession();
+    const onNetworkChange = () => void syncSession();
     window.addEventListener(MYSOCIAL_AUTH_BROADCAST_SESSION_EVENT, onBroadcast);
+    window.addEventListener(SOFISWAP_SELECTED_NETWORK_CHANGE_EVENT, onNetworkChange);
     return () => {
       off();
       window.removeEventListener(MYSOCIAL_AUTH_BROADCAST_SESSION_EVENT, onBroadcast);
+      window.removeEventListener(SOFISWAP_SELECTED_NETWORK_CHANGE_EVENT, onNetworkChange);
     };
   }, [syncSession]);
 

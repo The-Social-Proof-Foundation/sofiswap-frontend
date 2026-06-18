@@ -1,8 +1,13 @@
 import type { NextRequest } from 'next/server';
 
+import {
+  getCurrentNetworkFromCookies,
+  getMySocialSaltApiBaseUrl,
+} from '@/lib/network-utils';
+
 /**
  * Same-origin proxy: browser calls `/api/mysocial/salt`, `/api/mysocial/auth/refresh`, etc.
- * Server forwards to Salt at `NEXT_PUBLIC_MYSOCIAL_AUTH_API_BASE_URL` (default testnet salt host).
+ * Server forwards to tier-specific Salt from `selectedNetwork` (see `getMySocialSaltApiBaseUrl`).
  */
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -14,12 +19,10 @@ const corsHeaders: Record<string, string> = {
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-function saltApiOrigin(): string {
-  return (
-    process.env.MYSOCIAL_AUTH_API_BASE_URL?.trim() ||
-    process.env.NEXT_PUBLIC_MYSOCIAL_AUTH_API_BASE_URL?.trim() ||
-    'https://salt.testnet.mysocial.network'
-  ).replace(/\/$/, '');
+function saltApiOrigin(request: NextRequest): string {
+  const cookieHeader = request.headers.get('cookie');
+  const net = getCurrentNetworkFromCookies(cookieHeader);
+  return getMySocialSaltApiBaseUrl(net);
 }
 
 async function forward(
@@ -34,7 +37,7 @@ async function forward(
   }
 
   const path = pathSegments.join('/');
-  const upstream = new URL(`${saltApiOrigin()}/${path}`);
+  const upstream = new URL(`${saltApiOrigin(request)}/${path}`);
   upstream.search = request.nextUrl.search;
 
   const headers = new Headers();

@@ -51,8 +51,12 @@ function ConfigPrompt() {
     <div className={cn(tradeWorkspaceRouteEmptyRootClass, 'gap-2')} role="status">
       <p className="text-lg font-semibold text-foreground">Platform not configured</p>
       <p className="max-w-sm text-sm text-[var(--muted-foreground)]">
-        GraphQL platform id is missing. Set <span className="font-mono">NEXT_PUBLIC_SOFISWAP_PLATFORM_ID</span>{' '}
-        and related env vars.
+        GraphQL platform id is missing for this environment. Set{' '}
+        <span className="font-mono">NEXT_PUBLIC_SOFISWAP_PLATFORM_ID</span> or tier-specific{' '}
+        <span className="font-mono">*_MAINNET</span>/<span className="font-mono">*_TESTNET</span>
+        /<span className="font-mono">*_LOCALNET</span> platform env vars (see{' '}
+        <span className="font-mono">.env.example</span>
+        ).
       </p>
     </div>
   );
@@ -72,7 +76,10 @@ export function TradeSocialProofTokenContainer({
   const { currentNetwork } = useNetwork();
   const { isAuthenticated, displayAddress, isLoading: authLoading } = useMySocialAuth();
 
-  const platformId = useMemo(() => getSofiSwapPlatformConfig()?.platformGraphqlId ?? null, []);
+  const platformId = useMemo(
+    () => getSofiSwapPlatformConfig(currentNetwork)?.platformGraphqlId ?? null,
+    [currentNetwork]
+  );
 
   const profileParam = searchParams.get('profile')?.trim() || null;
   const poolParam = searchParams.get('pool')?.trim() || null;

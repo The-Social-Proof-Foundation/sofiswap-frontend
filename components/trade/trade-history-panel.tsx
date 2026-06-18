@@ -16,11 +16,14 @@ export function TradeHistoryPanel({
   trades,
   isLoading,
   error,
+  emptyDetail,
 }: {
   className?: string;
   trades: TradePrint[];
   isLoading?: boolean;
   error?: string | null;
+  /** Muted subtext when there are no trades (indexer / catalog hints). */
+  emptyDetail?: string | null;
 }) {
   const busy = Boolean(isLoading);
 
@@ -61,7 +64,9 @@ export function TradeHistoryPanel({
             <TradePanelCenteredState
               variant="muted"
               headline="No trades yet"
-              message=""
+              message={
+                emptyDetail != null && String(emptyDetail).trim().length > 0 ? emptyDetail : ''
+              }
             />
           </TradePanelCenteredStateFrame>
         ) : (

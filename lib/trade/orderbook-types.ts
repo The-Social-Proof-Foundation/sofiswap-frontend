@@ -1,3 +1,6 @@
+/** SDK `getLevel2TicksFromMid` depth per side; panel shows up to this many rows each of bids and asks. */
+export const ORDERBOOK_DEFAULT_LEVELS_PER_SIDE = 40;
+
 export type OrderBookLevel = {
   price: number;
   size: number;

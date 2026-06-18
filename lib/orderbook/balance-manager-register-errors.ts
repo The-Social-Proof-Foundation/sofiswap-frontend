@@ -1,3 +1,5 @@
+import { ORDERBOOK_DEPLOYMENT_ENV_HINT } from '@/lib/orderbook/config';
+
 /**
  * Orderbook v3: `register_balance_manager` → `registry::add_balance_manager` calls `load_inner_mut()` on the
  * registry's `Versioned` inner before touching the balance-manager table. `get_balance_manager_ids` simulates
@@ -23,10 +25,10 @@ export function augmentRegisterBalanceManagerError(
   const hint =
     'This orderbook registry cannot complete registration for the current package (its versioned ' +
     'inner failed to load). `get_balance_manager_ids` may still simulate as empty because it does not ' +
-    'touch that path. Fix: use the canonical `NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_*` and ' +
-    '`NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_*` pair for this network (same deployment), or ask the network ' +
-    'operator to restore registry state (admin: `init_balance_manager_map` if needed, `enable_version` / ' +
-    'version alignment for the published package).';
+    'touch that path. ' +
+    ORDERBOOK_DEPLOYMENT_ENV_HINT +
+    ' Or ask the network operator to restore registry state (admin: `init_balance_manager_map` if needed, ' +
+    '`enable_version` / version alignment for the published package).';
 
   const resolved =
     ctx !== undefined

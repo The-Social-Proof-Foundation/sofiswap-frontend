@@ -2,10 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { orderbookRuntimeNetwork, type OrderbookRuntimeNetwork } from '@/lib/orderbook-config';
 import {
+  orderbookRuntimeNetwork,
+  orderbookTradingNetwork,
+  type OrderbookRuntimeNetwork,
+} from '@/lib/orderbook/config';
+import {
+  type BalanceManagerSampleBalancesResult,
+  fetchBalanceManagerSampleBalances,
   fetchRegisteredBalanceManagerIds,
-  logBalanceManagerSnapshotToConsole,
+  logBalanceManagerSampleBalancesToConsole,
   pickPrimaryBalanceManagerId,
 } from '@/lib/orderbook/runtime';
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
@@ -32,6 +38,10 @@ export interface TradingSetupStatus {
   error: string | null;
   /** mainnet/testnet orderbook path; localnet skips registry checks. */
   orderbookSkipped: boolean;
+  /** Sampled MYSO/MYUSD BalanceManager balances after registry id resolve; null when not applicable. */
+  balanceManagerBalances: BalanceManagerSampleBalancesResult | null;
+  balanceManagerBalancesLoading: boolean;
+  balanceManagerBalancesError: string | null;
   refresh: (opts?: { force?: boolean }) => Promise<void>;
 }
 
@@ -49,13 +59,19 @@ export function useTradingSetupStatus({
   const [balanceManagerIds, setBalanceManagerIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const obNet = orderbookRuntimeNetwork(network);
-  const orderbookSkipped = obNet === null;
+  const [balanceManagerBalances, setBalanceManagerBalances] =
+    useState<BalanceManagerSampleBalancesResult | null>(null);
+  const [balanceManagerBalancesLoading, setBalanceManagerBalancesLoading] = useState(false);
+  const [balanceManagerBalancesError, setBalanceManagerBalancesError] = useState<string | null>(null);
+  const readNet = orderbookRuntimeNetwork(network);
+  const tradeNet = orderbookTradingNetwork(network);
+  const orderbookSkipped = tradeNet === null;
   const inFlight = useRef(false);
-  const lastBalanceLogKey = useRef<string | null>(null);
 
   useEffect(() => {
-    lastBalanceLogKey.current = null;
+    setBalanceManagerBalances(null);
+    setBalanceManagerBalancesError(null);
+    setBalanceManagerBalancesLoading(false);
   }, [displayAddress, network]);
 
   const refresh = useCallback(
@@ -64,18 +80,27 @@ export function useTradingSetupStatus({
         setBalanceManagerIds([]);
         setError(null);
         setIsLoading(false);
+        setBalanceManagerBalances(null);
+        setBalanceManagerBalancesError(null);
+        setBalanceManagerBalancesLoading(false);
         return;
       }
       if (!displayAddress || !isAuthenticated || authLoading) {
         setBalanceManagerIds([]);
         setError(null);
         setIsLoading(false);
+        setBalanceManagerBalances(null);
+        setBalanceManagerBalancesError(null);
+        setBalanceManagerBalancesLoading(false);
         return;
       }
       if (orderbookSkipped) {
         setBalanceManagerIds([]);
         setError(null);
         setIsLoading(false);
+        setBalanceManagerBalances(null);
+        setBalanceManagerBalancesError(null);
+        setBalanceManagerBalancesLoading(false);
         return;
       }
 
@@ -129,28 +154,39 @@ export function useTradingSetupStatus({
       !primaryBalanceManagerId ||
       error
     ) {
+      setBalanceManagerBalances(null);
+      setBalanceManagerBalancesError(null);
+      setBalanceManagerBalancesLoading(false);
       return;
     }
-    const net = obNet as OrderbookRuntimeNetwork;
-    const dedupeKey = `${net}:${displayAddress}:${primaryBalanceManagerId}`;
-    if (lastBalanceLogKey.current === dedupeKey) {
-      return;
-    }
-    lastBalanceLogKey.current = dedupeKey;
+    const net: OrderbookRuntimeNetwork = readNet;
 
     let cancelled = false;
+    setBalanceManagerBalancesLoading(true);
+    setBalanceManagerBalancesError(null);
     void (async () => {
       try {
         const rpc = getMySoJsonRpcClient(network);
-        await logBalanceManagerSnapshotToConsole({
+        const snapshot = await fetchBalanceManagerSampleBalances({
           jsonRpcClient: rpc,
           simulationSender: displayAddress,
           balanceManagerObjectId: primaryBalanceManagerId,
           network: net,
         });
+        if (!cancelled) {
+          setBalanceManagerBalances(snapshot);
+          logBalanceManagerSampleBalancesToConsole(snapshot);
+        }
       } catch (e) {
         if (!cancelled) {
-          console.warn('[SofiSwap] BalanceManager snapshot log failed', e);
+          const msg = e instanceof Error ? e.message : String(e);
+          setBalanceManagerBalances(null);
+          setBalanceManagerBalancesError(msg);
+          console.warn('[SofiSwap] BalanceManager snapshot failed', e);
+        }
+      } finally {
+        if (!cancelled) {
+          setBalanceManagerBalancesLoading(false);
         }
       }
     })();
@@ -162,7 +198,7 @@ export function useTradingSetupStatus({
     displayAddress,
     error,
     network,
-    obNet,
+    readNet,
     enabled,
     orderbookSkipped,
     primaryBalanceManagerId,
@@ -174,6 +210,9 @@ export function useTradingSetupStatus({
     isLoading,
     error,
     orderbookSkipped,
+    balanceManagerBalances,
+    balanceManagerBalancesLoading,
+    balanceManagerBalancesError,
     refresh: async (opts) => {
       if (displayAddress) {
         clearTradingSetupCacheForAddress(network, displayAddress);

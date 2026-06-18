@@ -4,7 +4,7 @@ import {
   getOrderbookUserClient,
   TRADE_BALANCE_MANAGER_KEY,
 } from '@/lib/orderbook/orderbook-read-client';
-import type { OrderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
 import { marketLabelFromPool, type OpenOrderRow } from '@/lib/trade/activity-tables';
 import { poolExistsOnOrderbookNetwork } from '@/lib/trade/trade-pool-catalog';
 import {
@@ -103,36 +103,52 @@ export function useAccountOpenOrders({
       setError(null);
       try {
         const client = getOrderbookUserClient(obNet, managerId);
-        const orderIds = await client.orderbook.accountOpenOrders(
-          poolKey,
-          TRADE_BALANCE_MANAGER_KEY
-        );
-        if (cancelled) return;
-
-        const idStrings = orderIds
-          .map(toOrderIdString)
-          .filter((s) => s.length > 0);
-
-        if (idStrings.length === 0) {
-          setRows([]);
-          setError(null);
-          return;
-        }
-
         const { baseScalar, quoteScalar } = scalarsForPool(poolKey, obNet);
         const market = marketLabelFromPool(poolKey, obNet);
-        const allOrders: NonNullable<
+
+        let allOrders: NonNullable<
           Awaited<ReturnType<typeof client.orderbook.getOrders>>
         > = [];
 
-        for (let i = 0; i < idStrings.length; i += GET_ORDERS_CHUNK) {
-          const chunk = idStrings.slice(i, i + GET_ORDERS_CHUNK);
-          const batch = await client.orderbook.getOrders(poolKey, chunk);
+        try {
+          const details = await client.orderbook.getAccountOrderDetails(
+            poolKey,
+            TRADE_BALANCE_MANAGER_KEY
+          );
           if (cancelled) return;
-          if (!batch) {
-            throw new Error('Could not load order details (getOrders returned null).');
+          allOrders = details ?? [];
+        } catch {
+          const orderIds = await client.orderbook.accountOpenOrders(
+            poolKey,
+            TRADE_BALANCE_MANAGER_KEY
+          );
+          if (cancelled) return;
+
+          const idStrings = orderIds
+            .map(toOrderIdString)
+            .filter((s) => s.length > 0);
+
+          if (idStrings.length === 0) {
+            setRows([]);
+            setError(null);
+            return;
           }
-          allOrders.push(...batch);
+
+          for (let i = 0; i < idStrings.length; i += GET_ORDERS_CHUNK) {
+            const chunk = idStrings.slice(i, i + GET_ORDERS_CHUNK);
+            const batch = await client.orderbook.getOrders(poolKey, chunk);
+            if (cancelled) return;
+            if (!batch) {
+              throw new Error('Could not load order details (getOrders returned null).');
+            }
+            allOrders.push(...batch);
+          }
+        }
+
+        if (allOrders.length === 0) {
+          setRows([]);
+          setError(null);
+          return;
         }
 
         const nextRows: OpenOrderRow[] = [];

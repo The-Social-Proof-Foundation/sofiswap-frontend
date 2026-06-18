@@ -18,10 +18,12 @@ import {
   isNetworkType,
   NETWORK_COOKIE_NAME,
   NETWORK_LABELS,
+  SOFISWAP_SELECTED_NETWORK_CHANGE_EVENT,
   type NetworkType,
 } from '@/lib/network-utils';
 import { resetMySoGraphQLClient } from '@/lib/myso-graphql-client';
 import { resetMySoJsonRpcClients } from '@/lib/myso-client';
+import { resetMySocialAuthInstance } from '@/lib/mysocial-auth-client';
 import { clearAllTradingSetupCache } from '@/lib/trading-setup-cache';
 
 interface NetworkContextValue {
@@ -70,6 +72,20 @@ export function NetworkProvider({ children }: NetworkProviderProps) {
     setIsChangingNetwork(true);
     try {
       Cookies.set(NETWORK_COOKIE_NAME, network, { expires: 365 });
+
+      try {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent(SOFISWAP_SELECTED_NETWORK_CHANGE_EVENT, {
+              detail: { network },
+            })
+          );
+        }
+      } catch {
+        /* ignore SSR */
+      }
+      resetMySocialAuthInstance();
+
       setCurrentNetwork(network);
       resetMySoGraphQLClient();
       resetMySoJsonRpcClients();

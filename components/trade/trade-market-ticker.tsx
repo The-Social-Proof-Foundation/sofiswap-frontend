@@ -63,11 +63,11 @@ const bar = {
 
 /** Fallback when reservation-pools fetch fails or returns empty */
 const TICKER_PLACEHOLDER: PlaceholderTick[] = [
-  { pair: 'MYSO-MyUSD', price: '$0.842', pct: 1.24 },
-  { pair: 'MYSO-BTC', price: '$0.839', pct: -0.42 },
-  { pair: 'MYSO-ETH', price: '$0.124', pct: 3.18 },
-  { pair: 'MYSO-SOL', price: '$2.41', pct: -1.72 },
-  { pair: 'MYSO-BNB', price: '$0.842', pct: 0.91 },
+  { pair: 'MySo-MyUSD', price: '$0.842', pct: 1.24 },
+  { pair: 'MySo-BTC', price: '$0.839', pct: -0.42 },
+  { pair: 'MySo-ETH', price: '$0.124', pct: 3.18 },
+  { pair: 'MySo-SOL', price: '$2.41', pct: -1.72 },
+  { pair: 'MySo-BNB', price: '$0.842', pct: 0.91 },
 ];
 
 function sortPlaceholdersForMode(ticks: PlaceholderTick[], mode: TickerListMode): PlaceholderTick[] {

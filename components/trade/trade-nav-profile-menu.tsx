@@ -26,9 +26,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { ProfilePortfolioOverviewProfile } from '@/lib/graphql/profile-portfolio-overview';
@@ -46,6 +43,10 @@ const profileMenuChevronClass =
 
 const profileMenuRowLinkClass =
   'group flex w-full cursor-pointer items-center rounded-md px-2.5 py-2 text-sm outline-none transition-colors text-foreground data-[highlighted]:bg-muted/70';
+
+/** Nested Environment tier rows — muted chrome so they read below primary menu rows. */
+const profileMenuEnvironmentSubRowClass =
+  'group relative flex w-full cursor-pointer items-center rounded-md px-2.5 py-2 pl-7 text-sm outline-none transition-colors border border-transparent bg-muted/25 text-[var(--muted-foreground)] data-[highlighted]:border-border/50 data-[highlighted]:bg-muted/50 data-[highlighted]:text-foreground';
 
 export function parseReservationPercent(raw: string | null | undefined): number {
   if (raw == null || raw === '') return 0;
@@ -216,7 +217,7 @@ function reservationThresholdMet(
   profile: ProfilePortfolioOverviewProfile,
   spt: NonNullable<ProfilePortfolioOverviewProfile['socialProofToken']>
 ): boolean {
-  if (profile.reservationHoldings.some((h) => h.thresholdMet === true)) return true;
+  if ((profile.reservationHoldings ?? []).some((h) => h.thresholdMet === true)) return true;
   const req = parseReservedAmount(spt.requiredThreshold);
   const total = parseReservedAmount(spt.totalReserved);
   if (req > 0) return total >= req;
@@ -424,8 +425,8 @@ export function ProfileAvatarWithReservationRing({
   );
 }
 
-const PROFILE_SUBMENU_SURFACE =
-  'rounded-xl border border-trade-shell bg-popover/90 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-popover/78';
+const profileMenuAvatarTriggerButtonClass =
+  'inline-flex shrink-0 rounded-full outline-none hover:bg-accent/40 focus-visible:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background';
 
 function ProfileMenuThemeToggle({ className }: { className?: string }) {
   const [mounted, setMounted] = useState(false);
@@ -481,6 +482,8 @@ export function TradeNavProfileMenu({
   profile: ProfilePortfolioOverviewProfile | null | undefined;
   signOut: () => void;
 }) {
+  const [environmentExpanded, setEnvironmentExpanded] = useState(false);
+
   const { currentNetwork, changeNetwork, isChangingNetwork } = useNetwork();
   const photo = resolveProfilePhotoUrl(profile?.profilePhoto ?? null);
   const hasProfile = profile != null;
@@ -499,14 +502,17 @@ export function TradeNavProfileMenu({
   const following = profile?.followingCount ?? 0;
   const tokenMenuAction = getProfileTokenMenuAction(profile);
 
+  const onPickNetwork = useCallback((network: NetworkType) => {
+    void changeNetwork(network);
+    setEnvironmentExpanded(false);
+  }, [changeNetwork]);
+
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => !open && setEnvironmentExpanded(false)}>
       <DropdownMenuTrigger asChild>
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon"
-          className="h-auto rounded-full p-0 hover:bg-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          className={cn(profileMenuAvatarTriggerButtonClass, 'cursor-pointer')}
           aria-label="Open profile menu"
         >
           <ProfileAvatarWithReservationRing
@@ -515,12 +521,12 @@ export function TradeNavProfileMenu({
             profile={profile}
             variant="trigger"
           />
-        </Button>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         sideOffset={8}
-        className="w-[min(calc(100vw-2rem),19rem)] rounded-xl border border-trade-shell bg-popover/90 p-0 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-popover/78"
+        className="z-[200] w-[min(calc(100vw-2rem),19rem)] rounded-xl border border-trade-shell bg-popover/90 p-0 shadow-lg backdrop-blur-xl supports-[backdrop-filter]:bg-popover/78"
       >
         <div className="space-y-0 border-b border-trade-shell">
           <div className="flex items-start gap-1 px-3 pb-2 pt-1.5">
@@ -623,46 +629,60 @@ export function TradeNavProfileMenu({
             </Link>
           </DropdownMenuItem>
 
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger
-              disabled={isChangingNetwork}
+          <DropdownMenuItem
+            className={cn(profileMenuRowLinkClass, 'cursor-pointer')}
+            onSelect={(e) => {
+              e.preventDefault();
+              setEnvironmentExpanded((v) => !v);
+            }}
+            aria-expanded={environmentExpanded}
+          >
+            <Globe className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">Environment</span>
+            <ChevronRight
               className={cn(
-                profileMenuRowLinkClass,
-                'cursor-pointer data-[state=open]:bg-muted/70',
-                isChangingNetwork && 'pointer-events-none opacity-60'
+                'ml-auto h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform duration-200 ease-out group-data-[highlighted]:text-foreground',
+                environmentExpanded ? 'rotate-90' : 'rotate-0'
               )}
-            >
-              <Globe className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
-              <span className="min-w-0 flex-1 truncate text-left">Environment</span>
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent
-              sideOffset={6}
-              className={cn('min-w-[10.5rem] p-1', PROFILE_SUBMENU_SURFACE)}
-            >
-              {(['mainnet', 'testnet', 'localnet'] as const).map((network: NetworkType) => {
-                  const isMainnet = network === 'mainnet';
+              aria-hidden
+            />
+          </DropdownMenuItem>
+          <div
+            className={cn(
+              'grid px-1 transition-[grid-template-rows] duration-200 ease-out',
+              environmentExpanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            )}
+          >
+            <div className="min-h-0 overflow-hidden">
+              <div className="ml-3 mr-1 space-y-0.5 rounded-lg border border-border/35 bg-muted/20 p-1.5">
+                {(['mainnet', 'testnet', 'localnet'] as const).map((network: NetworkType) => {
                   const isActive = currentNetwork === network;
                   return (
                     <DropdownMenuItem
                       key={network}
-                      disabled={isMainnet || isChangingNetwork}
-                      className="relative rounded-md py-2 pl-8 pr-2.5 text-sm"
+                      disabled={isChangingNetwork}
+                      className={cn(
+                        profileMenuEnvironmentSubRowClass,
+                        isActive &&
+                          '!border-border/60 !bg-muted/40 !font-medium !text-foreground',
+                        isChangingNetwork && 'pointer-events-none opacity-60'
+                      )}
                       onSelect={() => {
-                        if (isMainnet) return;
-                        void changeNetwork(network);
+                        onPickNetwork(network);
                       }}
                     >
-                      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                      <span className="absolute left-2 top-1/2 flex h-3.5 w-3.5 -translate-y-1/2 items-center justify-center">
                         {isActive ? (
-                          <Check className="h-3 w-3" strokeWidth={2.25} aria-hidden />
+                          <Check className="h-3 w-3 shrink-0" strokeWidth={2.25} aria-hidden />
                         ) : null}
                       </span>
                       {NETWORK_LABELS[network]}
                     </DropdownMenuItem>
                   );
-              })}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+                })}
+              </div>
+            </div>
+          </div>
 
           <DropdownMenuItem
             className={cn(profileMenuRowLinkClass, 'cursor-default')}

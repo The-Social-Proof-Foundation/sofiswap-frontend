@@ -162,11 +162,13 @@ function buildTokenMeta(
 ): SocialProofTokenMeta {
   const spt = profile?.socialProofToken ?? null;
   const name =
-    pool?.name?.trim() ||
-    spt?.name?.trim() ||
     profile?.displayName?.trim() ||
+    pool?.ownerProfile?.displayName?.trim() ||
     'Social proof token';
-  const symbol = pool?.symbol?.trim() || spt?.symbol?.trim() || '—';
+  const symbol =
+    profile?.username?.trim() ||
+    (spt?.tokenAddress?.trim() ? truncateMiddle(spt.tokenAddress.trim()) : '') ||
+    '—';
   const address =
     pool?.poolId?.trim() ||
     spt?.tokenAddress?.trim() ||
@@ -502,15 +504,18 @@ export function mapSocialProofTokenPageToWorkspace(result: SocialProofTokenPageR
   let formerReservations: ReservationHistoryRow[] = [];
 
   if (sptPool) {
-    reservations = sptPool.reservationHolders.map(reservationRowFromPool);
-    formerReservations = sptPool.formerReservationHolders.map(formerFromPool);
+    reservations = (sptPool.reservationHolders ?? []).map(reservationRowFromPool);
+    formerReservations = (sptPool.formerReservationHolders ?? []).map(formerFromPool);
   }
   if (profile?.socialProofToken) {
     const spt = profile.socialProofToken;
     if (!sptPool) {
-      reservations = spt.reservationHolders.map(reservationRowFromProfileSpt);
+      reservations = (spt.reservationHolders ?? []).map(reservationRowFromProfileSpt);
     }
-    formerReservations = [...formerReservations, ...spt.formerReservationHolders.map(formerFromProfile)];
+    formerReservations = [
+      ...formerReservations,
+      ...(spt.formerReservationHolders ?? []).map(formerFromProfile),
+    ];
   }
 
   const chartSeries = sptPool ? priceHistoryToChartSeries(sptPool.priceHistory) : [];

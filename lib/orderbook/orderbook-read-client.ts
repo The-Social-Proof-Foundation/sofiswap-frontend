@@ -1,14 +1,9 @@
 import { MySoGrpcClient } from '@socialproof/myso/grpc';
-import {
-  mainnetCoins,
-  mainnetPools,
-  orderbook,
-  testnetCoins,
-  testnetPools,
-} from '@socialproof/orderbook';
+import { orderbook } from '@socialproof/orderbook';
 import type { OrderbookClient } from '@socialproof/orderbook';
 
-import { getResolvedOrderbookDeployment, type OrderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
+import { orderbookPluginOptionsForNetwork } from '@/lib/orderbook/sdk-surface';
 import { getMySoGrpcBaseUrl } from '@/lib/network-utils';
 import type { NetworkType } from '@/lib/network-utils';
 
@@ -21,13 +16,9 @@ function orderbookRegistration(
   obNet: OrderbookRuntimeNetwork,
   balanceManagers: Record<string, { address: string }>
 ) {
-  const { orderbookPackageId } = getResolvedOrderbookDeployment(obNet);
-  const pools = obNet === 'mainnet' ? mainnetPools : testnetPools;
-  const coins = obNet === 'mainnet' ? mainnetCoins : testnetCoins;
+  const opts = orderbookPluginOptionsForNetwork(obNet);
   return orderbook({
-    address: orderbookPackageId,
-    pools,
-    coins,
+    ...opts,
     balanceManagers,
   });
 }

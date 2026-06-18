@@ -1,10 +1,10 @@
 import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
-import { mainnetPools, testnetPools } from '@socialproof/orderbook';
 
 import {
   orderbookRuntimeNetwork,
   type OrderbookRuntimeNetwork,
-} from '@/lib/orderbook-config';
+} from '@/lib/orderbook/config';
+import { orderbookPoolsForSdkNetwork } from '@/lib/orderbook/sdk-surface';
 import type { NetworkType } from '@/lib/network-utils';
 
 type PoolRow = { baseCoin: string; quoteCoin: string; address: string };
@@ -13,16 +13,32 @@ type PoolRow = { baseCoin: string; quoteCoin: string; address: string };
  * SofiSwap trade UI only lists spots where **both** legs are in this set (MYSO / MYUSD / USDC).
  * Excludes DEEP, WAL, DBUSDC, DBTC, and all other SDK pools.
  */
-const SOFI_SPOT_COINS = new Set(['MYSO', 'MYUSD', 'USDC']);
+export const SOFI_SPOT_COINS = new Set(['MYSO', 'MYUSD', 'USDC']);
+
+/** Human-facing ticker (canonical keys stay uppercase for SDK / APIs). */
+export function spotAssetSymbolDisplay(symbol: string): string {
+  const s = symbol.trim();
+  if (!s || s === '—') return s;
+  const u = s.toUpperCase();
+  if (u === 'MYSO') return 'MySo';
+  if (u === 'MYUSD') return 'MyUSD';
+  if (u === 'USDC') return 'USDC';
+  return s;
+}
+
+function poolInSofiCatalog(row: PoolRow | undefined): boolean {
+  if (!row) return false;
+  return SOFI_SPOT_COINS.has(row.baseCoin) && SOFI_SPOT_COINS.has(row.quoteCoin);
+}
 
 function poolsByNetwork(network: NetworkType): Record<string, PoolRow> {
   const ob = orderbookRuntimeNetwork(network);
-  return (ob === 'mainnet' ? mainnetPools : testnetPools) as Record<string, PoolRow>;
+  return orderbookPoolsForSdkNetwork(ob) as Record<string, PoolRow>;
 }
 
-/** Raw SDK pools for gRPC (mainnet / testnet only). */
+/** Raw SDK pool map for gRPC (includes localnet = testnet defaults + optional env patch). */
 export function orderbookPoolsForRuntime(obNet: OrderbookRuntimeNetwork): Record<string, PoolRow> {
-  return (obNet === 'mainnet' ? mainnetPools : testnetPools) as Record<string, PoolRow>;
+  return orderbookPoolsForSdkNetwork(obNet) as Record<string, PoolRow>;
 }
 
 export function poolExistsOnOrderbookNetwork(
@@ -31,11 +47,6 @@ export function poolExistsOnOrderbookNetwork(
 ): boolean {
   const pools = orderbookPoolsForRuntime(obNet);
   return Boolean(pools[poolKey.trim()]);
-}
-
-function poolInSofiCatalog(row: PoolRow | undefined): boolean {
-  if (!row) return false;
-  return SOFI_SPOT_COINS.has(row.baseCoin) && SOFI_SPOT_COINS.has(row.quoteCoin);
 }
 
 function sortPoolKeys(network: NetworkType, keys: string[]): string[] {
@@ -78,7 +89,9 @@ export function poolTickerForKey(network: NetworkType, poolKey: string): {
 
 export function pairLabelForPoolKey(network: NetworkType, poolKey: string): string {
   const { base, quote } = poolTickerForKey(network, poolKey);
-  return quote && quote !== '—' ? `${base} / ${quote}` : base;
+  const b = spotAssetSymbolDisplay(base);
+  const q = spotAssetSymbolDisplay(quote);
+  return quote && quote !== '—' ? `${b} / ${q}` : b;
 }
 
 /** Pool object id from the SDK map, when this key exists on the network. */
@@ -105,11 +118,13 @@ export function getDefaultTradePoolKey(network: NetworkType): string {
 export function buildTradePoolSpotlightItems(network: NetworkType): SpotlightItem[] {
   return tradePoolKeysForNetwork(network).map((id) => {
     const { base, quote } = poolTickerForKey(network, id);
+    const dispB = spotAssetSymbolDisplay(base);
+    const dispQ = spotAssetSymbolDisplay(quote);
     return {
       id,
-      name: `${base} / ${quote}`,
+      name: pairLabelForPoolKey(network, id),
       url: '/trade',
-      tags: [base, quote, 'pool', id.toLowerCase()],
+      tags: Array.from(new Set([base, quote, dispB, dispQ, 'pool', id.toLowerCase()])).filter(Boolean),
     };
   });
 }

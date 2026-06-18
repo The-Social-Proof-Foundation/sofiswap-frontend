@@ -3,7 +3,7 @@ import type { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 
 import { augmentRegisterBalanceManagerError } from '@/lib/orderbook/balance-manager-register-errors';
 import { resolveCreatedBalanceManagerObjectId } from '@/lib/orderbook/balance-manager-effects';
-import { getResolvedOrderbookDeployment, orderbookRuntimeNetwork } from '@/lib/orderbook-config';
+import { getResolvedOrderbookDeployment, orderbookTradingNetwork } from '@/lib/orderbook/config';
 import {
   appendCreateAndShareBalanceManagerMoves,
   appendRegisterBalanceManagerMove,
@@ -83,7 +83,7 @@ async function signAndExecuteTradingSetupImpl(input: {
   senderAddress: string;
   signer: Ed25519Keypair;
 }): Promise<MySoTransactionBlockResponse | null> {
-  const ob = orderbookRuntimeNetwork(input.network);
+  const ob = orderbookTradingNetwork(input.network);
   if (!ob) {
     throw new Error('Trading setup is not available on localnet.');
   }

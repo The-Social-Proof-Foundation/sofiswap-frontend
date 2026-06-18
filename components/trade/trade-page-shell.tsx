@@ -11,6 +11,7 @@ import { useGraphqlProfileOverviewSWR } from '@/hooks/useGraphqlProfileOverviewS
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
 import { useTradeChartOhlcvEnabled } from '@/hooks/useTradeChartOhlcvEnabled';
+import { useTradeSpotlightPoolItems } from '@/hooks/useTradeSpotlightPoolItems';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
 import { useNetwork } from '@/lib/network-provider';
 import { getDefaultNetwork } from '@/lib/network-utils';
@@ -21,11 +22,7 @@ import {
   tradeNavSegmentStorageKey,
   writeTradeNavSegment,
 } from '@/lib/trade-nav-segment-storage';
-import {
-  buildTradePoolSpotlightItems,
-  getDefaultTradePoolKey,
-  tradePoolKeysForNetwork,
-} from '@/lib/trade/pool-spotlight-items';
+import { getDefaultTradePoolKey, tradePoolKeysForNetwork } from '@/lib/trade/pool-spotlight-items';
 import { parseTradePath, tradeOrderbookPath } from '@/lib/trade-route-path';
 import { cn } from '@/lib/utils';
 import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
@@ -177,8 +174,8 @@ export function TradePageShell() {
   const { currentNetwork } = useNetwork();
   const { isAuthenticated, displayAddress, isLoading: tradeAuthLoading } = useMySocialAuth();
   const platformGraphqlId = useMemo(
-    () => getSofiSwapPlatformConfig()?.platformGraphqlId ?? null,
-    []
+    () => getSofiSwapPlatformConfig(currentNetwork)?.platformGraphqlId ?? null,
+    [currentNetwork]
   );
   const profileOverviewAddress = useMemo(() => {
     if (!isAuthenticated || tradeAuthLoading) return null;
@@ -208,19 +205,21 @@ export function TradePageShell() {
     showOrderbookWorkspace
   );
 
-  const spotlightItems = useMemo(
-    () => buildTradePoolSpotlightItems(currentNetwork),
-    [currentNetwork]
-  );
+  const { items: spotlightItems } = useTradeSpotlightPoolItems(currentNetwork);
+
+  const spotlightPoolIds = useMemo(() => spotlightItems.map((item) => item.id), [spotlightItems]);
 
   useEffect(() => {
     const keys = tradePoolKeysForNetwork(currentNetwork);
     const fallback = getDefaultTradePoolKey(currentNetwork);
-    const valid = new Set(keys.length > 0 ? keys : [fallback]);
+    const valid = new Set<string>([
+      ...(keys.length > 0 ? keys : [fallback]),
+      ...spotlightPoolIds,
+    ]);
     if (!valid.has(poolName)) {
       setPoolName(keys[0] ?? fallback);
     }
-  }, [currentNetwork, poolName]);
+  }, [currentNetwork, poolName, spotlightPoolIds]);
 
   const onPoolSpotlightSelect = useCallback(
     (item: SpotlightItem) => {
@@ -351,6 +350,8 @@ export function TradePageShell() {
         onClose={() => setPoolSpotlightOpen(false)}
         placeholder="Search tokens, pools, and wallets"
         showInitialResults
+        showRecent={false}
+        maxResults={32}
       />
     </div>
   );

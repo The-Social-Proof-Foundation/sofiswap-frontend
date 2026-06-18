@@ -7,11 +7,14 @@ import {
   type OhlcvInterval,
   fetchPoolOhlcv,
 } from '@/lib/orderbook-indexer/ohlcv';
+import { useNetwork } from '@/lib/network-provider';
 
 export type UsePoolOhlcvArgs = {
   poolName: string;
   interval: OhlcvInterval;
+  /** Passed to indexer as `start_time` (**milliseconds** since epoch). */
   startTime?: number;
+  /** Passed to indexer as `end_time` (**milliseconds** since epoch). */
   endTime?: number;
   limit?: number;
   /** When false, no request is made (e.g. gate not ready). */
@@ -31,6 +34,7 @@ export function usePoolOhlcv({
   isLoading: boolean;
   refresh: () => void;
 } {
+  const { currentNetwork } = useNetwork();
   const [data, setData] = useState<CandlestickData[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,6 +57,7 @@ export function usePoolOhlcv({
     setError(null);
 
     void fetchPoolOhlcv({
+      network: currentNetwork,
       poolName: poolName.trim(),
       interval,
       startTime,
@@ -81,7 +86,7 @@ export function usePoolOhlcv({
     return () => {
       ac.abort();
     };
-  }, [enabled, poolName, interval, startTime, endTime, limit, refreshNonce]);
+  }, [enabled, poolName, interval, startTime, endTime, limit, refreshNonce, currentNetwork]);
 
   return { data, error, isLoading, refresh };
 }
