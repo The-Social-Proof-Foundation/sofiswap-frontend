@@ -36,14 +36,14 @@ The copyright section is not displaying properly on mobile devices. The current 
 ### Technical Details:
 - Created dedicated mobile section (lines 133-150) with proper spacing
 - Removed complex nested positioning that was causing mobile display issues
-- Fixed text visibility issue by changing from `text-muted-foreground` to `text-foreground`
+- Fixed text visibility issue by changing from `text-[var(--muted-foreground)]` to `text-foreground`
 - Maintained identical desktop visual design
 - Used standard Tailwind responsive classes for better reliability
 
 ### Root Cause:
 The original issue was two-fold:
 1. **Complex nested layout**: Mobile copyright was buried in absolute positioning structure
-2. **Text visibility**: `text-muted-foreground` was too light to be visible on mobile devices
+2. **Text visibility**: `text-[var(--muted-foreground)]` was too light to be visible on mobile devices
 
 ### Final Solution:
 - Separate mobile layout with `sm:hidden` class
@@ -381,3 +381,218 @@ const getImageSrc = (itemNumber: number): string => {
 ```
 
 This ensures the floating images automatically adapt to the user's theme preference while maintaining smooth theme transitions.
+
+## MySo smart gas routing — COMPLETED
+
+### Project Status Board
+- [x] `app/api/gas-pool/reserve` + `execute` proxies (cookie `selectedNetwork`, `isSponsoredGasAllowedFromCookies`, `GAS_POOL_BASE_URL`)
+- [x] `lib/transaction-utils.ts` — `executeTransactionWithSmartGas`, `INSUFFICIENT_MYSO_FOR_GAS_MESSAGE`, `MYSO_GAS_COIN_TYPE`, minimal budget `BigInt(1_000_000)`
+- [x] `lib/tx/join-platform.ts` wired to smart gas via `appendJoinPlatformMoves`
+- [x] `hooks/useGoogleAuth.ts` test PTB with `treatAsGasCoinSplit: true`
+- [x] `.env.example` documents `GAS_POOL_BASE_URL`
+
+### Env
+- **GAS_POOL_BASE_URL** — server-only; upstream must expose `POST /reserve` and `POST /execute` matching `lib/gas-pool.ts` JSON bodies.
+
+### Insufficient MySo (localnet)
+- **Message constant**: `INSUFFICIENT_MYSO_FOR_GAS_MESSAGE` in `lib/transaction-utils.ts` — thrown when `!isSponsoredGasAllowed` and balance below minimal threshold.
+
+### Executor's Feedback
+- Manual QA: verify testnet/mainnet with 0 vs funded MySo; localnet rejects sponsorship via API 403 and client `isSponsoredGasAllowed`.
+
+## BalanceManager: `new_with_custom_owner` + cap minting — COMPLETED
+
+### Changes
+- [`lib/orderbook/runtime.ts`](lib/orderbook/runtime.ts): `appendCreateAndShareBalanceManagerMoves(tx, network, ownerAddress)` now chains `new_with_custom_owner` → `mint_trade_cap` / `mint_deposit_cap` / `mint_withdraw_cap` → `public_share_object` → `transferObjects` (caps to owner). Matches `@socialproof/orderbook` `BalanceManagerContract` entry names.
+- [`lib/tx/join-platform.ts`](lib/tx/join-platform.ts), [`lib/tx/trading-setup.ts`](lib/tx/trading-setup.ts): pass `senderAddress` / `input.senderAddress` as owner.
+
+### Verification
+- `npm run build` and `npm run lint` pass.
+- On-chain `myso_getNormalizedMoveModule` against default testnet fullnode returned method-not-found (non-Sui RPC shape); ABI confirmed from published `@socialproof/orderbook` dist.
+
+### Executor's Feedback
+- Manual testnet: run bundled join or standalone trading setup; confirm PTB1 succeeds, PTB2 registers manager, and three capability objects appear on the owner.
+
+## Trade page: Lightweight Charts + indexer OHLCV — COMPLETED
+
+### Changes
+- Dependency: `lightweight-charts` ^5.1.0.
+- [`lib/orderbook-indexer/ohlcv.ts`](lib/orderbook-indexer/ohlcv.ts): Zod-validated `GET …/ohclv/{pool}` client, tuple → `CandlestickData`, `NEXT_PUBLIC_ORDERBOOK_INDEXER_URL`.
+- [`hooks/usePoolOhlcv.ts`](hooks/usePoolOhlcv.ts): abortable fetch + `refresh()`.
+- [`components/trade/trade-candlestick-chart.tsx`](components/trade/trade-candlestick-chart.tsx): `createChart` + `CandlestickSeries`, theme-aware layout, `autoSize`, overlays for loading/error/empty.
+- [`app/trade/page.tsx`](app/trade/page.tsx): `h-dvh` shell, 2fr/1fr grid (md+), no Footer; default pool `MYSO_MYUSD`, `1h`, limit 200; chart via `dynamic(..., { ssr: false })`.
+- [`.env.example`](.env.example): documents `NEXT_PUBLIC_ORDERBOOK_INDEXER_URL`.
+
+### Verification
+- `npm run lint` and `npm run build` pass.
+
+## Trade workspace: resizable panels — COMPLETED
+
+### Changes
+- [`components/trade/trade-workspace-layout.tsx`](components/trade/trade-workspace-layout.tsx): Desktop — outer `flex`: workspace `flex-1`; swap **`w-[16.666667%]`** when OB open (OB **`flex: 0 0 20%`** of workspace so OB px = swap px; combined **⅓** viewport). Swap-only: **`w-1/4`** or **`w-1/5`** (2xl). Chart↔OB is fixed flex (no horizontal resizer); **`sofiswap-trade-chart-v`** kept. Mobile: stacked.
+- [`app/trade/page.tsx`](app/trade/page.tsx): Renders `TradeWorkspaceLayout` with `chart={<TradeChartWorkspace />}`.
+
+### Verification
+- `npm run lint` and `npm run build` pass.
+
+## Trade workspace: underline secondary tabs — COMPLETED
+
+### Changes
+- [`components/ui/tabs.tsx`](components/ui/tabs.tsx): Radix root exported as `TabsRoot`; new array-based `Tabs` with sliding underline (`ResizeObserver` + layout measurement); exports `UnderlineTabItem` / `UnderlineTabsProps`.
+- [`components/trade/trade-top-nav.tsx`](components/trade/trade-top-nav.tsx): Pill segments use `TabsRoot`.
+- [`components/trade/trade-workspace-layout.tsx`](components/trade/trade-workspace-layout.tsx): Orderbook/History pills use `TabsRoot`; swap rail — Market / Limit underline under Buy/Sell; bottom panel — Positions / Open Orders / Trade History underline replaces static “Open trades” label.
+
+### Verification
+- `npm run lint` and `npx tsc --noEmit` pass.
+
+## Trade workspace: Torph order panel — COMPLETED
+
+### Changes
+- Dependency: `torph` (^0.0.9); `TextMorph` from `torph/react`.
+- [`components/trade/trade-order-panel.tsx`](components/trade/trade-order-panel.tsx): Buy/sell semantics — amount in quote (buy) or base (sell); market shows **Estimated output**; limit shows **Limit price**, **Estimated fill**, **Total**; 25/50/75/100% against mock availability; **Max fee** placeholder; primary CTA. Large amount/price fields use transparent input over `TextMorph` for caret + morphing digits.
+- [`components/trade/trade-workspace-layout.tsx`](components/trade/trade-workspace-layout.tsx): `poolName` prop (default `MYSO_MYUSD`); `SwappingInputsSection` renders `TradeOrderPanel`; Buy/Sell segment active colors (emerald / rose).
+- [`app/trade/page.tsx`](app/trade/page.tsx): `poolName={DEFAULT_POOL_NAME}` on `TradeWorkspaceLayout`.
+
+### Verification
+- `npm run build` passes; no SSR workaround needed for torph.
+
+## Trade page: pool spotlight search — COMPLETED
+
+### Background
+Wire the chart pool header chevron to `@sehaj23/react-spotlight-search` for fuzzy pool lookup and selection.
+
+### Changes
+- Dependencies: `@sehaj23/react-spotlight-search`, `@mui/material` ^5, `@mui/icons-material` ^5, `@emotion/react`, `@emotion/styled` (library peers).
+- [`lib/trade/pool-spotlight-items.ts`](lib/trade/pool-spotlight-items.ts): `TRADE_POOL_SPOTLIGHT_ITEMS` (initial pools; extend when registry exists).
+- [`components/trade/trade-chart-pool-header.tsx`](components/trade/trade-chart-pool-header.tsx): Row is display-only; chevron is a `<button>` that calls `onPoolPickerOpen`; disabled styling when callback omitted.
+- [`app/trade/page.tsx`](app/trade/page.tsx): `useState` for `poolName` and `poolSpotlightOpen`; `next/dynamic` Spotlight with `{ ssr: false }`; `import '@sehaj23/react-spotlight-search/dist/index.css'`; `useTheme()` → `theme` prop `dark` | `light`; `onSelect` sets `poolName` from `item.id` and closes; chart + `TradeWorkspaceLayout` receive live `poolName`.
+
+### Lessons
+- Package ships styles at `dist/index.css` (not always visible to workspace glob). Spotlight should stay client-only alongside MUI stack to avoid App Router / Emotion SSR edge cases.
+
+### Verification
+- `npm run lint` and `npm run build` pass.
+
+## Trade ticker: orderbook status indicator — COMPLETED
+
+### Background
+Replace footer **Help** with a live status dot (green / amber / red) fed by `https://orderbook.{testnet|mainnet}.mysocial.network/status`, hover card with synced checkpoint and a 1s-updating “time since indexer update” label.
+
+### Changes
+- [`lib/orderbook-status.ts`](lib/orderbook-status.ts): Types, `getOrderbookStatusUrl`, `fetchOrderbookStatus`, lag-based `orderbookIndexerHealth`, `oldestIndexedTimestampMs`; optional `NEXT_PUBLIC_ORDERBOOK_STATUS_URL_TESTNET` / `_MAINNET` overrides.
+- [`components/trade/trade-orderbook-status-indicator.tsx`](components/trade/trade-orderbook-status-indicator.tsx): `useNetwork`, poll every 20s, HoverCard detail panel, glowing dot; Localnet explains unavailability.
+- [`components/trade/trade-market-ticker.tsx`](components/trade/trade-market-ticker.tsx): Help link removed; renders `TradeOrderbookStatusIndicator`.
+
+### Verification
+- `npm run lint`, `npx tsc --noEmit` pass.
+
+## Trade page: keep auth / trading setup warm across nav segments — COMPLETED
+
+### Root cause
+`/trade` used a ternary that **unmounted** `TradePlatformAccessGate` and `TradeWorkspaceLayout` when switching to **Social Proof Tokens**. That tore down `useTradingSetupStatus`, gate dialogs, and workspace hooks, so returning to **Orderbook** felt “cold” (re-fetch, loading states).
+
+### Fix
+- Render `TradePlatformAccessGate` whenever the trade page is shown (always under `TradeTopNav`).
+- Keep the orderbook workspace DOM mounted; use Tailwind `hidden` + `aria-hidden` when the social segment is active instead of removing the tree.
+- Social placeholder panel uses the same pattern (hidden when orderbook is active).
+
+### File
+- [`app/trade/page.tsx`](app/trade/page.tsx)
+
+### Verification
+- `npm run lint` passes.
+
+## Home landing: “Swap Sanctuary” nature theme — COMPLETED
+
+### Summary
+Redesigned [`app/page.tsx`](app/page.tsx) only: glade-style gradients, noise texture, organic SVG blobs, brand logos from `public/logo_light.svg` / `logo_dark.svg`, **Satoshi** for the **SofiSwap** wordmark and UI copy, **Fraunces** (Google via `next/font`) for bold serif statements and the closing **Swap Sanctuary** headline. Asymmetric hero grid (copy + frosted “charm” panel), `react-fast-marquee` strip, five DEX positioning statements, GSAP hero/float animations with `gsap.context` cleanup and hover listener teardown.
+
+### Also
+- [`tailwind.config.ts`](tailwind.config.ts): `sanctuary-float` / `sanctuary-drifts` keyframes (blobs use drifts; float animation removed from GSAP-driven icons to avoid transform fights).
+
+### Verification
+- `npm run lint`, `npm run build` pass.
+
+## Trade workspace: cancel orders + pool tape tab — COMPLETED
+
+- [`lib/tx/cancel-order.ts`](lib/tx/cancel-order.ts): `executeCancelPoolOrder` builds PTB via SDK `OrderbookContract.cancelOrder` on `getOrderbookUserClient` + `executeTransactionWithSmartGas`.
+- [`components/trade/trade-open-orders-table.tsx`](components/trade/trade-open-orders-table.tsx): optional **Cancel** action with loading state.
+- [`components/trade/trade-workspace-layout.tsx`](components/trade/trade-workspace-layout.tsx): trading setup enabled whenever authenticated (so cancel works from either tab); **Trade History** tab uses `usePoolTrades` + `TradeHistoryPanel` (same pool-level source as orderbook rail); toasts on cancel success/failure; refreshes open orders + trades after cancel.
+
+### Verification
+- `npm run lint`, `npm run build` pass.
+
+## MySo localhost config + outbound logging — COMPLETED
+
+### Background
+Browser JSON-RPC used `NEXT_PUBLIC_MYSO_FULLNODE_URL` while `/api/fullnode` used `NEXT_PUBLIC_MYSO_FULLNODE` only; `.env.example` did not document the URL variant. Verbose proxy logging ran on every request.
+
+### Changes
+- [`lib/myso-fullnode-env.ts`](lib/myso-fullnode-env.ts): `getOptionalMySoFullnodeOverride()` — prefers `NEXT_PUBLIC_MYSO_FULLNODE_URL`, then legacy `NEXT_PUBLIC_MYSO_FULLNODE`.
+- [`lib/myso-client.tsx`](lib/myso-client.tsx): Uses shared override + `JsonRpcHTTPTransport` with logging `fetch` wrapper.
+- [`app/api/fullnode/route.ts`](app/api/fullnode/route.ts): Same override resolution; verbose request/response logs only when `NEXT_PUBLIC_DEBUG_MYSO_TRANSPORT` is set; JSON-RPC errors still logged always.
+- [`lib/myso-transport-log.ts`](lib/myso-transport-log.ts): `isMySoTransportDebugEnabled`, `logMySoHttp`, `wrapFetchForMySoTransportLog`.
+- [`lib/myso-graphql-client.ts`](lib/myso-graphql-client.ts): GraphQL `fetch` wrapped with the same transport logger.
+- [`.env.example`](.env.example): Alias note, local full-stack hint, `NEXT_PUBLIC_DEBUG_MYSO_TRANSPORT`.
+
+### Verification
+- `npm run lint` passes.
+
+## Trade Spotlight: GET /get_pools + tier indexer URLs — COMPLETED
+
+- [`lib/orderbook-indexer/ohlcv.ts`](lib/orderbook-indexer/ohlcv.ts): `getOrderbookIndexerRestBase(network)` with tier env vars + public testnet/mainnet defaults; localnet requires explicit URL; shared `tradeTapeIndexerUnsetDetail()` for trade tape hints.
+- Indexer callers pass `network`: [`fetchPoolOhlcv`](lib/orderbook-indexer/ohlcv.ts), [`fetchPoolOrderBook`](lib/orderbook-indexer/orderbook.ts), [`fetchPoolTrades`](lib/orderbook-indexer/trades.ts); hooks [`usePoolOhlcv`](hooks/usePoolOhlcv.ts), [`usePoolOrderBook`](hooks/usePoolOrderBook.ts), [`usePoolTrades`](hooks/usePoolTrades.ts).
+- [`lib/orderbook-indexer/pools.ts`](lib/orderbook-indexer/pools.ts) + [`pools-session-cache.ts`](lib/orderbook-indexer/pools-session-cache.ts): Zod-validated `/get_pools`, `sessionStorage` key per tier (`sofiswap_trade_pools_v1:${network}`).
+- [`hooks/useTradeSpotlightPoolItems.ts`](hooks/useTradeSpotlightPoolItems.ts): hydrates Spotlight from cache/fetch + SDK fallback; [`lib/trade/indexer-pools-spotlight.ts`](lib/trade/indexer-pools-spotlight.ts) maps rows to `SpotlightItem` with SOFI symbol filter ([`SOFI_SPOT_COINS`](lib/trade/trade-pool-catalog.ts) exported).
+- [`components/trade/trade-page-shell.tsx`](components/trade/trade-page-shell.tsx): dynamic `Spotlight` items; validation effect unions indexer pool ids so SDK-unknown keys are kept.
+- [`.env.example`](.env.example): documents `NEXT_PUBLIC_ORDERBOOK_INDEXER_*_URL` tier vars.
+
+### Verification
+- `npm run lint`, `npx tsc --noEmit` pass.
+
+## Orderbook E2E Trading Implementation — COMPLETED
+
+### Background and Motivation
+Implement end-to-end orderbook trading on the frontend using `@socialproof/orderbook` (the `orderbook-ts-sdk` at `/Users/brandonshaw/Offline-Projects/ProjectYZ/myso-ts-sdks/packages/orderbook`). Goal: basic functioning E2E — chart, placed orders, past orders, open orders, right-side swapping panel, orderable buy/sell wall, live transaction history. Margin explicitly out of scope. Dynamic env support for localnet/testnet/mainnet.
+
+### Files Created (9)
+- `lib/tx/deposit-balance-manager.ts` — `executeDepositIntoBalanceManager` (SDK `balanceManager.depositIntoManager`; `treatAsGasCoinSplit` for MYSO)
+- `lib/tx/withdraw-balance-manager.ts` — `executeWithdrawFromBalanceManager` (SDK `balanceManager.withdrawFromManager`)
+- `lib/tx/place-limit-order.ts` — `executePlaceLimitOrder` (SDK `orderbook.placeLimitOrder`; GTC default, POST_ONLY optional)
+- `lib/tx/place-market-order.ts` — `executePlaceMarketOrder` (SDK `orderbook.placeMarketOrder`; IOC)
+- `lib/trade/order-placement-utils.ts` — `validateOrderForSubmission`, `roundToTick`/`roundToLot`, `generateClientOrderId`, `sdkOrderTypeFor`
+- `hooks/usePoolBalanceManagerBalances.ts` — polls base/quote BalanceManager balances via dev-inspect
+- `hooks/useAccountTradeHistory.ts` — fetches user's trade history from indexer filtered by `balance_manager_id`
+- `components/trade/trade-deposit-dialog.tsx` — deposit/withdraw dialog with base+quote coin picker
+
+### Files Modified (7)
+- `.env` — restructured into per-tier blocks; removed localhost pins; `NEXT_PUBLIC_DEFAULT_NETWORK=testnet`; split gas pool into `_TESTNET`/`_MAINNET`; per-tier gRPC + indexer URLs
+- `lib/orderbook/runtime.ts` — added generic `fetchBalanceManagerCoinBalance` (dev-inspect on `balance_manager::balance`)
+- `lib/orderbook-indexer/trades.ts` — added `indexerTradeRowToUserHistory` mapper + `fetchAccountTradeHistory`
+- `components/trade/trade-order-panel.tsx` — replaced mocks with live props (`midPrice`, `bestBid/Ask`, `baseBalance`, `quoteBalance`, `bookParams`, `takerFee`); added `onSubmitOrder`; client-side validation with inline error display
+- `components/trade/trade-workspace-layout.tsx` — `SwappingInputsSection` consumes live hooks + `onSubmitOrder` → `executePlace*Order`; `refreshNonce` pattern propagates post-trade refresh to `OpenTradesSection`; third "My Trades" tab via `useAccountTradeHistory` + `TradeUserTradeHistoryTable`
+- `components/trade/trade-nav-funds-bar.tsx` — accepts `poolName`; Deposit button + Withdraw crypto menu item open `TradeDepositDialog`; calls `trading.refresh()` on complete
+- `components/trade/trade-top-nav.tsx` — forwards `poolName` to `TradeNavFundsBar` via `TradeNavAuthActions`
+- `components/trade/trade-page-shell.tsx` — passes `poolName` to `TradeTopNav`; chart interval picker (`1m`–`1w`) in `TradeChartWorkspace`
+
+### Verification
+- `npm run build` passes (production build, 12 static pages generated)
+- `npm run dev` starts cleanly (Ready in ~1.4s, no errors)
+- No linter errors across the workspace
+
+### Manual E2E Test Steps (testnet)
+1. Boot `npm run dev` → network selector defaults to Testnet
+2. Sign in → platform join → BalanceManager setup completes
+3. Deposit dialog → deposit quote coin → confirm "Available" updates in swap panel
+4. Place limit buy below mid → appears in Open Orders within ~12s poll
+5. Place market sell of base → Open Orders updates, Market History shows print, My Trades shows fill
+6. Cancel remaining limit order → removed from Open Orders
+7. Verify: chart loads candles, L2 wall updates on poll, market tape streams, swap estimates match SDK quotes
+8. Withdraw remaining balance → balance returns to wallet, swap panel "Available" updates
+
+### Notes
+- `generateClientOrderId` uses `BigInt(1000)` instead of `1000n` literal (TS target < ES2020)
+- Post-trade refresh: `SwappingInputsSection` refreshes its own hooks (orderbook, onchain meta, balances) + calls `onTradeComplete` which increments `tradeRefreshNonce` in parent → `OpenTradesSection` refreshes open orders, pool trades, and my trades
+- Deposit/withdraw dialog refreshes `useTradingSetupStatus` via `trading.refresh()` on complete
+- Localnet trading remains disabled (`orderbookTradingNetwork` returns null); requires local indexer + orderbook deployment manifest
+- Mainnet ready when `NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_MAINNET` / `_REGISTRY_ID_MAINNET` are set
