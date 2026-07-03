@@ -14,10 +14,14 @@ import { TradeHistoryPanel } from '@/components/trade/trade-history-panel';
 import { TradeOpenOrdersTable } from '@/components/trade/trade-open-orders-table';
 import { TradeOrderBookPanel } from '@/components/trade/trade-order-book-panel';
 import { TradeOrderPanel } from '@/components/trade/trade-order-panel';
+import { TradeUserTradeHistoryTable } from '@/components/trade/trade-user-trade-history-table';
 import { SlidingSegmentTabs } from '@/components/ui/sliding-segment-tabs';
 import { Tabs, type UnderlineTabItem } from '@/components/ui/tabs';
 import { useAccountOpenOrders } from '@/hooks/useAccountOpenOrders';
+import { useAccountTradeHistory } from '@/hooks/useAccountTradeHistory';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
+import { usePoolBalanceManagerBalances } from '@/hooks/usePoolBalanceManagerBalances';
+import { usePoolOnchainMeta } from '@/hooks/usePoolOnchainMeta';
 import { usePoolOrderBook } from '@/hooks/usePoolOrderBook';
 import { usePoolTrades } from '@/hooks/usePoolTrades';
 import { useTradingSetupStatus } from '@/hooks/useTradingSetupStatus';
@@ -25,7 +29,10 @@ import { orderbookTradingNetwork } from '@/lib/orderbook/config';
 import { getOrderbookIndexerRestBase, tradeTapeIndexerUnsetDetail } from '@/lib/orderbook-indexer/ohlcv';
 import { useNetwork } from '@/lib/network-provider';
 import { executeCancelPoolOrder } from '@/lib/tx/cancel-order';
+import { executePlaceLimitOrder } from '@/lib/tx/place-limit-order';
+import { executePlaceMarketOrder } from '@/lib/tx/place-market-order';
 import { poolTickerForKey, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
+import { generateClientOrderId } from '@/lib/trade/order-placement-utils';
 import { ORDERBOOK_DEFAULT_LEVELS_PER_SIDE } from '@/lib/trade/orderbook-types';
 import { tradeRailSegmentListClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
@@ -52,9 +59,12 @@ const OPEN_TRADES_MAX_PCT = 32;
 function OpenTradesSection({
   className,
   poolName,
+  refreshNonce = 0,
 }: {
   className?: string;
   poolName: string;
+  /** Incremented by the parent after a trade/deposit to trigger refresh. */
+  refreshNonce?: number;
 }) {
   const { currentNetwork } = useNetwork();
   const tradeOb = orderbookTradingNetwork(currentNetwork);
@@ -70,6 +80,7 @@ function OpenTradesSection({
 
   const openOrdersTabActive = segment === 'open-orders';
   const tradeHistoryTabActive = segment === 'trade-history';
+  const myTradesTabActive = segment === 'my-trades';
 
   const tradingSetup = useTradingSetupStatus({
     isAuthenticated,
@@ -106,6 +117,30 @@ function OpenTradesSection({
     enabled: Boolean(poolName.trim()),
   });
 
+  const {
+    data: myTradeRows,
+    error: myTradesError,
+    isLoading: myTradesLoading,
+    refresh: refreshMyTrades,
+  } = useAccountTradeHistory({
+    poolName,
+    balanceManagerId: tradingSetup.primaryBalanceManagerId,
+    enabled:
+      myTradesTabActive &&
+      isAuthenticated &&
+      !authLoading &&
+      Boolean(tradingSetup.primaryBalanceManagerId),
+  });
+
+  // Trigger refresh when the parent signals a trade/deposit completed.
+  useEffect(() => {
+    if (refreshNonce <= 0) return;
+    refreshOpenOrders();
+    refreshPoolTrades();
+    refreshMyTrades();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshNonce]);
+
   const tradeTapeEmptyDetail = useMemo(() => {
     if (!getOrderbookIndexerRestBase(currentNetwork)) {
       return tradeTapeIndexerUnsetDetail();
@@ -117,12 +152,19 @@ function OpenTradesSection({
   }, [currentNetwork]);
 
   const tradeHistoryCount = poolTrades.length;
+  const myTradesCount = myTradeRows.length;
 
   const tabs = useMemo((): UnderlineTabItem[] => {
     const tradeHistorySuffix =
       tradeHistoryCount > 0 ? (
         <span className="text-[10px] font-normal tabular-nums text-[var(--muted-foreground)]">
           ({tradeHistoryCount})
+        </span>
+      ) : undefined;
+    const myTradesSuffix =
+      myTradesCount > 0 ? (
+        <span className="text-[10px] font-normal tabular-nums text-[var(--muted-foreground)]">
+          ({myTradesCount})
         </span>
       ) : undefined;
 
@@ -133,8 +175,13 @@ function OpenTradesSection({
         label: 'Trade History',
         suffix: tradeHistorySuffix,
       },
+      {
+        id: 'my-trades',
+        label: 'My Trades',
+        suffix: myTradesSuffix,
+      },
     ];
-  }, [tradeHistoryCount]);
+  }, [tradeHistoryCount, myTradesCount]);
 
   useEffect(() => {
     const ids = tabs.map((t) => t.id);
@@ -297,6 +344,44 @@ function OpenTradesSection({
             />
           )
         ) : null}
+
+        {segment === 'my-trades' ? (
+          myTradesTabActive && !isAuthenticated && !authLoading ? (
+            renderEmptyState()
+          ) : myTradesTabActive && authLoading ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState
+                variant="muted"
+                headline="Loading wallet…"
+                message=""
+              />
+            </TradePanelCenteredStateFrame>
+          ) : myTradesTabActive && !tradingSetup.primaryBalanceManagerId && !tradingSetup.isLoading ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState
+                variant="muted"
+                headline="No balance manager yet"
+                message="Complete trading setup to see your trade history."
+              />
+            </TradePanelCenteredStateFrame>
+          ) : myTradesTabActive && myTradesLoading ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState
+                variant="muted"
+                headline="Loading your trades…"
+                message=""
+              />
+            </TradePanelCenteredStateFrame>
+          ) : myTradesTabActive && myTradesError ? (
+            <TradePanelCenteredStateFrame>
+              <TradePanelCenteredState headline="Unable to load your trades" message={myTradesError} />
+            </TradePanelCenteredStateFrame>
+          ) : myTradesTabActive && myTradeRows.length > 0 ? (
+            <TradeUserTradeHistoryTable rows={myTradeRows} />
+          ) : myTradesTabActive ? (
+            renderEmptyState()
+          ) : null
+        ) : null}
       </div>
     </section>
   );
@@ -455,6 +540,7 @@ function SwappingInputsSection({
   orderBookCollapsed,
   onToggleOrderBook,
   showOrderBookToggle,
+  onTradeComplete,
 }: {
   className?: string;
   style?: CSSProperties;
@@ -462,9 +548,151 @@ function SwappingInputsSection({
   orderBookCollapsed?: boolean;
   onToggleOrderBook?: () => void;
   showOrderBookToggle?: boolean;
+  /** Called after a successful trade so the parent can refresh sibling panels. */
+  onTradeComplete?: () => void;
 }) {
+  const { currentNetwork } = useNetwork();
+  const tradeOb = orderbookTradingNetwork(currentNetwork);
   const [side, setSide] = useState<SwapSideSegment>('buy');
   const [orderType, setOrderType] = useState<SwapOrderTypeSegment>('market');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const {
+    isAuthenticated,
+    isLoading: authLoading,
+    displayAddress,
+    keypair,
+  } = useMySocialAuth();
+
+  const tradingSetup = useTradingSetupStatus({
+    isAuthenticated,
+    displayAddress,
+    authLoading,
+    network: currentNetwork,
+    enabled: isAuthenticated && !authLoading,
+  });
+
+  const managerId = tradingSetup.primaryBalanceManagerId;
+  const obNet = tradeOb;
+  const balanceEnabled =
+    isAuthenticated && !authLoading && Boolean(obNet) && Boolean(managerId) && Boolean(displayAddress);
+
+  const {
+    data: orderBook,
+    refresh: refreshOrderBook,
+  } = usePoolOrderBook({ poolName, enabled: Boolean(poolName.trim()) });
+
+  const {
+    data: onchainMeta,
+    refresh: refreshOnchainMeta,
+  } = usePoolOnchainMeta({
+    poolName,
+    obNet: tradeOb,
+    enabled: Boolean(tradeOb) && Boolean(poolName.trim()),
+  });
+
+  const {
+    baseBalance,
+    quoteBalance,
+    refresh: refreshBalances,
+  } = usePoolBalanceManagerBalances({
+    network: currentNetwork,
+    obNet: tradeOb,
+    poolName,
+    primaryBalanceManagerId: managerId,
+    displayAddress,
+    enabled: balanceEnabled,
+  });
+
+  const midPrice = orderBook?.midPrice ?? null;
+  const bestBid = orderBook?.bids[0]?.price ?? null;
+  const bestAsk = orderBook?.asks.length ? orderBook.asks[orderBook.asks.length - 1]!.price : null;
+  const bookParams = onchainMeta?.bookParams ?? null;
+  const takerFee = onchainMeta?.tradeParams.takerFee ?? null;
+
+  const refreshLocalAfterTrade = useCallback(() => {
+    refreshOrderBook();
+    refreshOnchainMeta();
+    refreshBalances();
+  }, [refreshOrderBook, refreshOnchainMeta, refreshBalances]);
+
+  const onSubmitOrder = useCallback(
+    async (input: {
+      side: SwapSideSegment;
+      orderType: SwapOrderTypeSegment;
+      amount: number;
+      limitPrice?: number;
+    }) => {
+      if (!tradeOb) {
+        toast.error('Trading unavailable', {
+          description: 'Order placement is not available on localnet.',
+        });
+        return;
+      }
+      if (!displayAddress || !keypair) {
+        toast.error('Signing unavailable', {
+          description: 'Connect a wallet that can sign transactions.',
+        });
+        return;
+      }
+      if (!managerId) {
+        toast.error('Trading setup incomplete', {
+          description: 'Balance manager not found for this wallet.',
+        });
+        return;
+      }
+
+      const clientOrderId = generateClientOrderId();
+      setIsSubmitting(true);
+      try {
+        if (input.orderType === 'limit') {
+          await executePlaceLimitOrder({
+            network: currentNetwork,
+            obNet: tradeOb,
+            poolKey: poolName.trim(),
+            balanceManagerObjectId: managerId,
+            side: input.side,
+            price: input.limitPrice!,
+            quantity: input.amount,
+            clientOrderId,
+            sender: displayAddress,
+            signer: keypair,
+          });
+        } else {
+          await executePlaceMarketOrder({
+            network: currentNetwork,
+            obNet: tradeOb,
+            poolKey: poolName.trim(),
+            balanceManagerObjectId: managerId,
+            side: input.side,
+            quantity: input.amount,
+            clientOrderId,
+            sender: displayAddress,
+            signer: keypair,
+          });
+        }
+        toast.success(`${input.side === 'buy' ? 'Buy' : 'Sell'} order placed`);
+        refreshLocalAfterTrade();
+        onTradeComplete?.();
+      } catch (e) {
+        toast.error('Could not place order', {
+          description: e instanceof Error ? e.message : String(e),
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [
+      tradeOb,
+      displayAddress,
+      keypair,
+      managerId,
+      currentNetwork,
+      poolName,
+      refreshLocalAfterTrade,
+      onTradeComplete,
+    ]
+  );
 
   return (
     <aside
@@ -514,7 +742,21 @@ function SwappingInputsSection({
           />
         </div>
       </div>
-      <TradeOrderPanel poolName={poolName} side={side} orderType={orderType} className="text-left" />
+      <TradeOrderPanel
+        poolName={poolName}
+        side={side}
+        orderType={orderType}
+        midPrice={midPrice}
+        bestBid={bestBid}
+        bestAsk={bestAsk}
+        baseBalance={baseBalance}
+        quoteBalance={quoteBalance}
+        bookParams={bookParams}
+        takerFee={takerFee}
+        isSubmitting={isSubmitting}
+        onSubmitOrder={onSubmitOrder}
+        className="text-left"
+      />
     </aside>
   );
 }
@@ -557,6 +799,7 @@ export function TradeWorkspaceLayout({
   const isMd = useIsMd();
   const isViewport2xl = useIsViewport2xl();
   const [orderBookCollapsed, setOrderBookCollapsed] = useState(false);
+  const [tradeRefreshNonce, setTradeRefreshNonce] = useState(0);
 
   const toggleOrderBook = useCallback(() => {
     setOrderBookCollapsed((c) => !c);
@@ -564,6 +807,10 @@ export function TradeWorkspaceLayout({
 
   const closeOrderBookPanel = useCallback(() => {
     setOrderBookCollapsed(true);
+  }, []);
+
+  const handleTradeComplete = useCallback(() => {
+    setTradeRefreshNonce((n) => n + 1);
   }, []);
 
   /** Swap column: fixed % of full trade row (viewport-wide). OB open → ⅙ (Tailwind arbitrary). */
@@ -596,10 +843,15 @@ export function TradeWorkspaceLayout({
             className="h-full min-h-0 flex-1 border-t-0"
           />
         </div>
-        <SwappingInputsSection poolName={poolName} className="shrink-0" />
+        <SwappingInputsSection
+          poolName={poolName}
+          className="shrink-0"
+          onTradeComplete={handleTradeComplete}
+        />
         <OpenTradesSection
           poolName={poolName}
           className="min-h-[min(40vh,19rem)] shrink-0"
+          refreshNonce={tradeRefreshNonce}
         />
       </div>
     );
@@ -655,7 +907,11 @@ export function TradeWorkspaceLayout({
             maxSize={OPEN_TRADES_MAX_PCT}
             className="min-h-0 min-w-0"
           >
-            <OpenTradesSection className="border-t-0" poolName={poolName} />
+            <OpenTradesSection
+              className="border-t-0"
+              poolName={poolName}
+              refreshNonce={tradeRefreshNonce}
+            />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>
@@ -673,6 +929,7 @@ export function TradeWorkspaceLayout({
         orderBookCollapsed={orderBookCollapsed}
         onToggleOrderBook={toggleOrderBook}
         showOrderBookToggle
+        onTradeComplete={handleTradeComplete}
       />
     </div>
   );

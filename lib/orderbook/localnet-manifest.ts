@@ -9,6 +9,7 @@ import { testnetCoins, testnetPackageIds, testnetPools } from '@socialproof/orde
 import { MYSO_FRAMEWORK_ADDRESS, normalizeMySoAddress } from '@socialproof/myso/utils';
 
 import { localnetPoolsFromTestnetDefaults } from '@/lib/orderbook/localnet-pool-map';
+import { ORDERBOOK_REGISTRY_OBJECT_ID } from '@/lib/orderbook/config';
 
 export interface LocalnetDeploymentManifest {
   packages: {
@@ -38,23 +39,6 @@ function stripEnvQuotes(raw: string): string {
   return t;
 }
 
-function extractOrderbookRegistryId(
-  objects: Array<{ objectId: string; objectType: string }>
-): string {
-  const obj = objects.find((o) => {
-    const typ = o.objectType;
-    return (
-      typ.includes('::registry::Registry') &&
-      !typ.includes('MarginRegistry') &&
-      !typ.includes('PoolKey')
-    );
-  });
-  if (!obj) {
-    throw new Error('Could not find orderbook registry::Registry in manifest packages.orderbook.objects');
-  }
-  return normalizeMySoAddress(obj.objectId);
-}
-
 export function buildPackageIdsFromManifest(manifest: LocalnetDeploymentManifest): OrderbookPackageIds {
   const orderbookPkg = manifest.packages.orderbook;
   let myusdTreasury = testnetPackageIds.MYUSD_TREASURY_ID;
@@ -73,7 +57,7 @@ export function buildPackageIdsFromManifest(manifest: LocalnetDeploymentManifest
   return {
     ...testnetPackageIds,
     ORDERBOOK_PACKAGE_ID: normalizeMySoAddress(orderbookPkg.packageId.trim()),
-    REGISTRY_ID: extractOrderbookRegistryId(orderbookPkg.objects),
+    REGISTRY_ID: ORDERBOOK_REGISTRY_OBJECT_ID,
     MYUSD_TREASURY_ID: myusdTreasury,
   };
 }

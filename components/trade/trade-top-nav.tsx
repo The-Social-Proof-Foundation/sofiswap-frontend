@@ -164,6 +164,7 @@ function TradeNavAuthActions({
   onSignIn,
   signOut,
   profile,
+  poolName,
 }: {
   isConfigured: boolean;
   isAuthenticated: boolean;
@@ -174,6 +175,7 @@ function TradeNavAuthActions({
   onSignIn: () => void;
   signOut: () => void;
   profile: ProfilePortfolioOverviewProfile | null | undefined;
+  poolName?: string;
 }) {
   const wallet = displayAddress?.trim() ?? '';
 
@@ -186,7 +188,7 @@ function TradeNavAuthActions({
       ) : null}
       {isAuthenticated && wallet ? (
         <>
-          <TradeNavFundsBar />
+          <TradeNavFundsBar poolName={poolName} />
           <TradeNavProfileMenu walletAddress={wallet} profile={profile} signOut={signOut} />
         </>
       ) : (
@@ -224,6 +226,7 @@ export function TradeTopNav({
   onTradeSegmentChange,
   onTradeNavSegmentChange,
   onOpenTradeSearch,
+  poolName,
 }: {
   className?: string;
   tradeSegment?: TradeNavSegment;
@@ -232,6 +235,8 @@ export function TradeTopNav({
   onTradeNavSegmentChange?: (segment: TradeNavSegment) => void;
   /** Spotlight / command-palette entry (pool search); rendered as a centered pill on desktop. */
   onOpenTradeSearch?: () => void;
+  /** Active pool key; forwarded to the funds bar for deposit/withdraw context. */
+  poolName?: string;
 }) {
   const {
     isConfigured,
@@ -321,6 +326,7 @@ export function TradeTopNav({
     onSignIn,
     signOut,
     profile: profileOverview?.profile,
+    poolName,
   };
 
   /** Matches TradeNavAuthActions: funds + profile vs Get started. */

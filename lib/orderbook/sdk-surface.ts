@@ -8,13 +8,18 @@
 import type { OrderbookPackageIds } from '@socialproof/orderbook';
 import {
   mainnetCoins,
+  mainnetPackageIds,
   mainnetPools,
   testnetCoins,
+  testnetPackageIds,
   testnetPools,
 } from '@socialproof/orderbook';
 
-import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
-import { getResolvedOrderbookDeployment } from '@/lib/orderbook/config';
+import {
+  getResolvedOrderbookDeployment,
+  ORDERBOOK_REGISTRY_OBJECT_ID,
+  type OrderbookRuntimeNetwork,
+} from '@/lib/orderbook/config';
 import { localnetPoolsFromTestnetDefaults } from '@/lib/orderbook/localnet-pool-map';
 import {
   buildPackageIdsFromManifest,
@@ -24,6 +29,18 @@ import {
 } from '@/lib/orderbook/localnet-manifest';
 
 let warnedLocalnetCoinsWithoutManifest = false;
+
+function packageIdsForPlugin(
+  obNet: OrderbookRuntimeNetwork,
+  orderbookPackageId: string
+): OrderbookPackageIds {
+  const base = obNet === 'mainnet' ? mainnetPackageIds : testnetPackageIds;
+  return {
+    ...base,
+    ORDERBOOK_PACKAGE_ID: orderbookPackageId,
+    REGISTRY_ID: ORDERBOOK_REGISTRY_OBJECT_ID,
+  };
+}
 
 export function orderbookPoolsForSdkNetwork(
   obNet: OrderbookRuntimeNetwork
@@ -77,10 +94,11 @@ export function orderbookPluginOptionsForNetwork(obNet: OrderbookRuntimeNetwork)
     };
   }
   const { orderbookPackageId } = getResolvedOrderbookDeployment(obNet);
+  const packageIds = packageIdsForPlugin(obNet, orderbookPackageId);
   return {
     address: orderbookPackageId,
     coins: orderbookCoinsForSdkNetwork(obNet),
     pools: orderbookPoolsForSdkNetwork(obNet),
-    deployment: undefined,
+    deployment: { packageIds },
   };
 }

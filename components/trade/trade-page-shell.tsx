@@ -13,6 +13,7 @@ import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
 import { useTradeChartOhlcvEnabled } from '@/hooks/useTradeChartOhlcvEnabled';
 import { useTradeSpotlightPoolItems } from '@/hooks/useTradeSpotlightPoolItems';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
+import { OHLCV_INTERVALS } from '@/lib/orderbook-indexer/ohlcv';
 import { useNetwork } from '@/lib/network-provider';
 import { getDefaultNetwork } from '@/lib/network-utils';
 import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
@@ -114,9 +115,10 @@ function TradeChartWorkspace({
   ohlcvEnabled: boolean;
   chartContainerRef: RefCallback<HTMLDivElement>;
 }) {
+  const [chartInterval, setChartInterval] = useState<OhlcvInterval>(DEFAULT_INTERVAL);
   const { data, error, isLoading } = usePoolOhlcv({
     poolName,
-    interval: DEFAULT_INTERVAL,
+    interval: chartInterval,
     limit: DEFAULT_LIMIT,
     enabled: ohlcvEnabled,
   });
@@ -139,6 +141,24 @@ function TradeChartWorkspace({
         poolName={poolName}
         onPoolPickerOpen={onOpenPoolSpotlight}
       />
+      <div className="flex shrink-0 items-center gap-1 px-3 py-1.5 border-b border-trade-shell">
+        {OHLCV_INTERVALS.map((iv) => (
+          <button
+            key={iv}
+            type="button"
+            onClick={() => setChartInterval(iv)}
+            className={cn(
+              'rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors',
+              iv === chartInterval
+                ? 'bg-primary/15 text-foreground'
+                : 'text-[var(--muted-foreground)] hover:bg-muted/60 hover:text-foreground'
+            )}
+            aria-pressed={iv === chartInterval}
+          >
+            {iv}
+          </button>
+        ))}
+      </div>
       <TradeCandlestickChart
         className="flex-1"
         data={data}
@@ -304,6 +324,7 @@ export function TradePageShell() {
         tradeSegment={tradeNavSegment}
         onTradeSegmentChange={onTradeSegmentChange}
         onOpenTradeSearch={() => setPoolSpotlightOpen(true)}
+        poolName={poolName}
       />
       <TradePlatformAccessGate verifyOrderbookTradingSetup={showOrderbookWorkspace} />
       <div

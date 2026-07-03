@@ -32,7 +32,7 @@ export function augmentRegisterBalanceManagerError(
 
   const resolved =
     ctx !== undefined
-      ? `\n\nResolved in this app: network=${ctx.network}, orderbookPackageId=${ctx.orderbookPackageId}, registryId=${ctx.registryId}. If these look wrong, set both env vars from the same deployment or unset both to fall back to \`@socialproof/orderbook\` defaults.`
+      ? `\n\nResolved in this app: network=${ctx.network}, orderbookPackageId=${ctx.orderbookPackageId}, registryId=${ctx.registryId} (fixed on-chain at 0x10). If package id looks wrong, set NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID or unset to fall back to \`@socialproof/orderbook\` defaults.`
       : '';
 
   return new Error(`${hint}${resolved}\n\nTechnical: ${msg}`);

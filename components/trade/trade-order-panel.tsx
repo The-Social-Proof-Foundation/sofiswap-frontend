@@ -8,17 +8,18 @@
 import { Button } from '@/components/ui/button';
 import { useNetwork } from '@/lib/network-provider';
 import { poolTickerForKey, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
+import {
+  validateOrderForSubmission,
+  type OrderKind,
+  type OrderSide,
+  type PoolBookConstraints,
+} from '@/lib/trade/order-placement-utils';
 import { cn } from '@/lib/utils';
 import { TextMorph } from 'torph/react';
 import { useCallback, useId, useMemo, useState } from 'react';
 
-export type TradeOrderSide = 'buy' | 'sell';
-export type TradeOrderType = 'market' | 'limit';
-
-const MOCK_PRICE_QUOTE_PER_BASE = 1.25;
-/** Mock balances so % shortcuts are usable before wallet/indexer wiring. */
-const AVAILABLE_QUOTE_MOCK = 10_000;
-const AVAILABLE_BASE_MOCK = 50_000;
+export type TradeOrderSide = OrderSide;
+export type TradeOrderType = OrderKind;
 
 function sanitizeDecimalInput(raw: string): string {
   let s = raw.replace(/[^0-9.]/g, '');
@@ -122,7 +123,7 @@ function ReadOnlyMorphRow({ label, valueStr, symbol }: ReadOnlyMorphRowProps) {
       <span className="block text-[11px] font-medium uppercase tracking-wide text-[var(--muted-foreground)]">{label}</span>
       <div
         className={cn(
-          'relative flex min-h-[3.75rem] items-center rounded-xl border border-trade-shell bg-muted/45 px-3 py-2.5',
+          'relative flex min-h-[3.75rem] items rounded-xl border border-trade-shell bg-muted/45 px-3 py-2.5',
           'dark:bg-muted/28'
         )}
       >
@@ -140,14 +141,46 @@ function ReadOnlyMorphRow({ label, valueStr, symbol }: ReadOnlyMorphRowProps) {
   );
 }
 
+export type SubmitOrderInput = {
+  side: TradeOrderSide;
+  orderType: TradeOrderType;
+  amount: number;
+  limitPrice?: number;
+};
+
 export type TradeOrderPanelProps = {
   poolName: string;
   side: TradeOrderSide;
   orderType: TradeOrderType;
+  /** Live mid price (quote per base); used to default the limit price. */
+  midPrice: number | null;
+  bestBid: number | null;
+  bestAsk: number | null;
+  baseBalance: number | null;
+  quoteBalance: number | null;
+  bookParams: PoolBookConstraints | null;
+  /** Taker fee as a fraction (e.g. 0.001 = 0.1%). */
+  takerFee: number | null;
+  isSubmitting: boolean;
+  onSubmitOrder: (input: SubmitOrderInput) => void;
   className?: string;
 };
 
-export function TradeOrderPanel({ poolName, side, orderType, className }: TradeOrderPanelProps) {
+export function TradeOrderPanel({
+  poolName,
+  side,
+  orderType,
+  midPrice,
+  bestBid,
+  bestAsk,
+  baseBalance,
+  quoteBalance,
+  bookParams,
+  takerFee,
+  isSubmitting,
+  onSubmitOrder,
+  className,
+}: TradeOrderPanelProps) {
   const { currentNetwork } = useNetwork();
   const { baseSymbol, quoteSymbol } = useMemo(() => {
     const t = poolTickerForKey(currentNetwork, poolName);
@@ -161,27 +194,42 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
   const priceInputId = `${baseId}-price`;
 
   const [amount, setAmount] = useState('0');
-  const [limitPrice, setLimitPrice] = useState(() => String(MOCK_PRICE_QUOTE_PER_BASE));
+  const [limitPrice, setLimitPrice] = useState(() => (midPrice ? String(midPrice) : '0'));
+
+  // Default limit price to mid when mid arrives or pool changes.
+  const [lastMidSeed, setLastMidSeed] = useState<number | null>(midPrice);
+  if (midPrice !== lastMidSeed) {
+    setLastMidSeed(midPrice);
+    if (midPrice && midPrice > 0) {
+      setLimitPrice(String(midPrice));
+    }
+  }
 
   const amountNum = parsePositiveNumber(amount);
   const limitPriceNum = parsePositiveNumber(limitPrice);
 
   const spendSymbol = side === 'buy' ? quoteSymbol : baseSymbol;
-  const availableMock = side === 'buy' ? AVAILABLE_QUOTE_MOCK : AVAILABLE_BASE_MOCK;
+  const available = side === 'buy' ? (quoteBalance ?? 0) : (baseBalance ?? 0);
 
   const applyPercent = useCallback(
     (pct: number) => {
-      if (availableMock <= 0) return;
-      const v = availableMock * (pct / 100);
+      if (available <= 0) return;
+      const v = available * (pct / 100);
       const s = v >= 1 ? v.toFixed(6).replace(/\.?0+$/, '') : v.toFixed(8).replace(/\.?0+$/, '');
       setAmount(s);
     },
-    [availableMock]
+    [available]
   );
 
-  /** Market: estimated asset received. Limit: same formula using limit price. */
+  /** Market: estimated asset received using best bid/ask. Limit: uses limit price. */
   const effectivePrice =
-    orderType === 'market' ? MOCK_PRICE_QUOTE_PER_BASE : limitPriceNum > 0 ? limitPriceNum : MOCK_PRICE_QUOTE_PER_BASE;
+    orderType === 'market'
+      ? side === 'buy'
+        ? (bestAsk ?? midPrice ?? 0)
+        : (bestBid ?? midPrice ?? 0)
+      : limitPriceNum > 0
+        ? limitPriceNum
+        : (midPrice ?? 0);
 
   const estimatedReceiveStr = useMemo(() => {
     if (amountNum <= 0 || effectivePrice <= 0) return '0';
@@ -205,7 +253,38 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
     return `${formatted} ${quoteSymbol}`;
   }, [orderType, amountNum, limitPriceNum, side, amount, quoteSymbol]);
 
-  const pctDisabled = availableMock <= 0;
+  const pctDisabled = available <= 0;
+
+  const validation = useMemo(
+    () =>
+      validateOrderForSubmission(
+        { side, orderType, amount: amountNum, limitPrice: limitPriceNum || undefined },
+        { bookParams, baseBalance, quoteBalance, midPrice, bestBid, bestAsk }
+      ),
+    [side, orderType, amountNum, limitPriceNum, bookParams, baseBalance, quoteBalance, midPrice, bestBid, bestAsk]
+  );
+
+  const canSubmit = !isSubmitting && validation.ok && amountNum > 0;
+
+  const handleSubmit = useCallback(() => {
+    if (!canSubmit || !validation.ok) return;
+    onSubmitOrder({
+      side,
+      orderType,
+      amount: validation.roundedQuantity,
+      limitPrice: orderType === 'limit' ? validation.roundedPrice : undefined,
+    });
+  }, [canSubmit, validation, onSubmitOrder, side, orderType]);
+
+  const feeDisplay = useMemo(() => {
+    if (takerFee == null) return `— ${quoteSymbol}`;
+    const bps = Math.round(takerFee * 10_000);
+    return `${bps} bps ${quoteSymbol}`;
+  }, [takerFee, quoteSymbol]);
+
+  const submitLabel = isSubmitting
+    ? 'Submitting…'
+    : `${side === 'buy' ? 'Buy' : 'Sell'} ${baseSymbol}`;
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-3', className)}>
@@ -217,7 +296,9 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
           </span>
         </span>
         <span className="tabular-nums font-medium text-foreground">
-          {new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(availableMock)}
+          {available > 0
+            ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 }).format(available)
+            : '—'}
         </span>
       </div>
 
@@ -277,12 +358,20 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
 
       <div className="mt-4 flex items-center justify-between text-xs">
         <span className="border-b border-dotted border-muted-foreground/60 text-[var(--muted-foreground)]">Max fee</span>
-        <span className="tabular-nums text-[var(--muted-foreground)]">— {quoteSymbol}</span>
+        <span className="tabular-nums text-[var(--muted-foreground)]">{feeDisplay}</span>
       </div>
+
+      {!validation.ok && amountNum > 0 ? (
+        <p className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {validation.error}
+        </p>
+      ) : null}
 
       <div className="mt-5">
         <Button
           type="button"
+          disabled={!canSubmit}
+          onClick={handleSubmit}
           className={cn(
             'h-12 w-full rounded-xl text-base font-bold hover:opacity-90',
             side === 'buy'
@@ -290,11 +379,8 @@ export function TradeOrderPanel({ poolName, side, orderType, className }: TradeO
               : 'bg-[var(--destructive)] text-[var(--destructive-foreground)]'
           )}
         >
-          {side === 'buy' ? 'Buy' : 'Sell'} {baseSymbol}
+          {submitLabel}
         </Button>
-        <p className="mt-2 text-center text-xs leading-snug text-[var(--muted-foreground)]">
-          Estimates use a mock price until live quotes are connected.
-        </p>
       </div>
     </div>
   );

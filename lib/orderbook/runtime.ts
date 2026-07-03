@@ -71,6 +71,58 @@ export function pickPrimaryBalanceManagerId(ids: string[]): string | null {
   return ids.length > 0 ? ids[0]! : null;
 }
 
+/**
+ * Reads a single coin balance inside a BalanceManager via dev-inspect. Works for any
+ * coin key in the SDK coin map (MYSO, MYUSD, USDC, etc.). Returns the human-adjusted
+ * balance (raw u64 divided by the coin scalar), or null when the coin is unknown.
+ *
+ * `simulationSender` is any valid address used as the inspect sender — the
+ * `balance_manager::balance` view function does not authenticate the caller.
+ */
+export async function fetchBalanceManagerCoinBalance(input: {
+  jsonRpcClient: MySoJsonRpcClient;
+  simulationSender: string;
+  balanceManagerObjectId: string;
+  coinKey: string;
+  network: OrderbookRuntimeNetwork;
+}): Promise<{ ok: true; balance: number } | { ok: false; error: string }> {
+  const { jsonRpcClient, simulationSender, balanceManagerObjectId, coinKey, network } = input;
+  const coinMap = network === 'mainnet' ? mainnetCoins : testnetCoins;
+  const coin = coinMap[coinKey as keyof typeof coinMap];
+  if (!coin) {
+    return { ok: false, error: `Unknown coin key "${coinKey}" on ${network}.` };
+  }
+
+  try {
+    const { orderbookPackageId } = getResolvedOrderbookDeployment(network);
+    const sender = normalizeMySoAddress(simulationSender);
+    const tx = new Transaction();
+    tx.setSender(sender);
+    tx.moveCall({
+      target: `${orderbookPackageId}::balance_manager::balance`,
+      arguments: [tx.object(balanceManagerObjectId)],
+      typeArguments: [coin.type],
+    });
+    const inspect = await jsonRpcClient.devInspectTransactionBlock({
+      sender,
+      transactionBlock: tx,
+    });
+    if (inspect.error) {
+      throw new Error(inspect.error);
+    }
+    const rawTuple = inspect.results?.[0]?.returnValues?.[0];
+    if (!rawTuple) {
+      throw new Error('devInspectTransactionBlock: missing balance return value');
+    }
+    const raw = new Uint8Array(rawTuple[0]);
+    const parsedBalance = bcs.U64.parse(raw);
+    const adjusted = Number(parsedBalance) / coin.scalar;
+    return { ok: true, balance: Number(adjusted.toFixed(9)) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** Coin keys to sample for dev console logging (both networks define these in the SDK). */
 export const BALANCE_MANAGER_SAMPLE_COIN_KEYS = ['MYSO', 'MYUSD'] as const;
 

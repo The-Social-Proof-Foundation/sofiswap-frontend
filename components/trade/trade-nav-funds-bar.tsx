@@ -25,7 +25,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  TradeDepositDialog,
+  type DepositDialogMode,
+} from '@/components/trade/trade-deposit-dialog';
 import { cn } from '@/lib/utils';
+import { useState } from 'react';
 
 /** Match reference: secondary controls (charcoal in dark). */
 const tradeNavWalletSecondaryClass = cn(
@@ -37,13 +42,25 @@ function ManageFundsMenuRow({
   icon: Icon,
   title,
   subtitle,
+  onClick,
+  disabled,
 }: {
   icon: LucideIcon;
   title: string;
   subtitle: string;
+  onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <DropdownMenuItem
+      onSelect={(e) => {
+        if (disabled) {
+          e.preventDefault();
+          return;
+        }
+        onClick?.();
+      }}
+      disabled={disabled}
       className={cn(
         'cursor-pointer gap-3 rounded-lg px-3 py-3 outline-none',
         'focus:bg-muted/80 data-[highlighted]:bg-muted/80'
@@ -71,7 +88,7 @@ function formatSpotEntryLine(coinKey: string, entry: BalanceManagerSampleCoinEnt
   return `${coinKey}: unavailable`;
 }
 
-export function TradeNavFundsBar() {
+export function TradeNavFundsBar({ poolName }: { poolName?: string }) {
   const { currentNetwork } = useNetwork();
   const { isAuthenticated, displayAddress, isLoading: authLoading } = useMySocialAuth();
   const trading = useTradingSetupStatus({
@@ -81,6 +98,15 @@ export function TradeNavFundsBar() {
     network: currentNetwork,
     enabled: isAuthenticated && !authLoading,
   });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<DepositDialogMode>('deposit');
+
+  const openDialog = (mode: DepositDialogMode) => {
+    setDialogMode(mode);
+    setDialogOpen(true);
+  };
+
+  const depositDisabled = !poolName || !trading.primaryBalanceManagerId || Boolean(trading.error);
 
   const spotHeaderContent = (() => {
     if (displayAddress == null) {
@@ -124,6 +150,8 @@ export function TradeNavFundsBar() {
         type="button"
         size="sm"
         aria-label="Deposit"
+        disabled={depositDisabled}
+        onClick={() => openDialog('deposit')}
         className={cn(
           'h-9 shrink-0 gap-2 rounded-xl px-3.5 font-semibold shadow-sm md:gap-3',
           'dark:bg-zinc-200 dark:text-zinc-900 dark:hover:bg-zinc-300'
@@ -188,30 +216,48 @@ export function TradeNavFundsBar() {
               icon={CreditCard}
               title="Withdraw cash"
               subtitle="Transfer funds to your bank"
+              disabled
             />
             <ManageFundsMenuRow
               icon={ArrowUpRight}
               title="Withdraw crypto"
-              subtitle="To a crypto address, email or phone number"
+              subtitle="Move funds from your BalanceManager to your wallet"
+              onClick={() => openDialog('withdraw')}
+              disabled={depositDisabled}
             />
             <ManageFundsMenuRow
               icon={CreditCard}
               title="Convert cash"
               subtitle="Convert between cash and crypto"
+              disabled
             />
             <ManageFundsMenuRow
               icon={ArrowLeftRight}
               title="Convert crypto"
               subtitle="Convert crypto to crypto"
+              disabled
             />
             <ManageFundsMenuRow
               icon={SquareArrowOutUpRight}
               title="Transfer futures excess"
               subtitle="Move funds from CFM futures to CBI spot"
+              disabled
             />
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {poolName ? (
+        <TradeDepositDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          poolName={poolName}
+          mode={dialogMode}
+          onComplete={() => {
+            void trading.refresh();
+          }}
+        />
+      ) : null}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
