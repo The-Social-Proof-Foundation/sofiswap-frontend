@@ -10,6 +10,7 @@ import { useNetwork } from '@/lib/network-provider';
 import { poolTickerForKey, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
 import {
   validateOrderForSubmission,
+  orderBaseQuantity,
   type OrderKind,
   type OrderSide,
   type PoolBookConstraints,
@@ -258,13 +259,14 @@ export function TradeOrderPanel({
   const validation = useMemo(
     () =>
       validateOrderForSubmission(
-        { side, orderType, amount: amountNum, limitPrice: limitPriceNum || undefined },
+        { side, orderType, amount: orderBaseQuantity(side, amountNum, effectivePrice), limitPrice: limitPriceNum || undefined },
         { bookParams, baseBalance, quoteBalance, midPrice, bestBid, bestAsk }
       ),
-    [side, orderType, amountNum, limitPriceNum, bookParams, baseBalance, quoteBalance, midPrice, bestBid, bestAsk]
+    [side, orderType, amountNum, effectivePrice, limitPriceNum, bookParams, baseBalance, quoteBalance, midPrice, bestBid, bestAsk]
   );
 
-  const canSubmit = !isSubmitting && validation.ok && amountNum > 0;
+  const canSubmit = !isSubmitting && validation.ok && amountNum > 0 && bookParams != null &&
+    (side === 'buy' ? quoteBalance != null : baseBalance != null) && effectivePrice > 0;
 
   const handleSubmit = useCallback(() => {
     if (!canSubmit || !validation.ok) return;

@@ -7,7 +7,9 @@
     "dev:watch": "nodemon",
     "build": "next build",
     "start": "node node_modules/next/dist/bin/next start -p ${PORT:-3000} -H 0.0.0.0",
-    "lint": "next lint"
+    "lint": "eslint app components hooks lib",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -94,6 +96,7 @@
     "@types/node": "24.1.0",
     "@types/react": "18.3.23",
     "nodemon": "^3.1.14",
+    "tsx": "^4.23.13",
     "typescript": "5.8.3"
   },
   "pnpm": {

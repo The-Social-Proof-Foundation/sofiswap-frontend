@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import { usePolledResource } from '@/hooks/usePolledResource';
 
 import {
   fetchReservationPools,
@@ -15,43 +16,15 @@ const REFRESH_INTERVAL_MS = 60_000;
 export function useReservationPoolsMarquee(network: NetworkType): {
   pools: ReservationPoolRow[];
   hasLiveData: boolean;
+  isLoading: boolean;
+  error: string | null;
 } {
-  const [pools, setPools] = useState<ReservationPoolRow[]>([]);
-
-  useEffect(() => {
-    let inFlight: AbortController | null = null;
-
-    const run = () => {
-      inFlight?.abort();
-      const ac = new AbortController();
-      inFlight = ac;
-      const baseUrl = getSocialIndexerRestBaseUrl(network);
-      void fetchReservationPools({
-        baseUrl,
-        page: 1,
-        limit: PAGE_SIZE,
-        signal: ac.signal,
-      })
-        .then((result) => {
-          if (!result.ok) {
-            setPools([]);
-            return;
-          }
-          setPools(result.data);
-        })
-        .catch((e) => {
-          if (e instanceof DOMException && e.name === 'AbortError') return;
-          setPools([]);
-        });
-    };
-
-    run();
-    const id = window.setInterval(run, REFRESH_INTERVAL_MS);
-    return () => {
-      window.clearInterval(id);
-      inFlight?.abort();
-    };
+  const load = useCallback(async () => {
+    const result = await fetchReservationPools({ baseUrl: getSocialIndexerRestBaseUrl(network), page: 1, limit: PAGE_SIZE });
+    if (!result.ok) throw new Error(result.error);
+    return result.data;
   }, [network]);
-
-  return { pools, hasLiveData: pools.length > 0 };
+  const resource = usePolledResource(`reservation-ticker:${network}`, load, REFRESH_INTERVAL_MS);
+  const pools = resource.data ?? [];
+  return { pools, hasLiveData: pools.length > 0, isLoading: resource.isLoading, error: resource.error };
 }

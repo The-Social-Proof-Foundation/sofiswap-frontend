@@ -13,7 +13,6 @@ import {
 import { toast } from 'sonner';
 
 import {
-  getClientSelectedNetwork,
   getDefaultNetwork,
   isNetworkType,
   NETWORK_COOKIE_NAME,
@@ -52,14 +51,16 @@ interface NetworkProviderProps {
 }
 
 export function NetworkProvider({ children }: NetworkProviderProps) {
-  const [currentNetwork, setCurrentNetwork] = useState<NetworkType>(() =>
-    getClientSelectedNetwork()
-  );
+  // The server cannot see browser cookies during static rendering. Hydrate with
+  // the same default first, then apply the persisted selection after mount.
+  const [currentNetwork, setCurrentNetwork] = useState<NetworkType>(getDefaultNetwork);
   const [isChangingNetwork, setIsChangingNetwork] = useState(false);
 
   useEffect(() => {
     const existing = Cookies.get(NETWORK_COOKIE_NAME);
-    if (!existing || !isNetworkType(existing)) {
+    if (isNetworkType(existing)) {
+      setCurrentNetwork(existing);
+    } else {
       const initial = getDefaultNetwork();
       Cookies.set(NETWORK_COOKIE_NAME, initial, { expires: 365 });
       setCurrentNetwork(initial);

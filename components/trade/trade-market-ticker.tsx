@@ -22,6 +22,7 @@ import {
   type ReservationPoolRow,
 } from '@/lib/social-indexer/reservation-pools';
 import { cn } from '@/lib/utils';
+import { tradeSptPath, tradeSptPostPath } from '@/lib/trade-route-path';
 
 const THUMB_BOX_PX = 30;
 /** Ring radius in viewBox units (stroke centered on circle). */
@@ -33,8 +34,6 @@ const THUMB_RECT_W = THUMB_RING_R * 2;
 const THUMB_POST_RX = 3.75;
 /** Inner avatar (larger photo, slightly thinner ring stroke). */
 const THUMB_INNER_PX = 21;
-
-type PlaceholderTick = { pair: string; price: string; pct: number };
 
 export type TickerListMode = 'gainers' | 'losers' | '24h-change' | 'vol-pct' | 'new';
 
@@ -60,32 +59,6 @@ const bar = {
   menuBg: 'bg-[#1a1a1a]',
   menuBorder: 'border-trade-shell',
 } as const;
-
-/** Fallback when reservation-pools fetch fails or returns empty */
-const TICKER_PLACEHOLDER: PlaceholderTick[] = [
-  { pair: 'MySo-MyUSD', price: '$0.842', pct: 1.24 },
-  { pair: 'MySo-BTC', price: '$0.839', pct: -0.42 },
-  { pair: 'MySo-ETH', price: '$0.124', pct: 3.18 },
-  { pair: 'MySo-SOL', price: '$2.41', pct: -1.72 },
-  { pair: 'MySo-BNB', price: '$0.842', pct: 0.91 },
-];
-
-function sortPlaceholdersForMode(ticks: PlaceholderTick[], mode: TickerListMode): PlaceholderTick[] {
-  const copy = [...ticks];
-  switch (mode) {
-    case 'gainers':
-      return copy.sort((a, b) => b.pct - a.pct);
-    case 'losers':
-      return copy.sort((a, b) => a.pct - b.pct);
-    case '24h-change':
-      return copy.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
-    case 'vol-pct':
-      return copy.sort((a, b) => b.pct - a.pct);
-    case 'new':
-    default:
-      return copy;
-  }
-}
 
 function reservationProgressPct(p: ReservationPoolRow): number {
   const t = p.required_threshold;
@@ -246,20 +219,6 @@ function ReservationPoolMarqueeThumb({
   );
 }
 
-function PlaceholderTickItem({ pair, price, pct }: PlaceholderTick) {
-  const up = pct >= 0;
-  return (
-    <span className="inline-flex items-center gap-2 whitespace-nowrap px-5 text-[13px] leading-none tabular-nums">
-      <span className="font-normal leading-none text-[var(--muted-foreground)]">{pair}</span>
-      <span className="font-medium text-primary text-[14px] leading-none">{price}</span>
-      <span className={cn('font-normal leading-none', up ? bar.up : bar.down)}>
-        {up ? '+' : ''}
-        {pct.toFixed(2)}%
-      </span>
-    </span>
-  );
-}
-
 function PoolMarqueeItem({
   pool,
   progressPct,
@@ -278,7 +237,7 @@ function PoolMarqueeItem({
     'text-[11px] font-normal leading-none tabular-nums text-primary';
 
   return (
-    <span className="inline-flex items-center gap-2 whitespace-nowrap px-5 text-[13px] leading-none tabular-nums pt-1">
+    <Link href={profile ? tradeSptPath(pool.owner) : tradeSptPostPath(pool.associated_id || '')} className="inline-flex items-center gap-2 whitespace-nowrap px-5 text-[13px] leading-none tabular-nums pt-1 hover:opacity-80 focus-visible:outline focus-visible:outline-primary">
       <ReservationPoolMarqueeThumb
         iconUrl={iconUrl}
         progressPct={progressPct}
@@ -300,7 +259,7 @@ function PoolMarqueeItem({
           </span>
         ) : null}
       </span>
-    </span>
+    </Link>
   );
 }
 
@@ -320,16 +279,10 @@ const TICKER_SORT_OPTIONS: { value: TickerListMode; label: string }[] = [
 
 export function TradeMarketTicker({ className }: { className?: string }) {
   const { currentNetwork } = useNetwork();
-  const { pools, hasLiveData } = useReservationPoolsMarquee(currentNetwork);
+  const { pools, hasLiveData, isLoading, error } = useReservationPoolsMarquee(currentNetwork);
   const [listMode, setListMode] = useState<TickerListMode>('new');
 
-  const { poolItems, placeholderItems } = useMemo(() => {
-    const sortedPools = sortReservationPools(pools, listMode);
-    const poolItemsDuped = [...sortedPools, ...sortedPools];
-    const placeholderSorted = sortPlaceholdersForMode(TICKER_PLACEHOLDER, listMode);
-    const placeholderItems = [...placeholderSorted, ...placeholderSorted];
-    return { poolItems: poolItemsDuped, placeholderItems };
-  }, [pools, listMode]);
+  const poolItems = useMemo(() => sortReservationPools(pools, listMode), [pools, listMode]);
 
   return (
     <footer
@@ -395,25 +348,21 @@ export function TradeMarketTicker({ className }: { className?: string }) {
       </div>
 
       <div className="trade-marquee-edge-mask flex min-h-0 min-w-0 flex-1 items-center justify-start overflow-hidden self-stretch">
-        <Marquee
+        {hasLiveData ? <Marquee
           speed={22}
           gradient={false}
           pauseOnHover
           autoFill
           className="flex min-h-0 w-full items-center"
         >
-          {hasLiveData
-            ? poolItems.map((p, i) => (
+          {poolItems.map((p, i) => (
                 <PoolMarqueeItem
                   key={`${p.pool_id}-${i}`}
                   pool={p}
                   progressPct={reservationProgressPct(p)}
                 />
-              ))
-            : placeholderItems.map((t, i) => (
-                <PlaceholderTickItem key={`${t.pair}-${i}`} {...t} />
               ))}
-        </Marquee>
+        </Marquee> : <span className="truncate px-5 text-xs text-muted-foreground" role="status">{isLoading ? 'Loading reservation pools…' : error ? 'Reservation ticker unavailable' : 'No open reservation pools'}</span>}
       </div>
 
       <div

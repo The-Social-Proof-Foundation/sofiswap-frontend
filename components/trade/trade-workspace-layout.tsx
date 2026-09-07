@@ -38,7 +38,7 @@ import { tradeRailSegmentListClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
 import { ArrowRightToLine, Menu } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 const MD_QUERY = '(min-width: 768px)';
@@ -556,6 +556,7 @@ function SwappingInputsSection({
   const [side, setSide] = useState<SwapSideSegment>('buy');
   const [orderType, setOrderType] = useState<SwapOrderTypeSegment>('market');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const orderSubmitLock = useRef(false);
 
   const {
     isAuthenticated,
@@ -623,12 +624,7 @@ function SwappingInputsSection({
       amount: number;
       limitPrice?: number;
     }) => {
-      if (!tradeOb) {
-        toast.error('Trading unavailable', {
-          description: 'Order placement is not available on localnet.',
-        });
-        return;
-      }
+      if (orderSubmitLock.current) return;
       if (!displayAddress || !keypair) {
         toast.error('Signing unavailable', {
           description: 'Connect a wallet that can sign transactions.',
@@ -643,6 +639,7 @@ function SwappingInputsSection({
       }
 
       const clientOrderId = generateClientOrderId();
+      orderSubmitLock.current = true;
       setIsSubmitting(true);
       try {
         if (input.orderType === 'limit') {
@@ -679,6 +676,7 @@ function SwappingInputsSection({
           description: e instanceof Error ? e.message : String(e),
         });
       } finally {
+        orderSubmitLock.current = false;
         setIsSubmitting(false);
       }
     },

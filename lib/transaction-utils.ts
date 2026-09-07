@@ -108,7 +108,7 @@ export interface ExecuteTransactionWithSmartGasParams {
   signer: Ed25519Keypair;
   sender: string;
   /** Mutates a fresh `Transaction` with `setSender` already applied. */
-  build: (tx: Transaction) => void;
+  build: (tx: Transaction, context: { sponsored: boolean }) => void;
   executeOptions?: NonNullable<
     Parameters<MySoJsonRpcClient['signAndExecuteTransaction']>[0]
   >['options'];
@@ -117,6 +117,8 @@ export interface ExecuteTransactionWithSmartGasParams {
    * sponsorship is used when allowed and `coinObjectCount <= 1`.
    */
   treatAsGasCoinSplit?: boolean;
+  /** Force sponsorship when user-owned payment objects would otherwise also be needed for gas. */
+  forceSponsored?: boolean;
   minimalGasBudget?: bigint;
 }
 
@@ -131,8 +133,13 @@ export async function executeTransactionWithSmartGas(
     build,
     executeOptions,
     treatAsGasCoinSplit = false,
+    forceSponsored = false,
     minimalGasBudget = DEFAULT_MINIMAL_GAS_BUDGET,
   } = params;
+
+  if (signer.toMySoAddress().toLowerCase() !== sender.toLowerCase()) {
+    throw new Error('The signing wallet does not match the connected account.');
+  }
 
   const balance = await client.getBalance({
     owner: sender,
@@ -143,7 +150,7 @@ export async function executeTransactionWithSmartGas(
   const coinObjectCount = balance.coinObjectCount;
 
   const sponsoredAllowed = isSponsoredGasAllowed(network);
-  const forceSponsored = shouldForceSponsoredForGasCoinSplit({
+  const forceSponsoredForGasCoin = shouldForceSponsoredForGasCoinSplit({
     treatAsGasCoinSplit,
     coinObjectCount,
   });
@@ -156,30 +163,32 @@ export async function executeTransactionWithSmartGas(
   }
 
   const needSponsored =
-    sponsoredAllowed && (forceSponsored || !canAfford);
+    sponsoredAllowed && (forceSponsored || forceSponsoredForGasCoin || !canAfford);
 
   const tx = new Transaction();
   tx.setSender(sender);
-  build(tx);
+  build(tx, { sponsored: needSponsored });
 
   if (!needSponsored) {
     console.log('✅ Smart gas: user-paid path', { network, sender });
-    return client.signAndExecuteTransaction({
+    const response = await client.signAndExecuteTransaction({
       signer,
       transaction: tx,
-      options: executeOptions,
+      options: { ...executeOptions, showEffects: true },
     });
+    assertTransactionSucceeded(response);
+    return response;
   }
 
   console.log('🛢️ Smart gas: sponsored path', {
     network,
     sender,
-    forceSponsored,
+    forceSponsored: forceSponsored || forceSponsoredForGasCoin,
     canAfford,
     coinObjectCount,
   });
 
-  const reservation = await reserveGas();
+  const reservation = await reserveGas(undefined, undefined, network);
   const { sponsor_address, reservation_id, gas_coins } = reservation.result;
 
   tx.setGasOwner(sponsor_address);
@@ -198,8 +207,18 @@ export async function executeTransactionWithSmartGas(
   const sponsored = await executeSponsoredTransaction(
     reservation_id,
     txBytesB64,
-    signature
+    signature,
+    network
   );
 
-  return normalizeSponsoredExecuteToBlockResponse(sponsored);
+  const response = normalizeSponsoredExecuteToBlockResponse(sponsored);
+  assertTransactionSucceeded(response);
+  return response;
+}
+
+/** A submitted transaction can still abort; never clear a form or show success without effects. */
+function assertTransactionSucceeded(response: MySoTransactionBlockResponse): void {
+  const status = response.effects?.status;
+  if (!status) throw new Error(`Execution status unavailable${response.digest ? ` for ${response.digest}` : ''}. Check transaction history before retrying.`);
+  if (status.status !== 'success') throw new Error(status.error || 'The transaction failed on chain.');
 }

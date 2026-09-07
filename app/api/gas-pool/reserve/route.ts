@@ -8,7 +8,8 @@ import {
   getCurrentNetworkFromCookies,
   getGasPoolBaseUrlForNetwork,
   getGasPoolBearerTokenForNetwork,
-  isSponsoredGasAllowedFromCookies,
+  isSponsoredGasAllowed,
+  isNetworkType,
   normalizeGasPoolBaseUrl,
 } from '@/lib/network-utils';
 
@@ -57,8 +58,10 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const cookieHeader = request.headers.get('cookie');
-    const network = getCurrentNetworkFromCookies(cookieHeader);
-    if (!isSponsoredGasAllowedFromCookies(cookieHeader)) {
+    const selected = request.nextUrl.searchParams.get('network');
+    if (selected != null && !isNetworkType(selected)) return NextResponse.json({ error: 'Unsupported network.' }, { status: 400 });
+    const network = isNetworkType(selected) ? selected : getCurrentNetworkFromCookies(cookieHeader);
+    if (!isSponsoredGasAllowed(network)) {
       const msg =
         'Sponsored transactions are not available on localnet. Please ensure you have sufficient MySo balance to pay for gas.';
       console.warn('🛢️ [Gas Pool Reserve] Sponsored transactions not allowed on localnet');

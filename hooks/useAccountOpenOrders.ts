@@ -7,13 +7,8 @@ import {
 import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
 import { marketLabelFromPool, type OpenOrderRow } from '@/lib/trade/activity-tables';
 import { poolExistsOnOrderbookNetwork } from '@/lib/trade/trade-pool-catalog';
-import {
-  FLOAT_SCALAR,
-  mainnetCoins,
-  mainnetPools,
-  testnetCoins,
-  testnetPools,
-} from '@socialproof/orderbook';
+import { FLOAT_SCALAR } from '@socialproof/orderbook';
+import { orderbookCoinsForSdkNetwork, orderbookPoolsForSdkNetwork } from '@/lib/orderbook/sdk-surface';
 import { useCallback, useEffect, useState } from 'react';
 
 /** Keep batches small to stay under RPC limits and reduce tx size. */
@@ -30,8 +25,8 @@ function scalarsForPool(poolKey: string, obNet: OrderbookRuntimeNetwork): {
   baseScalar: number;
   quoteScalar: number;
 } {
-  const pools = obNet === 'mainnet' ? mainnetPools : testnetPools;
-  const coins = obNet === 'mainnet' ? mainnetCoins : testnetCoins;
+  const pools = orderbookPoolsForSdkNetwork(obNet);
+  const coins = orderbookCoinsForSdkNetwork(obNet);
   const pool = pools[poolKey as keyof typeof pools] as
     | (typeof pools)[keyof typeof pools]
     | undefined;

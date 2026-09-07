@@ -23,7 +23,7 @@ import type {
   SptScalar,
 } from '@/lib/graphql/social-proof-token-page';
 import type { ProfilePortfolioSocialProofToken } from '@/lib/graphql/profile-portfolio-overview';
-import { resolveUsdPerMysoReservationQuote } from '@/lib/spt-reservation-ui-policy';
+import { baseUnitsToDisplay, scalarToBigInt } from '@/lib/spt/amounts';
 
 export function effectivePoolIdFromPortfolioSpt(
   spt: ProfilePortfolioSocialProofToken | null | undefined
@@ -53,11 +53,15 @@ function scalarToNum(v: SptScalar): number | null {
 }
 
 export function formatSptScalarAmount(v: SptScalar): string {
-  const n = scalarToNum(v);
-  if (n == null) return '—';
-  const abs = Math.abs(n);
-  const scaled = abs >= 1e11 ? n / 1e9 : n;
-  return formatCompactDecimal(scaled, { maxFractionDigits: 6 });
+  const amount = scalarToBigInt(v);
+  if (amount == null) return '—';
+  return baseUnitsToDisplay(amount, 6);
+}
+
+function tokenTypeLabel(value: number | null | undefined): string | null {
+  if (value === 1) return 'Profile';
+  if (value === 2) return 'Post';
+  return value == null ? null : `Type ${value}`;
 }
 
 function formatPercentish(v: SptScalar): string {
@@ -67,17 +71,15 @@ function formatPercentish(v: SptScalar): string {
 }
 
 function formatPriceish(v: SptScalar): string {
-  const n = scalarToNum(v);
-  if (n == null) return '—';
-  const scaled = Math.abs(n) >= 1e8 ? n / 1e9 : n;
-  if (!Number.isFinite(scaled)) return '—';
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 8,
-  }).format(scaled);
+  const n = scalarToBigInt(v);
+  return n == null ? '—' : baseUnitsToDisplay(n, 9);
 }
 
 function scalarToEpochMs(v: SptScalar): number | null {
+  if (typeof v === 'string' && !/^\d+(\.\d+)?$/.test(v.trim())) {
+    const ms = Date.parse(v);
+    return Number.isFinite(ms) ? ms : null;
+  }
   const n = scalarToNum(v);
   if (n == null) return null;
   if (n > 1e15) return Math.round(n / 1e6);
@@ -150,7 +152,7 @@ function buildProfileRibbon(
     reservationPoolAddress:
       profile?.reservationPoolAddress?.trim() || spt?.reservationPoolId?.trim() || null,
     poolOwnerLine: ownerLine || ownerFallback,
-    tokenType: pool?.tokenType?.trim() || spt?.tokenType?.trim() || null,
+    tokenType: tokenTypeLabel(pool?.tokenType ?? spt?.tokenType),
     isActive: spt?.isActive ?? null,
     profileAddress: profile?.address?.trim() ?? null,
   };
@@ -235,7 +237,7 @@ function buildStats(
     if (paddr) add('Profile', truncateMiddle(paddr));
   }
 
-  const tokenType = pool?.tokenType?.trim() || profile?.socialProofToken?.tokenType?.trim();
+  const tokenType = tokenTypeLabel(pool?.tokenType ?? profile?.socialProofToken?.tokenType);
   if (tokenType) add('Token type', tokenType);
 
   const ownerDisp =
@@ -265,7 +267,7 @@ function priceHistoryToChartSeries(
       const t = scalarToEpochMs(p.timestamp);
       const price = scalarToNum(p.price);
       if (t == null || price == null) return null;
-      return { t, price };
+      return { t, price: price / 1e9 };
     })
     .filter((x): x is SocialProofChartPoint => x != null)
     .sort((a, b) => a.t - b.t);
@@ -278,10 +280,11 @@ function mapPoolTransactions(rows: readonly SocialProofTokenPagePoolTransaction[
     return {
       id: `${row.from ?? ''}-${row.to ?? ''}-${index}`,
       time: txTimestampToIso(row.timestamp),
+      traderAddress: row.from,
       side,
       price: '—',
       amount: amt,
-      total: amt,
+      total: '—',
     };
   });
 }
@@ -307,7 +310,8 @@ function mapHolders(rows: readonly SocialProofTokenPagePoolHolder[]): SocialProo
   return rows.map((h, i) => ({
     id: `${h.address}-${i}`,
     address: h.address,
-    label: holderDisplay(h.profile),
+    label: h.profile?.address?.toLowerCase() === h.address.toLowerCase()
+      ? holderDisplay(h.profile) : truncateMiddle(h.address),
     amount: formatSptScalarAmount(h.amount),
   }));
 }
@@ -397,18 +401,17 @@ function buildPriceLabels(pool: SocialProofTokenPageSptPool | null): {
 
 function maxIndividualReservationHuman(
   config: SocialProofTokenPageConfiguration | null,
-  tokenType: string | null
+  tokenType: number | null
 ): number | null {
   if (!config) return null;
-  const t = tokenType?.trim().toUpperCase() ?? '';
-  const postish = t.includes('POST');
+  const postish = tokenType === 2;
   const raw = postish
     ? config.maxIndividualReservationAmountPost
     : config.maxIndividualReservationAmountProfile;
-  const n = scalarToNum(raw);
-  if (n == null || !Number.isFinite(n)) return null;
-  const scaled = Math.abs(n) >= 1e11 ? n / 1e9 : n;
-  return Number.isFinite(scaled) && scaled > 0 ? scaled : null;
+  const amount = scalarToBigInt(raw);
+  if (amount == null || amount <= BigInt(0)) return null;
+  const value = Number(baseUnitsToDisplay(amount, 9));
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function firstFormattedPrice(...candidates: (SptScalar | null | undefined)[]): string {
@@ -453,11 +456,24 @@ export type MappedSocialProofTokenWorkspace = {
   holders: SocialProofHolderRow[];
   tradingEnabled: boolean | null;
   tokenType: string | null;
+  tokenTypeCode: number | null;
+  ownerAddress: string | null;
+  subjectObjectId: string | null;
+  livePoolId: string | null;
+  totalReservedBaseUnits: bigint;
+  requiredThresholdBaseUnits: bigint;
+  currentSupplyBaseUnits: bigint;
+  basePriceBaseUnits: bigint;
+  quadraticCoefficient: bigint;
+  tradingFeeBps: bigint;
+  maxHoldPercentBps: bigint;
+  reservationBalances: Array<{ reserver: string; amount: bigint }>;
   reservationStatus: string | null;
   reservationPoolId: string | null;
   reservationPoolAddress: string | null;
   hasLiveTradingPool: boolean;
   maxIndividualReservationMyso: number | null;
+  maxIndividualReservationBaseUnits: bigint;
   usdPerMysoReservationQuote: number | null;
   /** GraphQL `socialProofToken.isActive`: drives reservation vs trading side panel. */
   sptIsActive: boolean | null;
@@ -470,13 +486,14 @@ export type MappedSocialProofTokenWorkspace = {
 };
 
 export function mapSocialProofTokenPageToWorkspace(result: SocialProofTokenPageResult): MappedSocialProofTokenWorkspace {
-  const { profile, sptPool, sptConfiguration } = result;
+  const { profile, sptPool, sptConfiguration, chainState, rules } = result;
   const token = buildTokenMeta(profile, sptPool);
   const stats = buildStats(profile, sptPool, sptConfiguration);
   const profileRibbon = buildProfileRibbon(profile, sptPool);
   const reservationFillPercent = reservationFillPercentFromProfile(profile);
   const spt = profile?.socialProofToken ?? null;
-  const tokenType = sptPool?.tokenType?.trim() || spt?.tokenType?.trim() || null;
+  const tokenTypeCode = chainState?.tokenType ?? sptPool?.tokenType ?? spt?.tokenType ?? 1;
+  const tokenType = tokenTypeLabel(tokenTypeCode);
   const reservationStatus = spt?.reservationStatus?.trim() || null;
   const reservationPoolId = spt?.reservationPoolId?.trim() || null;
   const reservationPoolAddress = profile?.reservationPoolAddress?.trim() || null;
@@ -493,12 +510,9 @@ export function mapSocialProofTokenPageToWorkspace(result: SocialProofTokenPageR
     return Number.isFinite(n) && n > 0 ? n : null;
   })();
 
-  const usdPerMysoReservationQuote = resolveUsdPerMysoReservationQuote({
-    envUsdPerMyso,
-    priceLabel,
-  });
+  const usdPerMysoReservationQuote = envUsdPerMyso;
 
-  const maxIndividualReservationMyso = maxIndividualReservationHuman(sptConfiguration, tokenType);
+  const maxIndividualReservationMyso = maxIndividualReservationHuman(sptConfiguration, tokenTypeCode);
 
   let reservations: ReservationHistoryRow[] = [];
   let formerReservations: ReservationHistoryRow[] = [];
@@ -528,28 +542,53 @@ export function mapSocialProofTokenPageToWorkspace(result: SocialProofTokenPageR
     profilePhotoUrl: profile?.profilePhoto?.trim() || null,
     coverPhotoUrl: profile?.coverPhoto?.trim() || null,
     websiteUrl: profile?.website?.trim() || null,
-    reservationFillPercent,
+    reservationFillPercent: chainState && !chainState.live && chainState.requiredThreshold > BigInt(0)
+      ? Math.min(100, Number(chainState.totalReserved * BigInt(10_000) / chainState.requiredThreshold) / 100)
+      : reservationFillPercent,
     profileRibbon,
     stats,
     trades,
     reservations,
     formerReservations,
     chartSeries,
-    priceLabel,
+    priceLabel: chainState?.live ? baseUnitsToDisplay(chainState.basePrice +
+      chainState.quadraticCoefficient * chainState.currentSupply * chainState.currentSupply / BigInt('10000000000000000000000'), 9) : priceLabel,
     changeLabel,
     holders,
-    tradingEnabled: sptConfiguration?.tradingEnabled ?? null,
+    tradingEnabled: rules?.tradingEnabled ?? sptConfiguration?.tradingEnabled ?? false,
     tokenType,
-    reservationStatus,
+    tokenTypeCode,
+    ownerAddress: sptPool?.owner?.trim() || spt?.owner?.trim() || profile?.address?.trim() || null,
+    subjectObjectId: profile?.profileId?.trim() || null,
+    livePoolId: chainState?.live ? chainState.poolId : null,
+    totalReservedBaseUnits: chainState?.totalReserved ?? scalarToBigInt(spt?.totalReserved) ?? BigInt(0),
+    requiredThresholdBaseUnits: (tokenTypeCode === 2 ? rules?.postThreshold : rules?.profileThreshold) ?? chainState?.requiredThreshold ?? scalarToBigInt(spt?.requiredThreshold) ?? BigInt(0),
+    currentSupplyBaseUnits: chainState?.currentSupply ?? BigInt(0),
+    basePriceBaseUnits: chainState?.live ? chainState.basePrice : rules?.basePrice ?? scalarToBigInt(sptConfiguration?.basePrice) ?? BigInt(0),
+    quadraticCoefficient: chainState?.live ? chainState.quadraticCoefficient : rules?.quadraticCoefficient ?? scalarToBigInt(sptConfiguration?.quadraticCoefficient) ?? BigInt(0),
+    tradingFeeBps: rules?.tradingFeeBps ?? (
+      (scalarToBigInt(sptConfiguration?.tradingCreatorFeeBps) ?? BigInt(0)) +
+      (scalarToBigInt(sptConfiguration?.tradingPlatformFeeBps) ?? BigInt(0)) +
+      (scalarToBigInt(sptConfiguration?.tradingTreasuryFeeBps) ?? BigInt(0))),
+    maxHoldPercentBps: rules?.maxHoldBps ?? scalarToBigInt(sptConfiguration?.maxHoldPercentBps) ?? BigInt(0),
+    reservationBalances: result.viewer && chainState ? [{ reserver: result.viewer, amount: chainState.viewerReservation }] : (sptPool?.reservationHolders ?? spt?.reservationHolders ?? [])
+      .map((row) => ({
+        reserver: row.reserver,
+        amount: scalarToBigInt(row.amount) ?? BigInt(0),
+      })),
+    reservationStatus: chainState?.live || chainState?.converted ? 'converted' : reservationStatus,
     reservationPoolId,
     reservationPoolAddress,
-    hasLiveTradingPool: Boolean(sptPool),
+    hasLiveTradingPool: Boolean(chainState?.live),
     maxIndividualReservationMyso,
+    maxIndividualReservationBaseUnits: rules
+      ? (tokenTypeCode === 2 ? rules.postThreshold : rules.profileThreshold) * rules.maxReservationBps / BigInt(10_000)
+      : scalarToBigInt(tokenTypeCode === 2 ? sptConfiguration?.maxIndividualReservationAmountPost : sptConfiguration?.maxIndividualReservationAmountProfile) ?? BigInt(0),
     usdPerMysoReservationQuote,
-    sptIsActive: spt?.isActive ?? null,
+    sptIsActive: chainState ? chainState.live : spt?.isActive ?? null,
     sptConfiguration: sptConfiguration ?? null,
-    reservationPlatformFeeBps: scalarToNum(sptConfiguration?.reservationPlatformFeeBps),
-    reservationTreasuryFeeBps: scalarToNum(sptConfiguration?.reservationTreasuryFeeBps),
-    reservationCreatorFeeBps: scalarToNum(sptConfiguration?.reservationCreatorFeeBps),
+    reservationPlatformFeeBps: rules ? Number(rules.reservationPlatformBps) : scalarToNum(sptConfiguration?.reservationPlatformFeeBps),
+    reservationTreasuryFeeBps: rules ? Number(rules.reservationTreasuryBps) : scalarToNum(sptConfiguration?.reservationTreasuryFeeBps),
+    reservationCreatorFeeBps: rules ? Number(rules.reservationCreatorBps) : scalarToNum(sptConfiguration?.reservationCreatorFeeBps),
   };
 }

@@ -28,7 +28,7 @@ export function spotAssetSymbolDisplay(symbol: string): string {
 
 function poolInSofiCatalog(row: PoolRow | undefined): boolean {
   if (!row) return false;
-  return SOFI_SPOT_COINS.has(row.baseCoin) && SOFI_SPOT_COINS.has(row.quoteCoin);
+  return Boolean(row.baseCoin && row.quoteCoin && row.address);
 }
 
 function poolsByNetwork(network: NetworkType): Record<string, PoolRow> {

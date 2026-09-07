@@ -17,7 +17,7 @@ import { useGraphqlProfileOverviewSWR } from '@/hooks/useGraphqlProfileOverviewS
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import type { ProfilePortfolioOverviewProfile } from '@/lib/graphql/profile-portfolio-overview';
 import { useNetwork } from '@/lib/network-provider';
-import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
+import { useSofiSwapPlatformConfig } from '@/hooks/useSofiSwapPlatformConfig';
 import {
   readTradeNavSegment,
   tradeNavSegmentStorageKey,
@@ -250,10 +250,8 @@ export function TradeTopNav({
   } = useMySocialAuth();
 
   const { currentNetwork } = useNetwork();
-  const platformId = useMemo(
-    () => getSofiSwapPlatformConfig(currentNetwork)?.platformGraphqlId ?? null,
-    [currentNetwork]
-  );
+  const { config: platformConfig } = useSofiSwapPlatformConfig(currentNetwork);
+  const platformId = platformConfig?.platformGraphqlId ?? null;
   const profileQueryAddress = isAuthenticated && !authLoading ? displayAddress : null;
   const { data: profileOverview } = useGraphqlProfileOverviewSWR(
     profileQueryAddress,

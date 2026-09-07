@@ -3,6 +3,7 @@ import type { NetworkType } from '@/lib/network-utils';
 const PREFIX = 'sofiswap_bm_register_pending_v1';
 /** Drop stale pending rows so we do not loop register forever with a bad object id. */
 const MAX_PENDING_AGE_MS = 2 * 60 * 60 * 1000;
+const pendingInMemory = new Map<string, PendingBalanceManagerRegisterPayload | null>();
 
 function key(network: NetworkType, address: string): string {
   return `${PREFIX}_${network}_${address.toLowerCase()}`;
@@ -11,6 +12,8 @@ function key(network: NetworkType, address: string): string {
 export interface PendingBalanceManagerRegisterPayload {
   managerObjectId: string;
   createDigest: string;
+  /** Successful registration awaiting registry read convergence. */
+  registerDigest?: string;
   savedAt: number;
 }
 
@@ -22,7 +25,9 @@ function parse(raw: string): PendingBalanceManagerRegisterPayload | null {
       typeof p === 'object' &&
       typeof p.managerObjectId === 'string' &&
       typeof p.createDigest === 'string' &&
-      typeof p.savedAt === 'number'
+      p.createDigest.length > 0 &&
+      (p.registerDigest === undefined || typeof p.registerDigest === 'string') &&
+      typeof p.savedAt === 'number' && Number.isFinite(p.savedAt)
     ) {
       return p;
     }
@@ -36,13 +41,16 @@ export function readPendingBalanceManagerRegister(
   network: NetworkType,
   address: string
 ): PendingBalanceManagerRegisterPayload | null {
-  if (typeof sessionStorage === 'undefined') return null;
-  const raw = sessionStorage.getItem(key(network, address));
-  if (!raw) return null;
-  const p = parse(raw);
+  const storageKey = key(network, address);
+  let p = pendingInMemory.get(storageKey) ?? null;
+  try {
+    // In-memory writes may be newer than persistent storage when quota is full.
+    const raw = pendingInMemory.has(storageKey) || typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(storageKey);
+    if (raw) p = parse(raw) ?? p;
+  } catch { /* Private browsing can deny storage; retain recovery in memory. */ }
   if (!p) return null;
   if (Date.now() - p.savedAt > MAX_PENDING_AGE_MS) {
-    sessionStorage.removeItem(key(network, address));
+    clearPendingBalanceManagerRegister(network, address);
     return null;
   }
   return p;
@@ -53,14 +61,10 @@ export function writePendingBalanceManagerRegister(
   address: string,
   payload: Omit<PendingBalanceManagerRegisterPayload, 'savedAt'> & { savedAt?: number }
 ): void {
-  if (typeof sessionStorage === 'undefined') return;
+  const full: PendingBalanceManagerRegisterPayload = { ...payload, savedAt: payload.savedAt ?? Date.now() };
+  pendingInMemory.set(key(network, address), full);
   try {
-    const full: PendingBalanceManagerRegisterPayload = {
-      managerObjectId: payload.managerObjectId,
-      createDigest: payload.createDigest,
-      savedAt: payload.savedAt ?? Date.now(),
-    };
-    sessionStorage.setItem(key(network, address), JSON.stringify(full));
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(key(network, address), JSON.stringify(full));
   } catch {
     /* quota */
   }
@@ -70,11 +74,14 @@ export function clearPendingBalanceManagerRegister(
   network: NetworkType,
   address: string
 ): void {
-  if (typeof sessionStorage === 'undefined') return;
-  sessionStorage.removeItem(key(network, address));
+  pendingInMemory.set(key(network, address), null);
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(key(network, address));
+  } catch { /* Storage can be unavailable. */ }
 }
 
 export function clearAllPendingBalanceManagerRegister(): void {
+  pendingInMemory.clear();
   if (typeof sessionStorage === 'undefined') return;
   const keys: string[] = [];
   for (let i = 0; i < sessionStorage.length; i++) {

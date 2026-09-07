@@ -6,8 +6,8 @@ import type {
 import type { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 import { Transaction } from '@socialproof/myso/transactions';
 
-import { augmentRegisterBalanceManagerError } from '@/lib/orderbook/balance-manager-register-errors';
-import { resolveCreatedBalanceManagerObjectId } from '@/lib/orderbook/balance-manager-effects';
+import { findCreatedBalanceManagerObjectId } from '@/lib/orderbook/balance-manager-effects';
+import { signAndExecuteTradingSetup } from '@/lib/tx/trading-setup';
 import {
   getResolvedOrderbookDeployment,
   orderbookTradingNetwork,
@@ -15,7 +15,6 @@ import {
 } from '@/lib/orderbook/config';
 import {
   appendCreateAndShareBalanceManagerMoves,
-  appendRegisterBalanceManagerMove,
   fetchRegisteredBalanceManagerIds,
 } from '@/lib/orderbook/runtime';
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
@@ -26,6 +25,7 @@ import {
 } from '@/lib/platform-config';
 import {
   clearPendingBalanceManagerRegister,
+  readPendingBalanceManagerRegister,
   writePendingBalanceManagerRegister,
 } from '@/lib/trading-setup-pending-storage';
 import { executeTransactionWithSmartGas } from '@/lib/transaction-utils';
@@ -134,12 +134,25 @@ function assertJoinTransactionSucceeded(response: MySoTransactionBlockResponse) 
  * Signs and executes the join PTB, verifies success from effects, then waits until the transaction is
  * readable via the RPC API (helps downstream GraphQL/indexer polling).
  */
-export async function signAndExecuteJoinPlatform(input: {
+type JoinPlatformInput = {
   network: NetworkType;
   config: SofiSwapPlatformConfig;
   senderAddress: string;
   signer: Ed25519Keypair;
-}): Promise<MySoTransactionBlockResponse> {
+};
+const joining = new Map<string, Promise<MySoTransactionBlockResponse>>();
+
+export async function signAndExecuteJoinPlatform(input: JoinPlatformInput): Promise<MySoTransactionBlockResponse> {
+  const key = `${input.network}:${input.senderAddress.toLowerCase()}:${input.config.platformGraphqlId}`;
+  const existing = joining.get(key);
+  if (existing) return existing;
+  const run = signAndExecuteJoinPlatformImpl(input);
+  joining.set(key, run);
+  try { return await run; }
+  finally { if (joining.get(key) === run) joining.delete(key); }
+}
+
+async function signAndExecuteJoinPlatformImpl(input: JoinPlatformInput): Promise<MySoTransactionBlockResponse> {
   const { network, signer, senderAddress, config } = input;
   const client = getMySoJsonRpcClient(network);
   const obNet = orderbookTradingNetwork(network);
@@ -147,21 +160,24 @@ export async function signAndExecuteJoinPlatform(input: {
 
   let shouldAttachBalanceManagerCreate =
     tradingSetupBundledWithJoin() && obNet !== null;
-  let skipBalanceManagerRegister = false;
+  const pending = readPendingBalanceManagerRegister(network, senderAddress);
 
   if (shouldAttachBalanceManagerCreate && obNet) {
     const fresh = await fetchRegisteredBalanceManagerIds(client, senderAddress);
-    if (!fresh.error && fresh.ids.length > 0) {
+    if (fresh.error) throw new Error(fresh.error);
+    if (fresh.ids.length > 0) {
       clearPendingBalanceManagerRegister(network, senderAddress);
       shouldAttachBalanceManagerCreate = false;
-      skipBalanceManagerRegister = true;
     }
   }
+
+  if (pending) shouldAttachBalanceManagerCreate = false;
 
   const includeJoin = await shouldIncludeJoinPlatformMove(client, senderAddress, config);
   const willAttachBalanceManager = Boolean(shouldAttachBalanceManagerCreate && obNet);
 
   if (!includeJoin && !willAttachBalanceManager) {
+    if (tradingSetupBundledWithJoin()) await signAndExecuteTradingSetup({ network, senderAddress, signer });
     const response = noopJoinSuccessResponse();
     assertJoinTransactionSucceeded(response);
     return response;
@@ -183,57 +199,17 @@ export async function signAndExecuteJoinPlatform(input: {
     executeOptions: executeOpts,
   });
   assertJoinTransactionSucceeded(response);
-  if (response.digest) {
-    await client.waitForTransaction({
-      digest: response.digest,
-      options: { showEffects: true },
-      timeout: 120_000,
-      pollInterval: 1_500,
-    });
-  }
-
-  if (tradingSetupBundledWithJoin() && obNet && skipBalanceManagerRegister) {
-    return response;
-  }
-
-  if (shouldAttachBalanceManagerCreate && obNet) {
-    const { orderbookPackageId, registryId } = getResolvedOrderbookDeployment(obNet);
-    const registerErrCtx = { network, orderbookPackageId, registryId } as const;
-    const managerId = await resolveCreatedBalanceManagerObjectId(
-      client,
-      response.digest,
-      orderbookPackageId,
-      response.effects
-    );
+  if (shouldAttachBalanceManagerCreate) {
+    const { orderbookPackageId } = getResolvedOrderbookDeployment(obNet);
+    // Save the execution result before querying its created object. A delayed
+    // endpoint must never cause the next join attempt to create a second manager.
     writePendingBalanceManagerRegister(network, senderAddress, {
-      managerObjectId: managerId,
+      managerObjectId: findCreatedBalanceManagerObjectId(orderbookPackageId, response) ?? '',
       createDigest: response.digest,
     });
-    let registered: MySoTransactionBlockResponse;
-    try {
-      registered = await executeTransactionWithSmartGas({
-        network,
-        client,
-        signer,
-        sender: senderAddress,
-        build: (tx) => {
-          appendRegisterBalanceManagerMove(tx, obNet, managerId);
-        },
-        executeOptions: executeOpts,
-      });
-    } catch (e) {
-      throw augmentRegisterBalanceManagerError(e, registerErrCtx);
-    }
-    assertJoinTransactionSucceeded(registered);
-    await client.waitForTransaction({
-      digest: registered.digest,
-      options: { showEffects: true },
-      timeout: 120_000,
-      pollInterval: 1_500,
-    });
-    clearPendingBalanceManagerRegister(network, senderAddress);
-    return registered;
   }
-
+  if (tradingSetupBundledWithJoin()) {
+    return (await signAndExecuteTradingSetup({ network, senderAddress, signer })) ?? response;
+  }
   return response;
 }

@@ -3,13 +3,12 @@ import type { MySoJsonRpcClient, MySoTransactionBlockResponse } from '@socialpro
 import { ORDERBOOK_DEPLOYMENT_ENV_HINT } from '@/lib/orderbook/config';
 
 function isBalanceManagerCreatedType(objectType: string): boolean {
-  return objectType.toLowerCase().includes('::balance_manager::balancemanager');
+  return objectType.toLowerCase().endsWith('::balance_manager::balancemanager');
 }
 
 function packagePrefixMatches(objectType: string, orderbookPackageId: string): boolean {
-  const pkgNorm = orderbookPackageId.replace(/^0x/i, '').toLowerCase();
-  const t = objectType.toLowerCase();
-  return t.startsWith(`0x${pkgNorm}::`) || t.includes(`0x${pkgNorm}::`);
+  const normalize = (value: string) => value.replace(/^0x/i, '').replace(/^0+/, '').toLowerCase();
+  return normalize(objectType.split('::')[0]) === normalize(orderbookPackageId);
 }
 
 function parseCreatedObjectIdsFromExecutedEffects(
@@ -56,25 +55,17 @@ export function findCreatedBalanceManagerObjectId(
   const changes = block.objectChanges;
   if (!changes?.length) return null;
 
-  const pkgNorm = orderbookPackageId.replace(/^0x/i, '').toLowerCase();
-  const packageMatches = (objectType: string): boolean => {
-    const t = objectType.toLowerCase();
-    return t.startsWith(`0x${pkgNorm}`) || t.startsWith(`0x${pkgNorm}::`) || t.includes(`0x${pkgNorm}::`);
-  };
-
-  const matches: string[] = [];
   for (const c of changes) {
     if (c.type !== 'created') continue;
     if (!('objectType' in c) || !('objectId' in c)) continue;
     const ot = String(c.objectType);
     if (!isBalanceManagerCreatedType(ot)) continue;
-    if (packageMatches(ot)) {
+    if (packagePrefixMatches(ot, orderbookPackageId)) {
       return c.objectId;
     }
-    matches.push(c.objectId);
   }
 
-  return matches.length === 1 ? matches[0]! : matches[0] ?? null;
+  return null;
 }
 
 /**

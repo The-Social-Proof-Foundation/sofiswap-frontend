@@ -3,6 +3,12 @@ import { OrderType } from '@socialproof/orderbook';
 export type OrderSide = 'buy' | 'sell';
 export type OrderKind = 'limit' | 'market';
 
+/** The form's buy input is a quote budget; the orderbook always accepts base quantity. */
+export function orderBaseQuantity(side: OrderSide, payAmount: number, price: number): number {
+  if (side === 'sell') return payAmount;
+  return Number.isFinite(price) && price > 0 ? payAmount / price : 0;
+}
+
 export type OrderPlacementInput = {
   side: OrderSide;
   orderType: OrderKind;
@@ -111,7 +117,7 @@ export function validateOrderForSubmission(
         : (bestBid ?? midPrice ?? 0);
 
   if (side === 'buy') {
-    if (quoteBalance != null && quoteBalance > 0 && referencePrice > 0) {
+    if (quoteBalance != null && quoteBalance >= 0 && referencePrice > 0) {
       const cost = roundedQuantity * referencePrice;
       if (cost > quoteBalance) {
         return {
@@ -121,7 +127,7 @@ export function validateOrderForSubmission(
       }
     }
   } else {
-    if (baseBalance != null && baseBalance > 0 && roundedQuantity > baseBalance) {
+    if (baseBalance != null && baseBalance >= 0 && roundedQuantity > baseBalance) {
       return {
         ok: false,
         error: `Insufficient base balance. You have ${baseBalance.toFixed(6)} but are selling ${roundedQuantity.toFixed(6)}.`,

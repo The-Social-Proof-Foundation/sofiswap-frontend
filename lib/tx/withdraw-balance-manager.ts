@@ -9,6 +9,8 @@ import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
 import type { NetworkType } from '@/lib/network-utils';
 import { executeTransactionWithSmartGas } from '@/lib/transaction-utils';
+import { orderbookCoinsForSdkNetwork } from '@/lib/orderbook/sdk-surface';
+import { checkedOrderbookAmount } from '@/lib/orderbook/amounts';
 
 /**
  * Withdraws coins from the BalanceManager back to the signer's wallet.
@@ -27,6 +29,10 @@ export async function executeWithdrawFromBalanceManager(input: {
   sender: string;
   signer: Ed25519Keypair;
 }): Promise<MySoTransactionBlockResponse> {
+  if (input.network !== input.obNet) throw new Error('The selected market and wallet networks do not match.');
+  const coin = orderbookCoinsForSdkNetwork(input.obNet)[input.coinKey];
+  if (!coin) throw new Error('This asset is no longer available. Refresh the markets.');
+  checkedOrderbookAmount(input.amount, coin.scalar);
   const client = getMySoJsonRpcClient(input.network);
   const obClient = getOrderbookUserClient(input.obNet, input.balanceManagerObjectId);
 

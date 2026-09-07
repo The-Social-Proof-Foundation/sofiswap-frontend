@@ -12,11 +12,12 @@ import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
 import { useTradeChartOhlcvEnabled } from '@/hooks/useTradeChartOhlcvEnabled';
 import { useTradeSpotlightPoolItems } from '@/hooks/useTradeSpotlightPoolItems';
+import { useSptDiscovery } from '@/hooks/useSptDiscovery';
+import { useSofiSwapPlatformConfig } from '@/hooks/useSofiSwapPlatformConfig';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
 import { OHLCV_INTERVALS } from '@/lib/orderbook-indexer/ohlcv';
 import { useNetwork } from '@/lib/network-provider';
 import { getDefaultNetwork } from '@/lib/network-utils';
-import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
 import type { TradeNavSegment } from '@/lib/trade-nav-segment-storage';
 import {
   readTradeNavSegment,
@@ -182,7 +183,7 @@ export function TradePageShell() {
     [searchParams]
   );
 
-  const { segment: pathSegment, routeProfileAddress } = useMemo(
+  const { segment: pathSegment, routeProfileAddress, routePostId } = useMemo(
     () => parseTradePath(pathname),
     [pathname]
   );
@@ -193,10 +194,8 @@ export function TradePageShell() {
 
   const { currentNetwork } = useNetwork();
   const { isAuthenticated, displayAddress, isLoading: tradeAuthLoading } = useMySocialAuth();
-  const platformGraphqlId = useMemo(
-    () => getSofiSwapPlatformConfig(currentNetwork)?.platformGraphqlId ?? null,
-    [currentNetwork]
-  );
+  const { config: platformConfig } = useSofiSwapPlatformConfig(currentNetwork);
+  const platformGraphqlId = platformConfig?.platformGraphqlId ?? null;
   const profileOverviewAddress = useMemo(() => {
     if (!isAuthenticated || tradeAuthLoading) return null;
     return displayAddress?.trim() || null;
@@ -225,7 +224,12 @@ export function TradePageShell() {
     showOrderbookWorkspace
   );
 
-  const { items: spotlightItems } = useTradeSpotlightPoolItems(currentNetwork);
+  const { items: spotlightItems, error: marketError, isLoading: marketsLoading, revalidate: refreshMarkets, revision: marketRevision } = useTradeSpotlightPoolItems(currentNetwork);
+  const { items: sptSpotlightItems } = useSptDiscovery(currentNetwork);
+  const allSpotlightItems = useMemo(
+    () => [...spotlightItems, ...sptSpotlightItems],
+    [spotlightItems, sptSpotlightItems]
+  );
 
   const spotlightPoolIds = useMemo(() => spotlightItems.map((item) => item.id), [spotlightItems]);
 
@@ -243,6 +247,16 @@ export function TradePageShell() {
 
   const onPoolSpotlightSelect = useCallback(
     (item: SpotlightItem) => {
+      if (item.id.startsWith('spt:')) {
+        setPoolSpotlightOpen(false);
+        setInlineTradeSegment('social-proof-tokens');
+        writeTradeNavSegment(
+          tradeNavSegmentStorageKey(displayAddress, isAuthenticated),
+          'social-proof-tokens'
+        );
+        router.replace(item.url || '/trade/spt');
+        return;
+      }
       setPoolName(item.id);
       setPoolSpotlightOpen(false);
       setInlineTradeSegment('orderbook');
@@ -271,11 +285,13 @@ export function TradePageShell() {
       }
 
       if (onSptUrl) {
+        if (parsed.routePostId || parsed.routeProfileAddress) router.push('/trade/spt');
         return;
       }
 
       setInlineTradeSegment('social-proof-tokens');
       writeTradeNavSegment(key, 'social-proof-tokens');
+      router.push('/trade/spt');
     },
     [pathname, router, withSearch, displayAddress, isAuthenticated]
   );
@@ -337,7 +353,14 @@ export function TradePageShell() {
         <Suspense fallback={null}>
           <TradeAuthMessage />
         </Suspense>
-        <TradeWorkspaceLayout
+        {spotlightItems.length === 0 ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center" role="status">
+            <p className="font-semibold">{marketsLoading ? 'Loading markets…' : marketError ? 'Markets are unavailable' : 'No orderbook markets on this network yet'}</p>
+            <p className="max-w-lg text-sm text-muted-foreground">{marketError || (!marketsLoading && 'Deployed markets will appear here automatically when the network indexes them.')}</p>
+            {!marketsLoading ? <button type="button" onClick={refreshMarkets} className="rounded-md border border-trade-shell px-4 py-2 text-sm">Refresh markets</button> : null}
+          </div>
+        ) : <TradeWorkspaceLayout
+          key={`${currentNetwork}:${marketRevision}`}
           chart={
             <TradeChartWorkspace
               poolName={poolName}
@@ -347,7 +370,7 @@ export function TradePageShell() {
             />
           }
           poolName={poolName}
-        />
+        />}
       </div>
       <div
         className={cn(
@@ -361,11 +384,12 @@ export function TradePageShell() {
             enabled={!showOrderbookWorkspace}
             profileOverview={tradeProfileOverview}
             profileAddressOverride={isSptRoute ? routeProfileAddress : null}
+            postIdOverride={isSptRoute ? routePostId : null}
           />
         </Suspense>
       </div>
       <Spotlight
-        items={spotlightItems}
+        items={allSpotlightItems}
         onSelect={onPoolSpotlightSelect}
         isOpen={poolSpotlightOpen}
         onClose={() => setPoolSpotlightOpen(false)}

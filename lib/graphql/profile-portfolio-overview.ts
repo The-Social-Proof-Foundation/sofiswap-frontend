@@ -184,7 +184,7 @@ export interface ProfilePortfolioSelectedBadge {
 export interface ProfilePortfolioSocialProofToken {
   poolId: string;
   tokenAddress: string;
-  tokenType: string;
+  tokenType: number | null;
   createdAt: string;
   isActive: boolean;
   currentPrice: string | null;

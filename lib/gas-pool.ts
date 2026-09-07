@@ -3,6 +3,8 @@
  * Handles gas reservation and sponsored transaction execution
  */
 
+import { getClientSelectedNetwork, type NetworkType } from '@/lib/network-utils';
+
 // Gas pool API configuration - using local API routes to avoid CORS
 const GAS_POOL_RESERVE_URL = '/api/gas-pool/reserve'
 const GAS_POOL_EXECUTE_URL = '/api/gas-pool/execute'
@@ -49,7 +51,8 @@ export interface ExecuteTransactionResponse {
  */
 export async function reserveGas(
   gasBudget: number = 10_000_000, // 0.01 MySo default - sufficient for most transactions
-  reserveDurationSecs: number = 420
+  reserveDurationSecs: number = 420,
+  network: NetworkType = getClientSelectedNetwork()
 ): Promise<GasReservationResponse> {
   try {
     console.log('🛢️ Reserving gas for sponsored transaction...', {
@@ -64,7 +67,7 @@ export async function reserveGas(
       reserve_duration_secs: reserveDurationSecs
     }
 
-    const response = await fetch(GAS_POOL_RESERVE_URL, {
+    const response = await fetch(`${GAS_POOL_RESERVE_URL}?network=${network}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -109,7 +112,8 @@ export async function reserveGas(
 export async function executeSponsoredTransaction(
   reservationId: number,
   txBytes: string,
-  userSig: string
+  userSig: string,
+  network: NetworkType = getClientSelectedNetwork()
 ): Promise<ExecuteTransactionResponse> {
   try {
     console.log('🚀 Executing sponsored transaction...', {
@@ -118,7 +122,7 @@ export async function executeSponsoredTransaction(
       userSigLength: userSig.length
     })
 
-    const response = await fetch(GAS_POOL_EXECUTE_URL, {
+    const response = await fetch(`${GAS_POOL_EXECUTE_URL}?network=${network}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

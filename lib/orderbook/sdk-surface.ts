@@ -6,6 +6,7 @@
  */
 
 import type { OrderbookPackageIds } from '@socialproof/orderbook';
+import { getDiscoveredOrderbookMarkets } from '@/lib/orderbook/discovered-markets';
 import {
   mainnetCoins,
   mainnetPackageIds,
@@ -45,6 +46,8 @@ function packageIdsForPlugin(
 export function orderbookPoolsForSdkNetwork(
   obNet: OrderbookRuntimeNetwork
 ): typeof mainnetPools | typeof testnetPools {
+  const discovered = getDiscoveredOrderbookMarkets(obNet);
+  if (discovered) return discovered.pools;
   if (obNet === 'mainnet') return mainnetPools;
   if (obNet === 'localnet') {
     const m = tryReadLocalnetManifestFromEnv();
@@ -57,6 +60,8 @@ export function orderbookPoolsForSdkNetwork(
 export function orderbookCoinsForSdkNetwork(
   obNet: OrderbookRuntimeNetwork
 ): typeof mainnetCoins | typeof testnetCoins {
+  const discovered = getDiscoveredOrderbookMarkets(obNet);
+  if (discovered) return discovered.coins;
   if (obNet === 'mainnet') return mainnetCoins;
   if (obNet === 'localnet') {
     const m = tryReadLocalnetManifestFromEnv();
@@ -88,8 +93,8 @@ export function orderbookPluginOptionsForNetwork(obNet: OrderbookRuntimeNetwork)
     const packageIds = buildPackageIdsFromManifest(m);
     return {
       address: packageIds.ORDERBOOK_PACKAGE_ID,
-      coins: mergeCoinsForLocalnetManifest(m),
-      pools: mergeLocalnetPoolsWithManifest(m),
+      coins: orderbookCoinsForSdkNetwork(obNet),
+      pools: orderbookPoolsForSdkNetwork(obNet),
       deployment: { packageIds },
     };
   }

@@ -19,7 +19,7 @@ import { poolTickerForKey, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool
 import { executeDepositIntoBalanceManager } from '@/lib/tx/deposit-balance-manager';
 import { executeWithdrawFromBalanceManager } from '@/lib/tx/withdraw-balance-manager';
 import { cn } from '@/lib/utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 export type DepositDialogMode = 'deposit' | 'withdraw';
@@ -69,6 +69,7 @@ export function TradeDepositDialog({
   const [coinKey, setCoinKey] = useState<'base' | 'quote'>('quote');
   const [amount, setAmount] = useState('0');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLock = useRef(false);
 
   // Reset amount when the dialog opens.
   useEffect(() => {
@@ -93,6 +94,8 @@ export function TradeDepositDialog({
   const amountNum = Number(amount);
   const canSubmit =
     !isSubmitting &&
+    !tradingSetup.isLoading &&
+    !tradingSetup.error &&
     Number.isFinite(amountNum) &&
     amountNum > 0 &&
     Boolean(tradeOb) &&
@@ -101,18 +104,14 @@ export function TradeDepositDialog({
     Boolean(keypair);
 
   const handleSubmit = useCallback(async () => {
-    if (!tradeOb) {
-      toast.error('Trading unavailable', {
-        description: 'Deposits are not available on localnet.',
-      });
-      return;
-    }
+    if (!canSubmit || submitLock.current) return;
     if (!displayAddress || !keypair || !managerId) {
       toast.error('Wallet not ready', {
         description: 'Sign in and complete trading setup first.',
       });
       return;
     }
+    submitLock.current = true;
     setIsSubmitting(true);
     try {
       if (mode === 'deposit') {
@@ -146,9 +145,11 @@ export function TradeDepositDialog({
         description: e instanceof Error ? e.message : String(e),
       });
     } finally {
+      submitLock.current = false;
       setIsSubmitting(false);
     }
   }, [
+    canSubmit,
     tradeOb,
     displayAddress,
     keypair,
@@ -162,10 +163,10 @@ export function TradeDepositDialog({
     onOpenChange,
   ]);
 
-  const isDisabled = !tradeOb || tradingSetup.isLoading || tradingSetup.error != null;
+  const isDisabled = isSubmitting || tradingSetup.isLoading || tradingSetup.error != null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (!submitLock.current) onOpenChange(next); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
@@ -183,6 +184,8 @@ export function TradeDepositDialog({
             <button
               type="button"
               onClick={() => setCoinKey('quote')}
+              disabled={isDisabled}
+              aria-pressed={coinKey === 'quote'}
               className={cn(
                 'rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
                 coinKey === 'quote'
@@ -195,6 +198,8 @@ export function TradeDepositDialog({
             <button
               type="button"
               onClick={() => setCoinKey('base')}
+              disabled={isDisabled}
+              aria-pressed={coinKey === 'base'}
               className={cn(
                 'rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
                 coinKey === 'base'

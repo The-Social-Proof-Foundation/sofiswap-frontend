@@ -11,8 +11,8 @@ import ThemeFavicon from '@/components/theme-favicon';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'SofiSwap - Coming Soon',
-  description: 'SofiSwap is a decentralized exchange on MySocial. Be the first to know when we launch.',
+  title: 'SofiSwap — Native and Social Markets on MySocial',
+  description: 'Trade native assets and profile or post Social Proof Tokens on MySocial.',
 };
 
 export default function RootLayout({

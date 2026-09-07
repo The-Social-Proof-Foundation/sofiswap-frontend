@@ -33,6 +33,7 @@ import { buildMysocialWalletExplorerHref } from '@/lib/mysocial-wallet-explorer'
 import { useNetwork } from '@/lib/network-provider';
 import { NETWORK_LABELS, type NetworkType } from '@/lib/network-utils';
 import { cn } from '@/lib/utils';
+import { tradeSptPath } from '@/lib/trade-route-path';
 
 const MYSOCIAL_ORIGIN = 'https://www.mysocial.network';
 /** Deep link for pool creation on MySocial; adjust if the product path changes. */
@@ -603,9 +604,7 @@ export function TradeNavProfileMenu({
           {tokenMenuAction ? (
             <DropdownMenuItem asChild>
               <Link
-                href={editHref}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={tradeSptPath(walletAddress)}
                 className={profileMenuRowLinkClass}
               >
                 <Coins className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />

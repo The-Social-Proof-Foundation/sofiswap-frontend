@@ -24,6 +24,7 @@ const CLOSED_RESERVATION_STATUS = new Set(
     'EXPIRED',
     'MINTED',
     'LAUNCHED',
+    'CONVERTED',
   ].map((s) => s.toUpperCase())
 );
 

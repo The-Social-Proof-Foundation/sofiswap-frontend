@@ -7,6 +7,7 @@
 
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { SptReservationCard } from '@/components/trade/spt-reservation-card';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { useNetwork } from '@/lib/network-provider';
 import { checkFollowStatus } from '@/lib/profile-utils';
@@ -14,7 +15,7 @@ import {
   signAndExecuteFollowUser,
   signAndExecuteUnfollowUser,
 } from '@/lib/tx/social-follow';
-import { INSUFFICIENT_MYSO_FOR_GAS_MESSAGE } from '@/lib/transaction-utils';
+import { INSUFFICIENT_MYSO_FOR_GAS_MESSAGE, MYSO_GAS_COIN_TYPE } from '@/lib/transaction-utils';
 import {
   ChartContainer,
   ChartTooltip,
@@ -35,7 +36,7 @@ import {
   Loader2,
   Lock,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { buildMysocialWalletExplorerHref } from '@/lib/mysocial-wallet-explorer';
@@ -51,6 +52,29 @@ import {
 } from '@/lib/trade-shell-styles';
 import { formatCompactDecimal } from '@/lib/trade/orderbook-format';
 import type { SocialProofHolderRow } from '@/lib/social-proof-token-map-workspace';
+import {
+  baseUnitsToDisplay,
+  calculateMaxSptBuyAmount,
+  calculateSptBuyCost,
+  calculateSptSellRefund,
+  feeFromBps,
+  parseDisplayAmountToBaseUnits,
+} from '@/lib/spt/amounts';
+import { getMySoJsonRpcClient } from '@/lib/myso-client';
+import {
+  executeBuySpt,
+  executeEnableSpt,
+  executeLaunchSpt,
+  executeReserveSpt,
+  executeSellSpt,
+  executeWithdrawSptReservation,
+  findOwnedSocialToken,
+  friendlySptTransactionError,
+  resolvePostTransactionContext,
+  SPT_TOKEN_TYPE_POST,
+  SPT_TOKEN_TYPE_PROFILE,
+  type SptTokenType,
+} from '@/lib/tx/social-proof-token';
 
 type Timeframe = '1H' | '1D' | '1W' | '1M' | '1Y' | 'ALL';
 
@@ -117,6 +141,7 @@ function formatUtcMonthDayMs(ms: number): string {
 }
 
 export type TradeHistoryRow = {
+  traderAddress?: string | null;
   id: string;
   /** ISO 8601 from API (stable across SSR and client) */
   time: string;
@@ -261,8 +286,7 @@ function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | nul
 function formatSptUsdPriceLabel(raw: string): string {
   const t = raw.trim();
   if (!t || t === '—') return '—';
-  if (t.startsWith('$')) return t;
-  return `$${t}`;
+  return `${t} MySo`;
 }
 
 function parsePercentFromChangeLabel(raw: string | null | undefined): {
@@ -488,9 +512,7 @@ function SptWorkspacePriceBand({
           <SptQuoteChangePctChip value={quotePctChipValue} />
         ) : null}
       </div>
-      <p className="text-sm tabular-nums text-foreground">
-        0 <span className="text-xs text-[var(--muted-foreground)]">MySo</span>
-      </p>
+      <p className="text-xs text-muted-foreground">{isReservationPhase ? 'Base price per SPT · reservations open' : 'Price per SPT'}</p>
       {!isReservationPhase && show24hChange ? (
         <p className="text-sm text-muted-foreground">{quoteSubline}</p>
       ) : null}
@@ -759,15 +781,14 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
           <tr className="border-b border-trade-shell text-[var(--muted-foreground)]">
             <th className="px-3 py-2.5 font-medium">Time</th>
             <th className="px-3 py-2.5 font-medium">Side</th>
-            <th className="px-3 py-2.5 text-right font-medium">Price</th>
-            <th className="hidden px-3 py-2.5 text-right font-medium sm:table-cell">Amount</th>
-            <th className="px-3 py-2.5 text-right font-medium">Total</th>
+            <th className="px-3 py-2.5 text-right font-medium">Amount (SPT)</th>
+            <th className="hidden px-3 py-2.5 text-right font-medium sm:table-cell">Trader</th>
           </tr>
         </thead>
         <tbody className="tabular-nums tracking-tight text-[13px] leading-normal">
           {rows.length === 0 ? (
             <tr>
-              <td colSpan={5} className="p-0" role="presentation">
+              <td colSpan={4} className="p-0" role="presentation">
                 <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-trade-shell bg-muted/25 text-muted-foreground dark:bg-muted/15">
                     <Layers className="size-5" strokeWidth={1.65} aria-hidden />
@@ -799,9 +820,8 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
                   {r.side}
                 </span>
               </td>
-              <td className="px-3 py-2 text-right">{r.price}</td>
-              <td className="hidden px-3 py-2 text-right sm:table-cell">{r.amount}</td>
-              <td className="px-3 py-2 text-right text-foreground/90">${r.total}</td>
+              <td className="px-3 py-2 text-right">{r.amount}</td>
+              <td className="hidden px-3 py-2 text-right sm:table-cell">{r.traderAddress ? <a href={buildMysocialWalletExplorerHref(r.traderAddress)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{`${r.traderAddress.slice(0, 6)}…${r.traderAddress.slice(-4)}`}</a> : '—'}</td>
               </tr>
             ))
           )}
@@ -939,106 +959,6 @@ const sptBuySellModeItems: SlidingSegmentItem[] = [
 
 const sptSwapPctPresets = ['25%', '50%', '75%', 'Max'] as const;
 
-const simpleReservationPctPresets = [25, 50, 75] as const;
-
-function formatDraftNumber(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '';
-  const s = n.toFixed(8).replace(/\.?0+$/, '');
-  return s === '' ? '' : s;
-}
-
-function sanitizeDecimalInput(raw: string, isUsdMode: boolean): string {
-  let t = raw.replace(/[$,\s]/g, '');
-  if (isUsdMode && t.startsWith('$')) t = t.slice(1);
-  t = t.replace(/[^\d.]/g, '');
-  const firstDot = t.indexOf('.');
-  if (firstDot !== -1) {
-    t =
-      t.slice(0, firstDot + 1) +
-      t
-        .slice(firstDot + 1)
-        .replace(/\./g, '');
-  }
-  return t;
-}
-
-function parsePositiveDecimal(s: string): number | null {
-  const n = Number.parseFloat(s);
-  if (!Number.isFinite(n) || n < 0) return null;
-  return n;
-}
-
-function formatMysoBreakdownAmount(n: number): string {
-  return formatCompactDecimal(n, { maxFractionDigits: 8 });
-}
-
-/** Fee in MySo from principal × bps / 10_000 (GraphQL reservation / trading fee fields). */
-function mysoFeeFromBps(principalMyso: number, bps: number | null | undefined): number {
-  if (principalMyso <= 0 || !Number.isFinite(principalMyso)) return 0;
-  if (bps == null || !Number.isFinite(bps)) return 0;
-  const b = Math.max(0, bps);
-  return (principalMyso * b) / 10_000;
-}
-
-const sptFeeBreakdownCardClass = cn(
-  'rounded-xl border border-border/50 bg-background/40 px-3 py-2.5',
-  'dark:border-trade-shell dark:bg-background/22'
-);
-
-function SptTradeFeeBreakdownCard({
-  subtotalMyso,
-  gasFeeMyso,
-  platformEcosystemFeeMyso,
-  creatorFeeMyso,
-  overallTotalFeeMyso,
-}: {
-  subtotalMyso: number;
-  gasFeeMyso: number;
-  platformEcosystemFeeMyso: number;
-  creatorFeeMyso: number;
-  overallTotalFeeMyso: number;
-}) {
-  const row = (label: string, amountMyso: number, variant: 'default' | 'total' = 'default') => (
-    <div className="flex items-baseline justify-between gap-3 text-[11px] leading-snug">
-      <span className="min-w-0 text-left text-[var(--muted-foreground)]">{label}</span>
-      <span
-        className="flex min-w-0 shrink-0 items-baseline justify-end gap-1"
-        title={`${formatMysoBreakdownAmount(amountMyso)} MySo`}
-      >
-        <span
-          className={cn(
-            'text-right tabular-nums text-foreground',
-            variant === 'total' ? 'text-sm font-semibold' : ''
-          )}
-        >
-          {formatMysoBreakdownAmount(amountMyso)}
-        </span>
-        <span
-          className={cn(
-            'shrink-0 font-semibold tracking-tight text-[var(--muted-foreground)]',
-            variant === 'total' ? 'text-xs' : 'text-[10px]'
-          )}
-        >
-          MySo
-        </span>
-      </span>
-    </div>
-  );
-
-  return (
-    <div className={sptFeeBreakdownCardClass} role="region" aria-label="Cost breakdown in MySo">
-      <div className="space-y-1.5">
-        {row('Subtotal', subtotalMyso)}
-        {row('Gas fee', gasFeeMyso)}
-        {row('Platform ecosystem fee', platformEcosystemFeeMyso)}
-        {row('Creator fee', creatorFeeMyso)}
-        <div className="border-t border-border/50 pt-1.5 dark:border-trade-shell">
-          {row('Total', overallTotalFeeMyso, 'total')}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const sptSwapBucketClass = cn(
   'rounded-[22px] border border-border/55 p-4',
@@ -1053,286 +973,108 @@ const sptSwapTokenSelectClass = cn(
   'dark:border-trade-shell dark:bg-background/40 dark:hover:bg-background/55'
 );
 
-function SimpleReservationAmountCard({
-  walletMysoAvailable,
-  maxReservationMyso,
-  usdPerMyso,
-  reservationPlatformFeeBps,
-  reservationTreasuryFeeBps,
-  reservationCreatorFeeBps,
-  className,
-}: {
-  walletMysoAvailable: number | null;
-  maxReservationMyso: number | null;
-  usdPerMyso: number | null;
-  reservationPlatformFeeBps?: number | null;
-  reservationTreasuryFeeBps?: number | null;
-  reservationCreatorFeeBps?: number | null;
-  className?: string;
-}) {
-  const [inputMode, setInputMode] = useState<'myso' | 'usd'>('myso');
-  const [draft, setDraft] = useState('');
-
-  const effectiveMax = useMemo(() => {
-    const w = walletMysoAvailable != null && Number.isFinite(walletMysoAvailable) ? walletMysoAvailable : null;
-    const c = maxReservationMyso != null && Number.isFinite(maxReservationMyso) ? maxReservationMyso : null;
-    if (w == null && c == null) return null;
-    if (w == null) return c as number;
-    if (c == null) return w;
-    return Math.min(w, c);
-  }, [walletMysoAvailable, maxReservationMyso]);
-
-  const primaryAmount = parsePositiveDecimal(draft) ?? 0;
-  const canConvert = usdPerMyso != null && usdPerMyso > 0;
-
-  const secondaryLine = useMemo(() => {
-    const zeroUsdLabel = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(0);
-    const zeroMysoLabel = `${formatCompactDecimal(0, { maxFractionDigits: 2 })} MySo`;
-
-    if (primaryAmount <= 0) {
-      return inputMode === 'myso' ? zeroUsdLabel : zeroMysoLabel;
-    }
-    if (!canConvert) {
-      return '—';
-    }
-    if (inputMode === 'myso') {
-      const usd = primaryAmount * usdPerMyso!;
-      const abs = Math.abs(usd);
-      if (abs >= 1000) {
-        return new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          notation: 'compact',
-          compactDisplay: 'short',
-          maximumFractionDigits: 2,
-        }).format(usd);
-      }
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }).format(usd);
-    }
-    const myso = primaryAmount / usdPerMyso!;
-    return `${formatCompactDecimal(myso, { maxFractionDigits: 2 })} MySo`;
-  }, [canConvert, inputMode, primaryAmount, usdPerMyso]);
-
-  const primarySuffix = inputMode === 'myso' ? 'MySo' : 'USD';
-
-  const applyFraction = (pct: number) => {
-    if (effectiveMax == null || effectiveMax <= 0) return;
-    const v = effectiveMax * pct;
-    setDraft(formatDraftNumber(v));
-  };
-
-  const flipInputMode = () => {
-    if (!canConvert) return;
-    const n = primaryAmount;
-    if (n <= 0) {
-      setInputMode((m) => (m === 'myso' ? 'usd' : 'myso'));
-      setDraft('');
-      return;
-    }
-    if (inputMode === 'myso') {
-      setDraft(formatDraftNumber(n * usdPerMyso!));
-      setInputMode('usd');
-    } else {
-      setDraft(formatDraftNumber(n / usdPerMyso!));
-      setInputMode('myso');
-    }
-  };
-
-  const reserveDisabled = primaryAmount <= 0 || !Number.isFinite(primaryAmount);
-
-  const { reserveSubtotalMyso, reserveFeeLinesMyso } = useMemo(() => {
-    const emptyFees = { gas: 0, platform: 0, creator: 0, total: 0 };
-    if (primaryAmount <= 0 || !Number.isFinite(primaryAmount)) {
-      return { reserveSubtotalMyso: 0, reserveFeeLinesMyso: emptyFees };
-    }
-    let subtotalMyso: number;
-    if (inputMode === 'myso') {
-      subtotalMyso = primaryAmount;
-    } else if (canConvert) {
-      subtotalMyso = primaryAmount / usdPerMyso!;
-    } else {
-      subtotalMyso = 0;
-    }
-    const platformBps = reservationPlatformFeeBps ?? null;
-    const treasuryBps = reservationTreasuryFeeBps ?? null;
-    const creatorBps = reservationCreatorFeeBps ?? null;
-    const platformEcosystemBps =
-      (platformBps != null && Number.isFinite(platformBps) ? Math.max(0, platformBps) : 0) +
-      (treasuryBps != null && Number.isFinite(treasuryBps) ? Math.max(0, treasuryBps) : 0);
-    const platformEcosystemMyso = mysoFeeFromBps(subtotalMyso, platformEcosystemBps);
-    const creatorMyso = mysoFeeFromBps(subtotalMyso, creatorBps);
-    const gasMyso = 0;
-    const totalFeesMyso = gasMyso + platformEcosystemMyso + creatorMyso;
-    return {
-      reserveSubtotalMyso: subtotalMyso,
-      reserveFeeLinesMyso: {
-        gas: gasMyso,
-        platform: platformEcosystemMyso,
-        creator: creatorMyso,
-        total: totalFeesMyso,
-      },
-    };
-  }, [
-    canConvert,
-    inputMode,
-    primaryAmount,
-    reservationCreatorFeeBps,
-    reservationPlatformFeeBps,
-    reservationTreasuryFeeBps,
-    usdPerMyso,
-  ]);
-
-  return (
-    <div className={cn(tradeSptTallCardReserveClass, className)}>
-      <div>
-        <p className="text-md font-medium text-[var(--muted-foreground)]">Reserve</p>
-      </div>
-
-      <div className="space-y-3">
-        <div className="flex min-h-[3rem] items-end gap-2 pt-2">
-          <input
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            aria-label={inputMode === 'myso' ? 'Amount in MySo' : 'Amount in USD'}
-            placeholder="0"
-            value={draft}
-            onChange={(e) => setDraft(sanitizeDecimalInput(e.target.value, inputMode === 'usd'))}
-            className={cn(
-              'min-w-0 flex-1 bg-transparent text-3xl font-semibold tabular-nums leading-none tracking-tight',
-              'text-foreground placeholder:text-muted-foreground/35 outline-none ring-0 text-left'
-            )}
-          />
-          <span className="shrink-0 pb-1 text-xs font-semibold tabular-nums text-[var(--muted-foreground)]">
-            {primarySuffix}
-          </span>
-        </div>
-
-        <div className="flex min-h-9 min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <button
-            type="button"
-            onClick={flipInputMode}
-            disabled={!canConvert}
-            className={cn(
-              'flex min-w-0 max-w-[min(100%,14rem)] items-center justify-start gap-2 rounded-lg py-1 text-left',
-              'transition-colors hover:opacity-90 disabled:pointer-events-none disabled:opacity-45',
-              'sm:max-w-[min(100%,18rem)]'
-            )}
-            aria-label={
-              canConvert
-                ? inputMode === 'myso'
-                  ? 'Switch to typing USD; shows MySo equivalent'
-                  : 'Switch to typing MySo; shows USD equivalent'
-                : 'USD conversion unavailable'
-            }
-          >
-            <span className="min-w-0 truncate text-sm font-medium tabular-nums text-[var(--muted-foreground)]">
-              {secondaryLine}
-            </span>
-            <ArrowDownUp
-              className="size-3.5 shrink-0 text-primary opacity-90"
-              strokeWidth={1.75}
-              aria-hidden
-            />
-          </button>
-
-          <div
-            className="flex shrink-0 flex-wrap justify-end gap-1.5 sm:ml-2"
-            role="group"
-            aria-label="Fill amount from available MySo"
-          >
-            {simpleReservationPctPresets.map((pct) => (
-              <button
-                key={pct}
-                type="button"
-                disabled={effectiveMax == null || effectiveMax <= 0}
-                onClick={() => applyFraction(pct / 100)}
-                className={cn(
-                  'rounded-full px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors',
-                  'disabled:pointer-events-none disabled:opacity-35',
-                  'bg-background/50 text-foreground hover:bg-background/70',
-                  'dark:bg-background/30 dark:hover:bg-background/45'
-                )}
-              >
-                {pct}
-              </button>
-            ))}
-            <button
-              type="button"
-              disabled={effectiveMax == null || effectiveMax <= 0}
-              onClick={() => {
-                if (effectiveMax == null || effectiveMax <= 0) return;
-                setDraft(formatDraftNumber(effectiveMax));
-              }}
-              className={cn(
-                'rounded-full px-3 py-1.5 text-[11px] font-semibold tabular-nums transition-colors',
-                'disabled:pointer-events-none disabled:opacity-35',
-                'bg-background/50 text-foreground hover:bg-background/70',
-                'dark:bg-background/30 dark:hover:bg-background/45'
-              )}
-            >
-              MAX
-            </button>
-          </div>
-        </div>
-        {!canConvert ? (
-          <p className="text-[10px] leading-snug text-[var(--muted-foreground)]">
-            Set <span className="font-mono">NEXT_PUBLIC_RESERVATION_USD_PER_MYSO</span> for an accurate USD
-            toggle, or rely on a small spot label when shown.
-          </p>
-        ) : null}
-      </div>
-
-      <div className="mt-1 flex min-h-0 flex-col gap-4">
-        <SptTradeFeeBreakdownCard
-          subtotalMyso={reserveSubtotalMyso}
-          gasFeeMyso={reserveFeeLinesMyso.gas}
-          platformEcosystemFeeMyso={reserveFeeLinesMyso.platform}
-          creatorFeeMyso={reserveFeeLinesMyso.creator}
-          overallTotalFeeMyso={reserveFeeLinesMyso.total}
-        />
-        <Button
-          type="button"
-          disabled={reserveDisabled}
-          className="h-12 w-full shrink-0 rounded-2xl font-semibold opacity-80"
-        >
-          {reserveDisabled ? 'Enter an amount' : 'Reserve'}
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function SocialProofSwapCard({
   sellSymbol,
   tradingEnabled,
+  walletMysoBaseUnits,
+  ownedTokenBaseUnits,
+  currentSupplyBaseUnits,
+  basePriceBaseUnits,
+  quadraticCoefficient,
+  tradingFeeBps,
+  maxHoldPercentBps,
+  isAuthenticated,
+  isBusy,
+  creatorFeesUseVault,
+  hasIndexedVaultSettlements,
+  onBuy,
+  onSell,
   className,
 }: {
   sellSymbol: string;
   tradingEnabled?: boolean | null;
+  walletMysoBaseUnits: bigint;
+  ownedTokenBaseUnits: bigint;
+  currentSupplyBaseUnits: bigint;
+  basePriceBaseUnits: bigint;
+  quadraticCoefficient: bigint;
+  tradingFeeBps: bigint;
+  maxHoldPercentBps: bigint;
+  isAuthenticated: boolean;
+  isBusy: boolean;
+  creatorFeesUseVault: boolean;
+  hasIndexedVaultSettlements: boolean;
+  onBuy: (tokenAmount: bigint, paymentAmount: bigint) => Promise<boolean>;
+  onSell: (tokenAmount: bigint) => Promise<boolean>;
   className?: string;
 }) {
   const [tradeMode, setTradeMode] = useState<'buy' | 'sell'>('buy');
-  const [sellPct, setSellPct] = useState<string | null>(null);
-  const swapDisabled = tradingEnabled === false;
+  const [draft, setDraft] = useState('');
+  const swapDisabled = tradingEnabled !== true || isBusy;
   const sellSym =
     sellSymbol === '—' || !sellSymbol?.trim() ? 'Token' : sellSymbol.trim();
+  const inputBaseUnits = parseDisplayAmountToBaseUnits(draft) ?? BigInt(0);
+  const buyQuote = useMemo(() => {
+    const budgetQuote = calculateMaxSptBuyAmount({
+      basePrice: basePriceBaseUnits,
+      quadraticCoefficient,
+      currentSupply: currentSupplyBaseUnits,
+      mysoBudget: tradeMode === 'buy' ? inputBaseUnits : BigInt(0),
+    });
+    if (maxHoldPercentBps <= BigInt(0) || maxHoldPercentBps >= BigInt(10_000)) {
+      return budgetQuote;
+    }
+    const numerator = maxHoldPercentBps * currentSupplyBaseUnits - BigInt(10_000) * ownedTokenBaseUnits;
+    const maxBuy = numerator > BigInt(0)
+      ? numerator / (BigInt(10_000) - maxHoldPercentBps)
+      : BigInt(0);
+    const tokenAmount = budgetQuote.tokenAmount < maxBuy ? budgetQuote.tokenAmount : maxBuy;
+    return {
+      tokenAmount,
+      cost: calculateSptBuyCost({
+        basePrice: basePriceBaseUnits,
+        quadraticCoefficient,
+        currentSupply: currentSupplyBaseUnits,
+        tokenAmount,
+      }),
+    };
+  }, [
+    basePriceBaseUnits,
+    currentSupplyBaseUnits,
+    inputBaseUnits,
+    maxHoldPercentBps,
+    ownedTokenBaseUnits,
+    quadraticCoefficient,
+    tradeMode,
+  ]);
+  const sellGross = useMemo(
+    () => calculateSptSellRefund({
+      basePrice: basePriceBaseUnits,
+      quadraticCoefficient,
+      currentSupply: currentSupplyBaseUnits,
+      tokenAmount: tradeMode === 'sell' ? inputBaseUnits : BigInt(0),
+    }),
+    [basePriceBaseUnits, currentSupplyBaseUnits, inputBaseUnits, quadraticCoefficient, tradeMode]
+  );
+  const sellFee = feeFromBps(sellGross, tradingFeeBps);
+  const sellNet = sellGross - sellFee;
+  const estimatedTradingFee = tradeMode === 'buy'
+    ? feeFromBps(buyQuote.cost, tradingFeeBps)
+    : sellFee;
+  const applyTradeFraction = (percent: number) => {
+    const available = tradeMode === 'buy' ? walletMysoBaseUnits : ownedTokenBaseUnits;
+    setDraft(baseUnitsToDisplay((available * BigInt(percent)) / BigInt(100), 9));
+  };
+  const tradeAmountValid = tradeMode === 'buy'
+    ? inputBaseUnits > BigInt(0) && inputBaseUnits <= walletMysoBaseUnits && buyQuote.tokenAmount > BigInt(0)
+    : inputBaseUnits > BigInt(0) && inputBaseUnits <= ownedTokenBaseUnits && sellNet > BigInt(0);
 
   const sellBucket = (
     <div className={sptSwapBucketClass}>
           <div className="mb-3 flex items-start justify-between gap-2">
             <span className="pt-0.5 text-[12px] font-medium text-[var(--muted-foreground)]">
-              Sell
+              {tradeMode === 'sell' ? 'You sell' : 'You receive'}
             </span>
             <div
               className="flex flex-wrap justify-end gap-1"
@@ -1340,17 +1082,15 @@ function SocialProofSwapCard({
               aria-label="Sell amount presets"
             >
               {sptSwapPctPresets.map((p) => {
-                const active = sellPct === p;
+                const percent = p === 'Max' ? 100 : Number.parseInt(p, 10);
                 return (
                   <button
                     key={p}
                     type="button"
-                    onClick={() => setSellPct((cur) => (cur === p ? null : p))}
+                    onClick={() => applyTradeFraction(percent)}
                     className={cn(
                       'rounded-full px-2.5 py-1 text-[10px] font-semibold tabular-nums transition-colors',
-                      active
-                        ? 'bg-foreground text-background'
-                        : 'bg-background/50 text-foreground hover:bg-background/70 dark:bg-background/30 dark:hover:bg-background/45'
+                      'bg-background/50 text-foreground hover:bg-background/70 dark:bg-background/30 dark:hover:bg-background/45'
                     )}
                   >
                     {p}
@@ -1360,19 +1100,32 @@ function SocialProofSwapCard({
             </div>
           </div>
           <div className="flex min-h-[2.75rem] items-end justify-between gap-3">
-            <span className="min-w-0 text-3xl font-semibold tabular-nums leading-none tracking-tight text-foreground">
-              0
-            </span>
-            <button type="button" className={sptSwapTokenSelectClass} aria-label={`Select sell token (${sellSym})`}>
+            {tradeMode === 'sell' ? (
+              <input
+                type="text"
+                inputMode="decimal"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                maxLength={32}
+                disabled={isBusy}
+                placeholder="0"
+                aria-label={`Amount of ${sellSym} to sell`}
+                className="min-w-0 flex-1 bg-transparent text-3xl font-semibold tabular-nums leading-none tracking-tight text-foreground outline-none placeholder:text-muted-foreground/35"
+              />
+            ) : (
+              <span className="min-w-0 text-3xl font-semibold tabular-nums leading-none tracking-tight text-foreground">
+                {baseUnitsToDisplay(buyQuote.tokenAmount, 6)}
+              </span>
+            )}
+            <span className={sptSwapTokenSelectClass}>
               <TokenAvatar symbol={sellSym} className="size-8 shrink-0 rounded-full text-[11px]" />
               <span className="max-w-[5rem] truncate">{sellSym}</span>
-              <ChevronDown className="size-4 shrink-0 opacity-55" strokeWidth={2} />
-            </button>
+            </span>
           </div>
           <div className="mt-3 flex items-baseline justify-between gap-2 text-[11px] text-[var(--muted-foreground)]">
-            <span className="tabular-nums">$0</span>
+            <span className="tabular-nums">{tradeMode === 'sell' ? `${baseUnitsToDisplay(sellNet, 6)} MySo` : 'Estimated receive'}</span>
             <span className="tabular-nums">
-              0 {sellSym}
+              {baseUnitsToDisplay(ownedTokenBaseUnits, 6)} {sellSym} available
             </span>
           </div>
     </div>
@@ -1382,6 +1135,10 @@ function SocialProofSwapCard({
     <div className="relative z-[1] -my-3 flex justify-center">
       <button
         type="button"
+        onClick={() => {
+          setTradeMode((mode) => mode === 'buy' ? 'sell' : 'buy');
+          setDraft('');
+        }}
         className={cn(
           'inline-flex size-10 items-center justify-center rounded-xl border-2 border-background',
           'bg-muted text-foreground shadow-md',
@@ -1398,13 +1155,27 @@ function SocialProofSwapCard({
   const buyBucket = (
     <div className={sptSwapBucketClass}>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[12px] font-medium text-[var(--muted-foreground)]">Buy</span>
+        <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{tradeMode === 'buy' ? 'You pay' : 'You receive'}</span>
       </div>
       <div className="flex min-h-[2.75rem] items-end justify-between gap-3">
-        <span className="min-w-0 text-3xl font-semibold tabular-nums leading-none tracking-tight text-foreground">
-          0
-        </span>
-        <button type="button" className={sptSwapTokenSelectClass} aria-label="Select buy token (Eth)">
+        {tradeMode === 'buy' ? (
+          <input
+            type="text"
+            inputMode="decimal"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            maxLength={32}
+            disabled={isBusy}
+            placeholder="0"
+            aria-label="MySo amount to spend"
+            className="min-w-0 flex-1 bg-transparent text-3xl font-semibold tabular-nums leading-none tracking-tight text-foreground outline-none placeholder:text-muted-foreground/35"
+          />
+        ) : (
+          <span className="min-w-0 text-3xl font-semibold tabular-nums leading-none tracking-tight text-foreground">
+            {baseUnitsToDisplay(sellNet, 6)}
+          </span>
+        )}
+        <span className={sptSwapTokenSelectClass}>
           <div
             className={cn(
               'flex size-8 shrink-0 items-center justify-center rounded-full',
@@ -1412,26 +1183,31 @@ function SocialProofSwapCard({
             )}
             aria-hidden
           >
-            Eth
+            MY
           </div>
-          <span className="max-w-[5rem] truncate">Eth</span>
-          <ChevronDown className="size-4 shrink-0 opacity-55" strokeWidth={2} />
-        </button>
+          <span className="max-w-[5rem] truncate">MySo</span>
+        </span>
       </div>
-      <div className="mt-3 text-[11px] tabular-nums text-[var(--muted-foreground)]">$0</div>
+      <div className="mt-3 flex justify-between text-[11px] tabular-nums text-[var(--muted-foreground)]">
+        <span>{tradeMode === 'buy' ? `${baseUnitsToDisplay(buyQuote.cost, 6)} MySo curve cost` : 'Estimated receive'}</span>
+        <span>{baseUnitsToDisplay(walletMysoBaseUnits, 6)} MySo available</span>
+      </div>
     </div>
   );
 
   return (
     <div data-trade-mode={tradeMode} className={cn(tradeSptTallCardSwapClass, className)}>
-      {swapDisabled ? (
+      {tradingEnabled !== true ? (
         <p className="rounded-lg bg-muted/35 px-3 py-2.5 text-center text-xs text-[var(--muted-foreground)] dark:bg-muted/25">
           Trading isn’t enabled for this token in your network configuration.
         </p>
       ) : null}
       <SlidingSegmentTabs
         value={tradeMode}
-        onValueChange={(v) => setTradeMode(v as 'buy' | 'sell')}
+        onValueChange={(v) => {
+          setTradeMode(v as 'buy' | 'sell');
+          setDraft('');
+        }}
         className="w-full"
         listClassName={cn(tradeSptSwapSegmentShellClass, 'grid h-10 w-full grid-cols-2')}
         aria-label="Buy or sell"
@@ -1455,19 +1231,45 @@ function SocialProofSwapCard({
       </div>
 
       <div className="mt-1 flex min-h-0 flex-col gap-4">
-        <SptTradeFeeBreakdownCard
-          subtotalMyso={0}
-          gasFeeMyso={0}
-          platformEcosystemFeeMyso={0}
-          creatorFeeMyso={0}
-          overallTotalFeeMyso={0}
-        />
+        <dl className="space-y-2 rounded-xl border border-trade-shell bg-background/30 p-3 text-xs">
+          <div className="flex justify-between gap-3"><dt className="text-muted-foreground">Trading fee ({Number(tradingFeeBps) / 100}%)</dt><dd className="tabular-nums">{baseUnitsToDisplay(estimatedTradingFee, 9)} MySo</dd></div>
+          <div className="flex justify-between gap-3 border-t border-trade-shell pt-2"><dt>{tradeMode === 'buy' ? 'Payment (fee included)' : 'Estimated net proceeds'}</dt><dd className="font-semibold tabular-nums">{baseUnitsToDisplay(tradeMode === 'buy' ? buyQuote.cost : sellNet, 9)} MySo</dd></div>
+        </dl>
+        <p className="text-xs leading-relaxed text-muted-foreground">Network gas is additional. Quotes follow the pool’s bonding curve. {tradeMode === 'buy' ? 'Your payment is capped at the amount shown.' : 'The final sale price can change before execution.'}</p>
+        {creatorFeesUseVault ? (
+          <p className="rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs leading-relaxed text-foreground" role="note">
+            Creator fees are routed automatically to the post’s beneficiary vaults in the same transaction.
+            {hasIndexedVaultSettlements ? ' Settlement history is indexed.' : ''}
+          </p>
+        ) : null}
+        {draft && !tradeAmountValid ? <p role="status" className="text-xs text-destructive">Enter an amount within your balance, the pool liquidity, and the token’s holding limit (up to 9 decimals).</p> : null}
         <Button
           type="button"
-          disabled={swapDisabled}
+          disabled={swapDisabled || !tradeAmountValid || !isAuthenticated}
+          onClick={() => {
+            if (!isAuthenticated) {
+              toast.error('Sign in to continue.');
+              return;
+            }
+            if (!tradeAmountValid) return;
+            const action = tradeMode === 'buy'
+              ? onBuy(buyQuote.tokenAmount, buyQuote.cost)
+              : onSell(inputBaseUnits);
+            void action.then((success) => { if (success) setDraft(''); });
+          }}
           className="h-12 w-full shrink-0 rounded-2xl font-semibold opacity-80"
         >
-          {swapDisabled ? 'Trading unavailable' : 'Enter an amount'}
+          {isBusy ? (
+            <><Loader2 className="mr-2 size-4 animate-spin" />Submitting…</>
+          ) : tradingEnabled === false ? (
+            'Trading unavailable'
+          ) : !isAuthenticated ? (
+            'Sign in to continue'
+          ) : tradeAmountValid ? (
+            tradeMode === 'buy' ? `Buy ${sellSym}` : `Sell ${sellSym}`
+          ) : (
+            'Enter a valid amount'
+          )}
         </Button>
       </div>
     </div>
@@ -1483,7 +1285,11 @@ function PriceChartBlock({
   onTimeframeChange: (t: Timeframe) => void;
   chartSeries: readonly SocialProofChartPoint[];
 }) {
-  const data = useMemo(() => chartRowsWithLabels(chartSeries), [chartSeries]);
+  const data = useMemo(() => {
+    const hours: Record<Timeframe, number> = { '1H': 1, '1D': 24, '1W': 168, '1M': 720, '1Y': 8760, ALL: Infinity };
+    const cutoff = Date.now() - hours[timeframe] * 3_600_000;
+    return chartRowsWithLabels(chartSeries.filter((point) => point.t >= cutoff));
+  }, [chartSeries, timeframe]);
 
   const tfItems: SlidingSegmentItem[] = useMemo(
     () =>
@@ -1504,7 +1310,7 @@ function PriceChartBlock({
             'bg-muted/25 text-sm text-[var(--muted-foreground)] dark:bg-muted/20'
           )}
         >
-          No price history yet.
+          No price history in this timeframe.
         </div>
       ) : (
       <ChartContainer
@@ -1599,6 +1405,7 @@ export type TradeSocialProofTokenWorkspaceProps = {
   reservationPoolAddress?: string | null;
   hasLiveTradingPool?: boolean;
   maxIndividualReservationMyso?: number | null;
+  maxIndividualReservationBaseUnits?: bigint;
   usdPerMysoReservationQuote?: number | null;
   /** Connected wallet MySo balance when portfolio overview is loaded. */
   walletMysoAvailable?: number | null;
@@ -1608,6 +1415,21 @@ export type TradeSocialProofTokenWorkspaceProps = {
   reservationPlatformFeeBps?: number | null;
   reservationTreasuryFeeBps?: number | null;
   reservationCreatorFeeBps?: number | null;
+  tokenTypeCode?: number | null;
+  ownerAddress?: string | null;
+  subjectObjectId?: string | null;
+  livePoolId?: string | null;
+  creatorFeesUseVault?: boolean;
+  hasIndexedVaultSettlements?: boolean;
+  totalReservedBaseUnits?: bigint;
+  requiredThresholdBaseUnits?: bigint;
+  currentSupplyBaseUnits?: bigint;
+  basePriceBaseUnits?: bigint;
+  quadraticCoefficient?: bigint;
+  tradingFeeBps?: bigint;
+  maxHoldPercentBps?: bigint;
+  reservationBalances?: Array<{ reserver: string; amount: bigint }>;
+  onDataChanged?: () => void;
 };
 
 export function TradeSocialProofTokenWorkspace({
@@ -1631,15 +1453,45 @@ export function TradeSocialProofTokenWorkspace({
   reservationPoolAddress: reservationPoolAddressProp,
   hasLiveTradingPool: hasLiveTradingPoolProp,
   maxIndividualReservationMyso: maxIndividualReservationMysoProp,
+  maxIndividualReservationBaseUnits = BigInt(0),
   usdPerMysoReservationQuote: usdPerMysoReservationQuoteProp,
   walletMysoAvailable: walletMysoAvailableProp,
   sptIsActive: sptIsActiveProp,
   reservationPlatformFeeBps: reservationPlatformFeeBpsProp,
   reservationTreasuryFeeBps: reservationTreasuryFeeBpsProp,
   reservationCreatorFeeBps: reservationCreatorFeeBpsProp,
+  tokenTypeCode: tokenTypeCodeProp,
+  ownerAddress: ownerAddressProp,
+  subjectObjectId: subjectObjectIdProp,
+  livePoolId: livePoolIdProp,
+  creatorFeesUseVault = false,
+  hasIndexedVaultSettlements = false,
+  totalReservedBaseUnits: totalReservedBaseUnitsProp,
+  requiredThresholdBaseUnits: requiredThresholdBaseUnitsProp,
+  currentSupplyBaseUnits: currentSupplyBaseUnitsProp,
+  basePriceBaseUnits: basePriceBaseUnitsProp,
+  quadraticCoefficient: quadraticCoefficientProp,
+  tradingFeeBps: tradingFeeBpsProp,
+  maxHoldPercentBps: maxHoldPercentBpsProp,
+  reservationBalances: reservationBalancesProp,
+  onDataChanged,
 }: TradeSocialProofTokenWorkspaceProps = {}) {
   const [timeframe, setTimeframe] = useState<Timeframe>('1D');
   const [bottomTab, setBottomTab] = useState('transactions');
+  const [transactionBusy, setTransactionBusy] = useState(false);
+  const transactionLock = useRef(false);
+  const mounted = useRef(true);
+  const refreshTimers = useRef<number[]>([]);
+  const walletRequest = useRef(0);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; walletRequest.current += 1; refreshTimers.current.forEach(window.clearTimeout); };
+  }, []);
+  const [walletMysoBaseUnits, setWalletMysoBaseUnits] = useState(BigInt(0));
+  const [ownedTokenBaseUnits, setOwnedTokenBaseUnits] = useState(BigInt(0));
+  const { keypair, displayAddress, isAuthenticated } = useMySocialAuth();
+  const { currentNetwork } = useNetwork();
 
   const profileRibbon = profileRibbonProp ?? null;
   const token = tokenProp;
@@ -1684,6 +1536,233 @@ export function TradeSocialProofTokenWorkspace({
   const reservationPlatformFeeBps = reservationPlatformFeeBpsProp ?? null;
   const reservationTreasuryFeeBps = reservationTreasuryFeeBpsProp ?? null;
   const reservationCreatorFeeBps = reservationCreatorFeeBpsProp ?? null;
+  const tokenType: SptTokenType = tokenTypeCodeProp === SPT_TOKEN_TYPE_POST
+    ? SPT_TOKEN_TYPE_POST
+    : SPT_TOKEN_TYPE_PROFILE;
+  const ownerAddress = ownerAddressProp?.trim() || profileRibbon?.profileAddress?.trim() || null;
+  const subjectObjectId = subjectObjectIdProp?.trim() || null;
+  const livePoolId = livePoolIdProp?.trim() || null;
+  const totalReservedBaseUnits = totalReservedBaseUnitsProp ?? BigInt(0);
+  const requiredThresholdBaseUnits = requiredThresholdBaseUnitsProp ?? BigInt(0);
+  const currentSupplyBaseUnits = currentSupplyBaseUnitsProp ?? BigInt(0);
+  const basePriceBaseUnits = basePriceBaseUnitsProp ?? BigInt(0);
+  const quadraticCoefficient = quadraticCoefficientProp ?? BigInt(0);
+  const tradingFeeBps = tradingFeeBpsProp ?? BigInt(0);
+  const maxHoldPercentBps = maxHoldPercentBpsProp ?? BigInt(0);
+  const viewerReservationBaseUnits = (reservationBalancesProp ?? []).find((row) =>
+    mysoAddressesEqual(row.reserver, displayAddress)
+  )?.amount ?? BigInt(0);
+  const isOwner = mysoAddressesEqual(ownerAddress, displayAddress);
+  const canLaunch =
+    isOwner &&
+    !livePoolId &&
+    Boolean(reservationPoolId || reservationPoolAddress) &&
+    requiredThresholdBaseUnits > BigInt(0) &&
+    totalReservedBaseUnits >= requiredThresholdBaseUnits;
+
+  const refreshWalletState = useCallback(async () => {
+    const request = ++walletRequest.current;
+    const viewer = displayAddress?.trim();
+    if (!viewer) {
+      setWalletMysoBaseUnits(BigInt(0));
+      setOwnedTokenBaseUnits(BigInt(0));
+      return;
+    }
+    try {
+      const client = getMySoJsonRpcClient(currentNetwork);
+      const [balance, owned] = await Promise.all([
+        client.getBalance({ owner: viewer, coinType: MYSO_GAS_COIN_TYPE }),
+        livePoolId
+          ? findOwnedSocialToken({ network: currentNetwork, owner: viewer, poolId: livePoolId })
+          : Promise.resolve(null),
+      ]);
+      if (!mounted.current || request !== walletRequest.current) return;
+      setWalletError(null);
+      setWalletMysoBaseUnits(BigInt(balance.totalBalance));
+      setOwnedTokenBaseUnits(owned?.amount ?? BigInt(0));
+    } catch {
+      if (!mounted.current || request !== walletRequest.current) return;
+      setWalletMysoBaseUnits(BigInt(0));
+      setOwnedTokenBaseUnits(BigInt(0));
+      setWalletError('Could not refresh wallet balances. Try again before trading.');
+    }
+  }, [currentNetwork, displayAddress, livePoolId]);
+
+  useEffect(() => {
+    void refreshWalletState();
+    const interval = window.setInterval(() => { if (document.visibilityState === 'visible') void refreshWalletState(); }, 20_000);
+    return () => { walletRequest.current += 1; window.clearInterval(interval); };
+  }, [refreshWalletState]);
+
+  const afterTransaction = useCallback(async (message: string) => {
+    toast.success(message);
+    if (!mounted.current) return;
+    onDataChanged?.();
+    await refreshWalletState();
+    if (!mounted.current) return;
+    refreshTimers.current.forEach(window.clearTimeout);
+    refreshTimers.current = [2_500, 8_000].map((delay) => window.setTimeout(() => onDataChanged?.(), delay));
+  }, [onDataChanged, refreshWalletState]);
+
+  const requireSigner = () => {
+    const sender = displayAddress?.trim();
+    if (!sender || !keypair || !mysoAddressesEqual(sender, keypair.toMySoAddress())) {
+      toast.error('Sign in with a wallet that can sign transactions.');
+      return null;
+    }
+    return { sender, signer: keypair };
+  };
+
+  const handleReserve = async (displayAmount: string) => {
+    const auth = requireSigner();
+    const poolId = reservationPoolId || reservationPoolAddress;
+    const principalAmount = parseDisplayAmountToBaseUnits(displayAmount);
+    if (!auth || !poolId || !principalAmount || principalAmount <= BigInt(0) || transactionLock.current) return false;
+    const feeBps =
+      BigInt(Math.max(0, Math.trunc(reservationPlatformFeeBps ?? 0))) +
+      BigInt(Math.max(0, Math.trunc(reservationTreasuryFeeBps ?? 0))) +
+      BigInt(Math.max(0, Math.trunc(reservationCreatorFeeBps ?? 0)));
+    transactionLock.current = true;
+    setTransactionBusy(true);
+    try {
+      const postContext = tokenType === SPT_TOKEN_TYPE_POST && subjectObjectId
+        ? await resolvePostTransactionContext({
+            network: currentNetwork,
+            postId: subjectObjectId,
+            reservationAmount: principalAmount,
+          })
+        : undefined;
+      await executeReserveSpt({
+        network: currentNetwork,
+        ...auth,
+        tokenType,
+        reservationPoolId: poolId,
+        principalAmount,
+        feeAmount: feeFromBps(principalAmount, feeBps),
+        postContext,
+      });
+      await afterTransaction('Reservation submitted');
+      return true;
+    } catch (error) {
+      toast.error(friendlySptTransactionError(error));
+      return false;
+    } finally {
+      transactionLock.current = false;
+      if (mounted.current) setTransactionBusy(false);
+    }
+  };
+
+  const handleWithdraw = async (displayAmount: string) => {
+    const auth = requireSigner();
+    const poolId = reservationPoolId || reservationPoolAddress;
+    const amount = parseDisplayAmountToBaseUnits(displayAmount);
+    if (!auth || !poolId || !amount || amount <= BigInt(0) || transactionLock.current) return false;
+    transactionLock.current = true;
+    setTransactionBusy(true);
+    try {
+      const postContext = tokenType === SPT_TOKEN_TYPE_POST && subjectObjectId
+        ? await resolvePostTransactionContext({
+            network: currentNetwork,
+            postId: subjectObjectId,
+            reservationAmount: amount,
+          })
+        : undefined;
+      await executeWithdrawSptReservation({
+        network: currentNetwork,
+        ...auth,
+        tokenType,
+        reservationPoolId: poolId,
+        amount,
+        postContext,
+      });
+      await afterTransaction('Reservation withdrawn');
+      return true;
+    } catch (error) {
+      toast.error(friendlySptTransactionError(error));
+      return false;
+    } finally {
+      transactionLock.current = false;
+      if (mounted.current) setTransactionBusy(false);
+    }
+  };
+
+  const handleBuy = async (tokenAmount: bigint, paymentAmount: bigint) => {
+    const auth = requireSigner();
+    if (!auth || !livePoolId || transactionLock.current) return false;
+    transactionLock.current = true;
+    setTransactionBusy(true);
+    try {
+      await executeBuySpt({
+        network: currentNetwork,
+        ...auth,
+        poolId: livePoolId,
+        tokenAmount,
+        paymentAmount,
+      });
+      await afterTransaction('Token purchase complete');
+      return true;
+    } catch (error) {
+      toast.error(friendlySptTransactionError(error));
+      return false;
+    } finally {
+      transactionLock.current = false;
+      if (mounted.current) setTransactionBusy(false);
+    }
+  };
+
+  const handleSell = async (tokenAmount: bigint) => {
+    const auth = requireSigner();
+    if (!auth || !livePoolId || transactionLock.current) return false;
+    transactionLock.current = true;
+    setTransactionBusy(true);
+    try {
+      await executeSellSpt({
+        network: currentNetwork,
+        ...auth,
+        poolId: livePoolId,
+        tokenAmount,
+      });
+      await afterTransaction('Token sale complete');
+      return true;
+    } catch (error) {
+      toast.error(friendlySptTransactionError(error));
+      return false;
+    } finally {
+      transactionLock.current = false;
+      if (mounted.current) setTransactionBusy(false);
+    }
+  };
+
+  const handleOwnerAction = async (action: 'enable' | 'launch') => {
+    const auth = requireSigner();
+    if (!auth || !isOwner || transactionLock.current) return false;
+    transactionLock.current = true;
+    setTransactionBusy(true);
+    try {
+      if (action === 'enable') {
+        if (!subjectObjectId) throw new Error('GraphQL did not return the subject object id.');
+        await executeEnableSpt({
+          network: currentNetwork,
+          ...auth,
+          tokenType,
+          subjectObjectId,
+        });
+        await afterTransaction('Social Proof Token reservations enabled');
+      } else {
+        const poolId = reservationPoolId || reservationPoolAddress;
+        if (!poolId) throw new Error('GraphQL did not return the reservation pool id.');
+        await executeLaunchSpt({ network: currentNetwork, ...auth, reservationPoolId: poolId });
+        await afterTransaction('Social Proof Token launched');
+      }
+      return true;
+    } catch (error) {
+      toast.error(friendlySptTransactionError(error));
+      return false;
+    } finally {
+      transactionLock.current = false;
+      if (mounted.current) setTransactionBusy(false);
+    }
+  };
 
   const sidePanelMode = useMemo(
     () =>
@@ -1701,7 +1780,7 @@ export function TradeSocialProofTokenWorkspace({
   const showTradingQuote =
     sidePanelMode === 'full' || (isSptActive === true && hasQuotePrice);
   const quoteDisplayPrice =
-    hasQuotePrice && priceLabel ? priceLabel.trim() : '$0.00';
+    hasQuotePrice && priceLabel ? priceLabel.trim() : '—';
   const { percent: quoteParsedPct, rest: quoteChangeRest } = parsePercentFromChangeLabel(
     changeLabel ?? null
   );
@@ -1803,6 +1882,30 @@ export function TradeSocialProofTokenWorkspace({
             reservationFillPercent={reservationFillPercent}
             className="rounded-b-none"
           />
+          {isOwner && !hasLiveTradingPool && ((!reservationPoolId && !reservationPoolAddress) || canLaunch) ? (
+            <div className="border-x border-trade-shell bg-muted/20 px-4 py-3">
+              <p className="text-xs font-medium text-foreground">
+                {canLaunch ? 'Reservation threshold reached' : 'Creator controls'}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                {canLaunch
+                  ? 'Launch the pool to open curve-based buying and selling.'
+                  : `Enable reservations for this ${tokenType === SPT_TOKEN_TYPE_POST ? 'post' : 'profile'}.`}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3 w-full rounded-xl"
+                disabled={transactionBusy || (!canLaunch && !subjectObjectId)}
+                onClick={() => void handleOwnerAction(canLaunch ? 'launch' : 'enable')}
+              >
+                {transactionBusy ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                {canLaunch ? 'Launch token' : 'Enable token'}
+              </Button>
+            </div>
+          ) : null}
+          {walletError ? <div role="status" className="border-x border-trade-shell px-4 py-3 text-xs text-destructive">{walletError} <button type="button" className="underline" onClick={() => void refreshWalletState()}>Retry</button></div> : null}
+          {sidePanelMode === 'simple' ? <p className="border-x border-trade-shell px-4 py-3 text-xs tabular-nums text-muted-foreground">{baseUnitsToDisplay(totalReservedBaseUnits, 9)} / {baseUnitsToDisplay(requiredThresholdBaseUnits, 9)} MySo reserved toward launch</p> : null}
           {sidePanelMode === 'none' ? (
             <div className={cn(tradeSptEmptyAsideClass, 'rounded-t-none border-t-0')}>
               <p className="text-sm font-medium text-foreground">No reservation or trading</p>
@@ -1812,19 +1915,34 @@ export function TradeSocialProofTokenWorkspace({
               </p>
             </div>
           ) : sidePanelMode === 'simple' ? (
-            <SimpleReservationAmountCard
-              walletMysoAvailable={walletMysoAvailable}
-              maxReservationMyso={maxIndividualReservationMyso}
-              usdPerMyso={usdPerMysoReservationQuote}
-              reservationPlatformFeeBps={reservationPlatformFeeBps}
-              reservationTreasuryFeeBps={reservationTreasuryFeeBps}
-              reservationCreatorFeeBps={reservationCreatorFeeBps}
+            <SptReservationCard
+              walletAvailable={walletMysoBaseUnits > BigInt(50_000_000) ? walletMysoBaseUnits - BigInt(50_000_000) : BigInt(0)}
+              reservationAvailable={viewerReservationBaseUnits}
+              reservationLimit={maxIndividualReservationBaseUnits}
+              feeBps={BigInt((reservationPlatformFeeBps ?? 0) + (reservationTreasuryFeeBps ?? 0) + (reservationCreatorFeeBps ?? 0))}
+              isAuthenticated={isAuthenticated}
+              isBusy={transactionBusy}
+              onReserve={handleReserve}
+              onWithdraw={handleWithdraw}
               className="rounded-t-none border-t-0"
             />
           ) : (
             <SocialProofSwapCard
               sellSymbol={displaySymbol === '—' ? 'Token' : displaySymbol}
               tradingEnabled={tradingEnabled}
+              walletMysoBaseUnits={walletMysoBaseUnits > BigInt(50_000_000) ? walletMysoBaseUnits - BigInt(50_000_000) : BigInt(0)}
+              ownedTokenBaseUnits={ownedTokenBaseUnits}
+              currentSupplyBaseUnits={currentSupplyBaseUnits}
+              basePriceBaseUnits={basePriceBaseUnits}
+              quadraticCoefficient={quadraticCoefficient}
+              tradingFeeBps={tradingFeeBps}
+              maxHoldPercentBps={maxHoldPercentBps}
+              isAuthenticated={isAuthenticated}
+              isBusy={transactionBusy}
+              creatorFeesUseVault={creatorFeesUseVault}
+              hasIndexedVaultSettlements={hasIndexedVaultSettlements}
+              onBuy={handleBuy}
+              onSell={handleSell}
               className="rounded-t-none border-t-0"
             />
           )}

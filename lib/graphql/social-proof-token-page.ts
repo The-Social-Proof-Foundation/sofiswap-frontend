@@ -1,5 +1,6 @@
 import { getMySoGraphQLClient } from '@/lib/myso-graphql-client';
-import type { NetworkType } from '@/lib/network-utils';
+import { getClientSelectedNetwork, type NetworkType } from '@/lib/network-utils';
+import { readSptPoolState, readSptRules, resolveLiveSptPoolId, type SptPoolState, type SptRules } from '@/lib/spt/pool-state';
 
 const SPT_PAGE_FRAGMENTS = /* GraphQL */ `
   fragment PstBadge on SelectedBadge {
@@ -29,11 +30,13 @@ export const SOCIAL_PROOF_TOKEN_PAGE_QUERY = /* GraphQL */ `
   query SocialProofTokenPage(
     $profileAddress: MySoAddress!
     $poolId: ID!
+    $includePool: Boolean!
     $chartPoints: Int = 500
     $holdersLimit: Int = 100
     $txLimit: Int = 100
   ) {
     profile(address: $profileAddress) {
+      profileId
       displayName
       address
       username
@@ -108,7 +111,7 @@ export const SOCIAL_PROOF_TOKEN_PAGE_QUERY = /* GraphQL */ `
       }
     }
 
-    sptPool(id: $poolId) {
+    sptPool(id: $poolId) @include(if: $includePool) {
       poolId
       tokenType
       price
@@ -146,6 +149,7 @@ export const SOCIAL_PROOF_TOKEN_PAGE_QUERY = /* GraphQL */ `
       }
       reservationHolders(limit: $holdersLimit, offset: 0) {
         amount
+        poolId
         reservedAt
         reserver
         reserverProfile {
@@ -198,7 +202,7 @@ export interface SocialProofTokenPagePstBadge {
   badgeName: string;
   badgeIconUrl: string | null;
   badgeMediaUrl: string | null;
-  badgeType: string;
+  badgeType: number;
 }
 
 export interface SocialProofTokenPagePstProfileSummary {
@@ -243,7 +247,7 @@ export interface SocialProofTokenPageProfileSocialProofToken {
   poolId: string | null;
   tokenAddress: string | null;
   isActive: boolean | null;
-  tokenType: string | null;
+  tokenType: number | null;
   owner: string | null;
   createdAt: SptScalar;
   basePrice: SptScalar;
@@ -265,6 +269,7 @@ export interface SocialProofTokenPageProfileSocialProofToken {
 }
 
 export interface SocialProofTokenPageProfile {
+  profileId: string | null;
   displayName: string | null;
   address: string;
   username: string | null;
@@ -304,6 +309,7 @@ export interface SocialProofTokenPagePriceHistoryPoint {
 
 export interface SocialProofTokenPagePoolReservationHolder {
   amount: SptScalar;
+  poolId: string | null;
   reservedAt: SptScalar;
   reserver: string;
   reserverProfile: SocialProofTokenPagePstProfileSummary | null;
@@ -320,7 +326,7 @@ export interface SocialProofTokenPagePoolFormerReservationHolder {
 
 export interface SocialProofTokenPageSptPool {
   poolId: string | null;
-  tokenType: string | null;
+  tokenType: number | null;
   price: SptScalar;
   priceChange24H: SptScalar;
   marketCap: SptScalar;
@@ -333,6 +339,10 @@ export interface SocialProofTokenPageSptPool {
   ownerProfile: SocialProofTokenPagePstProfileSummary | null;
   holders: SocialProofTokenPagePoolHolder[];
   transactions: SocialProofTokenPagePoolTransaction[];
+  creatorFeeSettlements?: Array<{
+    eventId: string; poolId: string; trader: string; sourcePostId: string | null;
+    creatorFee: SptScalar; walletAmount: SptScalar; vaultAmount: SptScalar; timestamp: string;
+  }>;
   priceHistory: SocialProofTokenPagePriceHistoryPoint[];
   reservationHolders: SocialProofTokenPagePoolReservationHolder[];
   formerReservationHolders: SocialProofTokenPagePoolFormerReservationHolder[];
@@ -371,6 +381,9 @@ export interface SocialProofTokenPageQueryData {
 }
 
 export interface SocialProofTokenPageResult {
+  rules?: SptRules;
+  chainState?: SptPoolState | null;
+  viewer?: string | null;
   profile: SocialProofTokenPageProfile | null;
   sptPool: SocialProofTokenPageSptPool | null;
   sptConfiguration: SocialProofTokenPageConfiguration | null;
@@ -378,8 +391,9 @@ export interface SocialProofTokenPageResult {
 }
 
 export interface FetchSocialProofTokenPageArgs {
+  viewer?: string | null;
   profileAddress: string;
-  poolId: string;
+  poolId?: string | null;
   network?: NetworkType;
   chartPoints?: number;
   holdersLimit?: number;
@@ -388,36 +402,44 @@ export interface FetchSocialProofTokenPageArgs {
 
 export async function fetchSocialProofTokenPage({
   profileAddress,
-  poolId,
-  network,
+  viewer,
+  network = getClientSelectedNetwork(),
   chartPoints = 500,
   holdersLimit = 100,
   txLimit = 100,
 }: FetchSocialProofTokenPageArgs): Promise<SocialProofTokenPageResult> {
   const client = getMySoGraphQLClient(network);
-  const res = await client.query<SocialProofTokenPageQueryData>({
+  const queryPage = (poolId: string | null) => client.query<SocialProofTokenPageQueryData>({
     query: SOCIAL_PROOF_TOKEN_PAGE_QUERY,
     variables: {
       profileAddress,
-      poolId,
+      poolId: poolId?.trim() || '0x0',
+      includePool: Boolean(poolId?.trim()),
       chartPoints,
       holdersLimit,
       txLimit,
     },
   });
-
-  if (res.errors?.length) {
-    return {
-      profile: res.data?.profile ?? null,
-      sptPool: res.data?.sptPool ?? null,
-      sptConfiguration: res.data?.sptConfiguration ?? null,
-      errors: res.errors,
-    };
+  // Resolve from the subject on every refresh: reservation IDs survive launch and
+  // are not trading pool IDs. A URL query parameter is never trusted for trading.
+  let res = await queryPage(null);
+  const profile = res.data?.profile;
+  let chainState: SptPoolState | null = null;
+  if (profile?.profileId) {
+    const liveId = await resolveLiveSptPoolId(network, profile.profileId);
+    const reservationId = profile.socialProofToken?.reservationPoolId || profile.reservationPoolAddress;
+    const id = liveId || reservationId;
+    if (id) chainState = await readSptPoolState({ network, poolId: id, subjectId: profile.profileId, viewer });
+    if (liveId) res = await queryPage(liveId);
   }
 
   return {
+    rules: await readSptRules(network),
+    chainState,
+    viewer,
     profile: res.data?.profile ?? null,
     sptPool: res.data?.sptPool ?? null,
     sptConfiguration: res.data?.sptConfiguration ?? null,
+    errors: res.errors,
   };
 }

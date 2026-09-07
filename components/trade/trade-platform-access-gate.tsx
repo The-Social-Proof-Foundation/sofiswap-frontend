@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { useTradingSetupStatus } from '@/hooks/useTradingSetupStatus';
+import { useSofiSwapPlatformConfig } from '@/hooks/useSofiSwapPlatformConfig';
 import {
   fetchPlatformUserAccessGate,
   type PlatformUserAccess,
@@ -26,7 +27,6 @@ import {
 } from '@/lib/graphql-profile-cache';
 import { useNetwork } from '@/lib/network-provider';
 import type { NetworkType } from '@/lib/network-utils';
-import { getSofiSwapPlatformConfig } from '@/lib/platform-config';
 import { signAndExecuteJoinPlatform } from '@/lib/tx/join-platform';
 import { cn } from '@/lib/utils';
 import { signAndExecuteTradingSetup } from '@/lib/tx/trading-setup';
@@ -123,7 +123,7 @@ export function TradePlatformAccessGate({
   const effectiveOrderbookSkipped =
     orderbookSkipped || !verifyOrderbookTradingSetup;
 
-  const config = useMemo(() => getSofiSwapPlatformConfig(currentNetwork), [currentNetwork]);
+  const { config } = useSofiSwapPlatformConfig(currentNetwork);
   const [mode, setMode] = useState<GateMode>('idle');
   const [joinOpen, setJoinOpen] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
@@ -152,13 +152,6 @@ export function TradePlatformAccessGate({
     };
 
     try {
-      if (readTradeGateOk(currentNetwork, config.platformGraphqlId, displayAddress)) {
-        setMode('hidden');
-        setJoinOpen(false);
-        setRepairOpen(false);
-        return;
-      }
-
       let stale =
         readCachedPlatformAccess(currentNetwork, config.platformGraphqlId, displayAddress) ??
         readAndConsumePrefetchedAccess(currentNetwork, config.platformGraphqlId, displayAddress);

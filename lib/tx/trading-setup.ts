@@ -2,7 +2,7 @@ import type { MySoTransactionBlockResponse } from '@socialproof/myso/jsonRpc';
 import type { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 
 import { augmentRegisterBalanceManagerError } from '@/lib/orderbook/balance-manager-register-errors';
-import { resolveCreatedBalanceManagerObjectId } from '@/lib/orderbook/balance-manager-effects';
+import { findCreatedBalanceManagerObjectId, resolveCreatedBalanceManagerObjectId } from '@/lib/orderbook/balance-manager-effects';
 import { getResolvedOrderbookDeployment, orderbookTradingNetwork } from '@/lib/orderbook/config';
 import {
   appendCreateAndShareBalanceManagerMoves,
@@ -31,9 +31,10 @@ function runTradingSetupExclusive<T>(key: string, fn: () => Promise<T>): Promise
   const run = prev.then(() => fn());
   const tail = run.then(() => undefined, () => undefined);
   setupQueues.set(key, tail);
-  void run.finally(() => {
+  const cleanup = () => {
     if (setupQueues.get(key) === tail) setupQueues.delete(key);
-  });
+  };
+  void run.then(cleanup, cleanup);
   return run;
 }
 
@@ -64,7 +65,7 @@ async function waitCommitted(
 }
 
 /**
- * Create + share, then register BalanceManager on the orderbook registry (two PTBs; mainnet/testnet only).
+ * Create + share, then register BalanceManager on the orderbook registry (two PTBs; all supported networks).
  *
  * Returns `null` when the registry already lists at least one balance manager for this sender (no new object).
  */
@@ -84,9 +85,6 @@ async function signAndExecuteTradingSetupImpl(input: {
   signer: Ed25519Keypair;
 }): Promise<MySoTransactionBlockResponse | null> {
   const ob = orderbookTradingNetwork(input.network);
-  if (!ob) {
-    throw new Error('Trading setup is not available on localnet.');
-  }
   const client = getMySoJsonRpcClient(input.network);
   const { orderbookPackageId, registryId } = getResolvedOrderbookDeployment(ob);
   const registerErrCtx = {
@@ -96,81 +94,55 @@ async function signAndExecuteTradingSetupImpl(input: {
   } as const;
 
   const fresh = await fetchRegisteredBalanceManagerIds(client, input.senderAddress);
+  if (fresh.error) throw new Error(fresh.error);
   if (!fresh.error && fresh.ids.length > 0) {
     clearPendingBalanceManagerRegister(input.network, input.senderAddress);
     return null;
   }
 
-  const pending = readPendingBalanceManagerRegister(input.network, input.senderAddress);
-  if (pending) {
-    const pendingRecheck = await fetchRegisteredBalanceManagerIds(client, input.senderAddress);
-    if (!pendingRecheck.error && pendingRecheck.ids.length > 0) {
-      clearPendingBalanceManagerRegister(input.network, input.senderAddress);
-      return null;
-    }
-    let registered: MySoTransactionBlockResponse;
-    try {
-      registered = await executeTransactionWithSmartGas({
-        network: input.network,
-        client,
-        signer: input.signer,
-        sender: input.senderAddress,
-        build: (tx) => {
-          appendRegisterBalanceManagerMove(tx, ob, pending.managerObjectId);
-        },
-        executeOptions: EXECUTE_OPTIONS,
-      });
-    } catch (e) {
-      throw augmentRegisterBalanceManagerError(e, registerErrCtx);
-    }
-    assertSuccess(registered);
-    await waitCommitted(client, registered.digest);
-    clearPendingBalanceManagerRegister(input.network, input.senderAddress);
-    return registered;
+  let pending = readPendingBalanceManagerRegister(input.network, input.senderAddress);
+  // Registration already succeeded. Do not submit another transaction while a
+  // lagging registry read catches up; the caller continues its normal polling.
+  if (pending?.registerDigest) return null;
+
+  if (!pending) {
+    const created = await executeTransactionWithSmartGas({
+      network: input.network, client, signer: input.signer, sender: input.senderAddress,
+      build: (tx) => appendCreateAndShareBalanceManagerMoves(tx, ob, input.senderAddress),
+      executeOptions: EXECUTE_OPTIONS,
+    });
+    assertSuccess(created);
+    pending = {
+      managerObjectId: findCreatedBalanceManagerObjectId(orderbookPackageId, created) ?? '',
+      createDigest: created.digest,
+      savedAt: Date.now(),
+    };
+    // Persist the successful creation BEFORE any read or wait can fail.
+    writePendingBalanceManagerRegister(input.network, input.senderAddress, pending);
   }
 
-  const created = await executeTransactionWithSmartGas({
-    network: input.network,
-    client,
-    signer: input.signer,
-    sender: input.senderAddress,
-    build: (tx) => {
-      appendCreateAndShareBalanceManagerMoves(tx, ob, input.senderAddress);
-    },
-    executeOptions: EXECUTE_OPTIONS,
-  });
-  assertSuccess(created);
-  await waitCommitted(client, created.digest);
-
-  const managerId = await resolveCreatedBalanceManagerObjectId(
-    client,
-    created.digest,
-    orderbookPackageId,
-    created.effects
+  const managerId = pending.managerObjectId || await resolveCreatedBalanceManagerObjectId(
+    client, pending.createDigest, orderbookPackageId
   );
-
-  writePendingBalanceManagerRegister(input.network, input.senderAddress, {
-    managerObjectId: managerId,
-    createDigest: created.digest,
-  });
+  const resolved = { ...pending, managerObjectId: managerId };
+  writePendingBalanceManagerRegister(input.network, input.senderAddress, resolved);
 
   let registered: MySoTransactionBlockResponse;
   try {
     registered = await executeTransactionWithSmartGas({
-      network: input.network,
-      client,
-      signer: input.signer,
-      sender: input.senderAddress,
-      build: (tx) => {
-        appendRegisterBalanceManagerMove(tx, ob, managerId);
-      },
+      network: input.network, client, signer: input.signer, sender: input.senderAddress,
+      build: (tx) => appendRegisterBalanceManagerMove(tx, ob, managerId),
       executeOptions: EXECUTE_OPTIONS,
     });
   } catch (e) {
     throw augmentRegisterBalanceManagerError(e, registerErrCtx);
   }
   assertSuccess(registered);
-  await waitCommitted(client, registered.digest);
-  clearPendingBalanceManagerRegister(input.network, input.senderAddress);
+  writePendingBalanceManagerRegister(input.network, input.senderAddress, {
+    ...resolved, registerDigest: registered.digest,
+  });
+  await waitCommitted(client, registered.digest).catch(() => {
+    console.warn('Balance manager registered; registry read availability is delayed.', registered.digest);
+  });
   return registered;
 }

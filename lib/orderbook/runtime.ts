@@ -6,7 +6,7 @@ import { bcs } from '@socialproof/myso/bcs';
 import type { MySoJsonRpcClient } from '@socialproof/myso/jsonRpc';
 import { Transaction } from '@socialproof/myso/transactions';
 import { normalizeMySoAddress } from '@socialproof/myso/utils';
-import { mainnetCoins, testnetCoins } from '@socialproof/orderbook';
+import { orderbookCoinsForSdkNetwork } from '@/lib/orderbook/sdk-surface';
 
 import {
   augmentOrderbookRegistryInspectError,
@@ -25,8 +25,8 @@ export async function fetchRegisteredBalanceManagerIds(
   ownerAddress: string
 ): Promise<BalanceManagerIdsResult> {
   const net = jsonRpcClient.network;
-  if (net !== 'mainnet' && net !== 'testnet') {
-    return { ids: [], error: null };
+  if (net !== 'mainnet' && net !== 'testnet' && net !== 'localnet') {
+    return { ids: [], error: 'Unsupported orderbook network.' };
   }
   const obNet = net as OrderbookRuntimeNetwork;
   try {
@@ -87,7 +87,7 @@ export async function fetchBalanceManagerCoinBalance(input: {
   network: OrderbookRuntimeNetwork;
 }): Promise<{ ok: true; balance: number } | { ok: false; error: string }> {
   const { jsonRpcClient, simulationSender, balanceManagerObjectId, coinKey, network } = input;
-  const coinMap = network === 'mainnet' ? mainnetCoins : testnetCoins;
+  const coinMap = orderbookCoinsForSdkNetwork(network);
   const coin = coinMap[coinKey as keyof typeof coinMap];
   if (!coin) {
     return { ok: false, error: `Unknown coin key "${coinKey}" on ${network}.` };
@@ -185,7 +185,7 @@ async function fetchBalanceManagerSampleBalancesImpl(input: {
 }): Promise<BalanceManagerSampleBalancesResult> {
   const { jsonRpcClient, simulationSender, balanceManagerObjectId, network } = input;
   const { orderbookPackageId } = getResolvedOrderbookDeployment(network);
-  const coinMap = network === 'mainnet' ? mainnetCoins : testnetCoins;
+  const coinMap = orderbookCoinsForSdkNetwork(network);
   const byCoin: Partial<Record<BalanceManagerSampleCoinKey, BalanceManagerSampleCoinEntry>> = {};
 
   for (const coinKey of BALANCE_MANAGER_SAMPLE_COIN_KEYS) {

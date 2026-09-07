@@ -4,8 +4,7 @@
  * **Runtime network** (`orderbookRuntimeNetwork`): maps app `NetworkType` → gRPC / SDK reads,
  * including `localnet` against a local fullnode.
  *
- * **Trading network** (`orderbookTradingNetwork`): mainnet/testnet only — BalanceManager PTBs and
- * registry-backed setup are disabled on localnet (`null`).
+ * **Trading network** (`orderbookTradingNetwork`): all supported networks, including localnet.
  *
  * **Deployment** (`getResolvedOrderbookDeployment`): orderbook Move package id from env / SDK defaults;
  * registry object id is fixed on-chain ({@link ORDERBOOK_REGISTRY_OBJECT_ID}) for all networks.
@@ -35,7 +34,7 @@ function trimPublic(value: string | undefined): string {
 function isCanonicalMysoHexId(value: string): boolean {
   if (!value.startsWith('0x') && !value.startsWith('0X')) return false;
   const hex = value.slice(2);
-  return /^[0-9a-fA-F]{64}$/.test(hex);
+  return /^[0-9a-fA-F]{1,64}$/.test(hex);
 }
 
 function warnInvalidCanonical(name: string): void {
@@ -51,6 +50,13 @@ function packageIdUniversal(): string | undefined {
 }
 
 function packageIdTier(network: OrderbookRuntimeNetwork): string | undefined {
+  if (network === 'localnet') {
+    const v = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_LOCALNET);
+    if (!v) return undefined;
+    if (isCanonicalMysoHexId(v)) return v;
+    warnInvalidCanonical('NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_LOCALNET');
+    return undefined;
+  }
   if (network === 'mainnet') {
     const v = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_MAINNET);
     if (!v) return undefined;
@@ -65,18 +71,6 @@ function packageIdTier(network: OrderbookRuntimeNetwork): string | undefined {
   return undefined;
 }
 
-function packageIdPlatformFallback(): string | undefined {
-  const v =
-    trimPublic(process.env.NEXT_PUBLIC_MYSO_PLATFORM_PACKAGE_ID_LOCALNET) ||
-    trimPublic(process.env.NEXT_PUBLIC_MYSO_PLATFORM_PACKAGE_ID);
-  if (!v) return undefined;
-  if (isCanonicalMysoHexId(v)) return v;
-  console.warn(
-    '[orderbook] localnet: platform package id is not canonical — prefer NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID. Using raw value.'
-  );
-  return v;
-}
-
 export interface ResolvedOrderbookDeployment {
   orderbookPackageId: string;
   registryId: string;
@@ -89,17 +83,8 @@ export function getResolvedOrderbookDeployment(
 
   const fromUniversalPkg = packageIdUniversal();
   const fromTierPkg = packageIdTier(network);
-  const fromPlatformPkg = network === 'localnet' ? packageIdPlatformFallback() : undefined;
-
-  const pkg =
-    fromUniversalPkg ?? fromTierPkg ?? fromPlatformPkg ?? defaults.ORDERBOOK_PACKAGE_ID;
-
-  if (network === 'localnet' && !fromUniversalPkg && !fromTierPkg && fromPlatformPkg != null) {
-    console.warn(
-      '[orderbook] localnet: using platform package id for orderbook calls — usually wrong. ' +
-        'Set NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID to the orderbook Move package.'
-    );
-  }
+  const pkg = fromTierPkg ?? fromUniversalPkg ??
+    (network === 'localnet' ? '0x0b0c' : defaults.ORDERBOOK_PACKAGE_ID);
 
   return { orderbookPackageId: pkg, registryId: ORDERBOOK_REGISTRY_OBJECT_ID };
 }
@@ -110,8 +95,7 @@ export function orderbookRuntimeNetwork(network: NetworkType): OrderbookRuntimeN
 
 export function orderbookTradingNetwork(
   network: NetworkType
-): Exclude<OrderbookRuntimeNetwork, 'localnet'> | null {
-  if (network === 'localnet') return null;
+): OrderbookRuntimeNetwork {
   return network;
 }
 

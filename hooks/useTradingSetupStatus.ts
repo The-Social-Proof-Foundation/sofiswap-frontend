@@ -66,7 +66,11 @@ export function useTradingSetupStatus({
   const readNet = orderbookRuntimeNetwork(network);
   const tradeNet = orderbookTradingNetwork(network);
   const orderbookSkipped = tradeNet === null;
-  const inFlight = useRef(false);
+  const inFlight = useRef(new Set<string>());
+  const contextKey = `${network}:${displayAddress}:${isAuthenticated}:${enabled}`;
+  const activeContext = useRef(contextKey);
+  activeContext.current = contextKey;
+  const [resolvedContext, setResolvedContext] = useState<string | null>(null);
 
   useEffect(() => {
     setBalanceManagerBalances(null);
@@ -107,6 +111,7 @@ export function useTradingSetupStatus({
       if (!opts?.force) {
         const cached = readTradingSetupCache(network, displayAddress);
         if (cached && cached.error == null) {
+          setResolvedContext(contextKey);
           setBalanceManagerIds(cached.ids);
           setError(null);
           setIsLoading(false);
@@ -114,14 +119,16 @@ export function useTradingSetupStatus({
         }
       }
 
-      if (inFlight.current) return;
-      inFlight.current = true;
+      if (inFlight.current.has(contextKey)) return;
+      inFlight.current.add(contextKey);
       setIsLoading(true);
       setError(null);
 
       try {
         const client = getMySoJsonRpcClient(network);
         const res = await fetchRegisteredBalanceManagerIds(client, displayAddress);
+        if (activeContext.current !== contextKey) return;
+        setResolvedContext(contextKey);
         setBalanceManagerIds(res.ids);
         setError(res.error);
         writeTradingSetupCache(network, displayAddress, {
@@ -129,22 +136,25 @@ export function useTradingSetupStatus({
           error: res.error,
         });
       } catch (e) {
+        if (activeContext.current !== contextKey) return;
+        setResolvedContext(contextKey);
         const msg = e instanceof Error ? e.message : String(e);
         setError(msg);
         setBalanceManagerIds([]);
       } finally {
-        setIsLoading(false);
-        inFlight.current = false;
+        if (activeContext.current === contextKey) setIsLoading(false);
+        inFlight.current.delete(contextKey);
       }
     },
-    [displayAddress, isAuthenticated, authLoading, network, orderbookSkipped, enabled]
+    [displayAddress, isAuthenticated, authLoading, network, orderbookSkipped, enabled, contextKey]
   );
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  const primaryBalanceManagerId = pickPrimaryBalanceManagerId(balanceManagerIds);
+  const scopedIds = resolvedContext === contextKey ? balanceManagerIds : [];
+  const primaryBalanceManagerId = pickPrimaryBalanceManagerId(scopedIds);
 
   useEffect(() => {
     if (
@@ -205,10 +215,10 @@ export function useTradingSetupStatus({
   ]);
 
   return {
-    balanceManagerIds,
+    balanceManagerIds: scopedIds,
     primaryBalanceManagerId,
-    isLoading,
-    error,
+    isLoading: isLoading || Boolean(enabled && isAuthenticated && displayAddress && resolvedContext !== contextKey),
+    error: resolvedContext === contextKey ? error : null,
     orderbookSkipped,
     balanceManagerBalances,
     balanceManagerBalancesLoading,

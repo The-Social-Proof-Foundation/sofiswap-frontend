@@ -4,15 +4,15 @@ import type { NetworkType } from '@/lib/network-utils';
 
 const clients = new Map<NetworkType, MySoJsonRpcClient>();
 
-function rpcBaseUrl(): string {
+function rpcBaseUrl(network: NetworkType): string {
   const env = process.env.NEXT_PUBLIC_MYSO_FULLNODE_URL?.trim();
   if (env) {
     return env.replace(/\/$/, '');
   }
   if (typeof window !== 'undefined') {
-    return `${window.location.origin}/api/fullnode`;
+    return `${window.location.origin}/api/fullnode?network=${network}`;
   }
-  return 'http://localhost:3000/api/fullnode';
+  return `http://localhost:3000/api/fullnode?network=${network}`;
 }
 
 /**
@@ -23,7 +23,7 @@ export function getMySoJsonRpcClient(network: NetworkType): MySoJsonRpcClient {
   if (!client) {
     client = new MySoJsonRpcClient({
       network,
-      url: rpcBaseUrl(),
+      url: rpcBaseUrl(network),
     });
     clients.set(network, client);
   }
