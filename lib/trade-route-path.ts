@@ -53,6 +53,27 @@ export function tradeOrderbookPath(): string {
   return '/trade';
 }
 
+export const TRADE_POOL_QUERY_KEY = 'pool';
+
+export function readTradePoolQuery(searchParams: { get: (name: string) => string | null }): string | null {
+  const raw = searchParams.get(TRADE_POOL_QUERY_KEY)?.trim();
+  return raw || null;
+}
+
+export function tradePathWithPool(
+  path: string,
+  poolName: string,
+  currentSearch?: string
+): string {
+  const [base, existing] = path.split('?');
+  const params = new URLSearchParams(currentSearch ?? existing ?? '');
+  const trimmed = poolName.trim();
+  if (trimmed) params.set(TRADE_POOL_QUERY_KEY, trimmed);
+  else params.delete(TRADE_POOL_QUERY_KEY);
+  const qs = params.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
 export function tradeSptPath(routeWallet: string | null | undefined): string {
   const normalized =
     routeWallet?.trim() ? mySoAddressFromString(routeWallet.trim()) : null;

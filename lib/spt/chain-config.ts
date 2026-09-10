@@ -1,5 +1,9 @@
 import { getMySoGraphQLClient } from '@/lib/myso-graphql-client';
 import type { NetworkType } from '@/lib/network-utils';
+import {
+  pickUsableOnchainObjectId,
+  readSofiSwapPlatformEnv,
+} from '@/lib/platform-config';
 
 const CANONICAL_MYSOCIAL_PACKAGE_ID =
   '0x00000000000000000000000000000000000000000000000000000000000050c1';
@@ -43,8 +47,7 @@ function publicPackageId(network: NetworkType): string {
 }
 
 function firstAddress(value: ObjectNodes | undefined): string | null {
-  const address = value?.nodes?.[0]?.address?.trim();
-  return address || null;
+  return pickUsableOnchainObjectId(value?.nodes?.[0]?.address);
 }
 
 function objectField(alias: string, packageId: string, module: string, type: string): string {
@@ -66,6 +69,12 @@ export function buildSptChainConfigQuery(packageId: string): string {
       }
     }
   `;
+}
+
+/** GraphQL names the platform SoFiSwap / SofiSwap / Sofi Swap. */
+export function isSofiSwapPlatformName(name: string | null | undefined): boolean {
+  const normalized = name?.trim().toLowerCase().replace(/[\s_-]+/g, '') ?? '';
+  return normalized === 'sofiswap';
 }
 
 function required(value: string | null, label: string): string {
@@ -100,18 +109,23 @@ async function loadSptChainConfig(network: NetworkType): Promise<SptChainConfig>
   }
 
   const data = response.data;
-  const platform = data?.platforms?.find(
-    (item) => item.name?.trim().toLowerCase() === 'sofiswap'
-  );
+  const env = readSofiSwapPlatformEnv(network);
+  const platform = data?.platforms?.find((item) => isSofiSwapPlatformName(item.name));
   const value: SptChainConfig = {
     packageId,
     tokenRegistryId: required(firstAddress(data?.tokenRegistry), 'Social Proof Token registry'),
     sptConfigId: required(firstAddress(data?.sptConfig), 'Social Proof Token configuration'),
     ecosystemTreasuryId: required(firstAddress(data?.ecosystemTreasury), 'ecosystem treasury'),
     usernameRegistryId: required(firstAddress(data?.usernameRegistry), 'username registry'),
-    blockListRegistryId: required(firstAddress(data?.blockListRegistry), 'block list registry'),
-    platformRegistryId: required(firstAddress(data?.platformRegistry), 'platform registry'),
-    platformId: platform?.platformId?.trim() || null,
+    blockListRegistryId: required(
+      pickUsableOnchainObjectId(firstAddress(data?.blockListRegistry), env.blockListRegistryObjectId),
+      'block list registry'
+    ),
+    platformRegistryId: required(
+      pickUsableOnchainObjectId(firstAddress(data?.platformRegistry), env.platformRegistryObjectId),
+      'platform registry'
+    ),
+    platformId: pickUsableOnchainObjectId(platform?.platformId, env.platformGraphqlId),
   };
 
   cache.set(network, { value, expiresAt: Date.now() + TTL_MS });

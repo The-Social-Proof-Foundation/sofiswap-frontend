@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { baseUnitsToDisplay, feeFromBps, parseDisplayAmountToBaseUnits } from '@/lib/spt/amounts';
@@ -23,6 +23,8 @@ export function SptReservationCard({
 }) {
   const [mode, setMode] = useState<'reserve' | 'withdraw'>('reserve');
   const [draft, setDraft] = useState('');
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const confirmTimer = useRef(0);
   const amount = parseDisplayAmountToBaseUnits(draft);
   const principal = amount ?? BigInt(0);
   const fee = feeFromBps(principal, feeBps);
@@ -40,7 +42,7 @@ export function SptReservationCard({
       <div className="flex rounded-full bg-background/45 p-1 text-xs font-semibold" role="group" aria-label="Reservation action">
         {(['reserve', 'withdraw'] as const).map((value) => (
           <button key={value} type="button" disabled={isBusy} aria-pressed={mode === value}
-            onClick={() => { setMode(value); setDraft(''); }}
+            onClick={() => { setMode(value); setDraft(''); setConfirm(null); }}
             className={cn('flex-1 rounded-full px-3 py-2 capitalize focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring', mode === value ? 'bg-foreground text-background' : 'text-muted-foreground')}>
             {value === 'reserve' ? 'Reserve' : 'Withdraw reserve'}
           </button>
@@ -74,10 +76,27 @@ export function SptReservationCard({
         <div className="flex justify-between gap-3 border-t border-trade-shell pt-2"><dt>{mode === 'reserve' ? 'Total payment' : 'You receive'}</dt><dd className="font-semibold tabular-nums">{baseUnitsToDisplay(total > BigInt(0) ? total : BigInt(0), 9)} MySo</dd></div>
       </dl>
       <p className="text-xs leading-relaxed text-muted-foreground">Network gas is additional. Reservation fees apply when adding or withdrawing funds. After launch, your reservation becomes SPT.</p>
+      {confirm ? (
+        <p role="status" className="rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-medium text-foreground">
+          {confirm}
+        </p>
+      ) : null}
       <Button type="button" disabled={isBusy || !isAuthenticated || !valid} className="h-12 w-full rounded-2xl font-semibold"
         onClick={() => {
           if (!valid || isBusy) return;
-          void (mode === 'reserve' ? onReserve(draft) : onWithdraw(draft)).then((success) => { if (success) setDraft(''); });
+          const action = mode;
+          const display = draft;
+          void (action === 'reserve' ? onReserve(display) : onWithdraw(display)).then((success) => {
+            if (!success) return;
+            setDraft('');
+            setConfirm(
+              action === 'reserve'
+                ? `Reserved ${display} MySo on-chain.`
+                : `Withdrew ${display} MySo on-chain.`
+            );
+            window.clearTimeout(confirmTimer.current);
+            confirmTimer.current = window.setTimeout(() => setConfirm(null), 6_000);
+          });
         }}>
         {isBusy ? <><Loader2 className="mr-2 size-4 animate-spin" />Submitting…</>
           : !isAuthenticated ? 'Sign in to continue' : mode === 'reserve' ? 'Reserve MySo' : 'Withdraw reserve'}

@@ -5,7 +5,7 @@ import type { NetworkType } from '@/lib/network-utils';
 import { writeTradingSetupCache } from '@/lib/trading-setup-cache';
 
 /**
- * Poll until registry lists at least one Balance Manager or timeout (mainnet/testnet only).
+ * Poll until registry lists at least one Balance Manager or timeout.
  */
 export async function pollRegisteredBalanceManagerIdsAfterTx(
   network: NetworkType,

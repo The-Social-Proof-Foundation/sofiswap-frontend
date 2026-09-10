@@ -202,7 +202,7 @@ function OpenTradesSection({
       const tradeOb = orderbookTradingNetwork(currentNetwork);
       if (!tradeOb) {
         toast.error('Cancel unavailable', {
-          description: 'Order cancel is not available on localnet.',
+          description: 'Order cancel is not available on this network.',
         });
         return;
       }

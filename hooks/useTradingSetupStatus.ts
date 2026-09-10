@@ -36,7 +36,7 @@ export interface TradingSetupStatus {
   primaryBalanceManagerId: string | null;
   isLoading: boolean;
   error: string | null;
-  /** mainnet/testnet orderbook path; localnet skips registry checks. */
+  /** True only when this network cannot run orderbook registry reads. Localnet is supported. */
   orderbookSkipped: boolean;
   /** Sampled MYSO/MYUSD BalanceManager balances after registry id resolve; null when not applicable. */
   balanceManagerBalances: BalanceManagerSampleBalancesResult | null;
@@ -46,7 +46,7 @@ export interface TradingSetupStatus {
 }
 
 /**
- * Resolves registry-linked BalanceManager IDs after login (mainnet/testnet).
+ * Resolves registry-linked BalanceManager IDs after login (localnet, testnet, and mainnet).
  * Uses short-lived sessionStorage to smooth navigation; invalidated on network switch via {@link clearAllTradingSetupCache}.
  */
 export function useTradingSetupStatus({

@@ -16,9 +16,9 @@ type PoolRow = { baseCoin: string; quoteCoin: string; address: string };
 export const SOFI_SPOT_COINS = new Set(['MYSO', 'MYUSD', 'USDC']);
 
 /** Human-facing ticker (canonical keys stay uppercase for SDK / APIs). */
-export function spotAssetSymbolDisplay(symbol: string): string {
-  const s = symbol.trim();
-  if (!s || s === '—') return s;
+export function spotAssetSymbolDisplay(symbol: string | null | undefined): string {
+  const s = (symbol ?? '').trim();
+  if (!s || s === '—') return s || '—';
   const u = s.toUpperCase();
   if (u === 'MYSO') return 'MySo';
   if (u === 'MYUSD') return 'MyUSD';
@@ -81,10 +81,16 @@ export function poolTickerForKey(network: NetworkType, poolKey: string): {
   base: string;
   quote: string;
 } {
-  const row = poolsByNetwork(network)[poolKey];
-  if (row) return { base: row.baseCoin, quote: row.quoteCoin };
-  const parts = poolKey.split('_').filter(Boolean);
-  return { base: parts[0] ?? poolKey, quote: parts[1] ?? '—' };
+  const key = (poolKey ?? '').trim();
+  const row = key ? poolsByNetwork(network)[key] : undefined;
+  const fromRowBase = row?.baseCoin?.trim();
+  const fromRowQuote = row?.quoteCoin?.trim();
+  if (fromRowBase && fromRowQuote) return { base: fromRowBase, quote: fromRowQuote };
+  const parts = key.split('_').filter(Boolean);
+  return {
+    base: fromRowBase || parts[0] || key || '—',
+    quote: fromRowQuote || parts[1] || '—',
+  };
 }
 
 export function pairLabelForPoolKey(network: NetworkType, poolKey: string): string {

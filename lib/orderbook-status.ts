@@ -1,7 +1,10 @@
 /**
- * Orderbook indexer HTTP status (testnet/mainnet).
- * @see https://orderbook.testnet.mysocial.network/status
+ * Orderbook indexer HTTP status (localnet / testnet / mainnet).
+ * Hosted tiers: https://orderbook.{tier}.mysocial.network/status
+ * Localnet: `{NEXT_PUBLIC_ORDERBOOK_INDEXER_LOCALNET_URL}/status` unless STATUS_URL_LOCALNET is set.
  */
+
+import type { NetworkType } from '@/lib/network-utils';
 
 export type OrderbookIndexerHealth = 'healthy' | 'degraded' | 'unhealthy';
 
@@ -30,9 +33,16 @@ function trimEnv(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-export function getOrderbookStatusUrl(
-  network: 'mainnet' | 'testnet'
-): string {
+export function getOrderbookStatusUrl(network: NetworkType): string | null {
+  if (network === 'localnet') {
+    const override = trimEnv(process.env.NEXT_PUBLIC_ORDERBOOK_STATUS_URL_LOCALNET);
+    if (override) return override.replace(/\/$/, '');
+    const indexer =
+      trimEnv(process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_LOCALNET_URL) ||
+      trimEnv(process.env.NEXT_PUBLIC_ORDERBOOK_INDEXER_URL);
+    if (!indexer) return null;
+    return `${indexer.replace(/\/$/, '')}/status`;
+  }
   const override =
     network === 'testnet'
       ? trimEnv(process.env.NEXT_PUBLIC_ORDERBOOK_STATUS_URL_TESTNET)

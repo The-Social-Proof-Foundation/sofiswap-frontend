@@ -45,6 +45,8 @@ export function indexerTradeRowToPrint(row: Record<string, unknown>): TradePrint
     coerceFiniteNumber(row.size) ??
     coerceFiniteNumber(row.base_quantity) ??
     coerceFiniteNumber(row.baseQuantity) ??
+    coerceFiniteNumber(row.base_volume) ??
+    coerceFiniteNumber(row.baseVolume) ??
     coerceFiniteNumber(row.quantity);
 
   if (price == null || size == null) {
@@ -52,7 +54,7 @@ export function indexerTradeRowToPrint(row: Record<string, unknown>): TradePrint
   }
 
   let side: 'buy' | 'sell' = 'buy';
-  const rawSide = row.side ?? row.taker_side ?? row.takerSide;
+  const rawSide = row.side ?? row.type ?? row.taker_side ?? row.takerSide;
   if (rawSide === 'sell' || rawSide === 'buy') {
     side = rawSide;
   } else if (typeof row.taker_is_bid === 'boolean') {
@@ -138,6 +140,8 @@ export function indexerTradeRowToUserHistory(
     coerceFiniteNumber(row.size) ??
     coerceFiniteNumber(row.base_quantity) ??
     coerceFiniteNumber(row.baseQuantity) ??
+    coerceFiniteNumber(row.base_volume) ??
+    coerceFiniteNumber(row.baseVolume) ??
     coerceFiniteNumber(row.quantity);
   if (price == null || size == null) return null;
 
@@ -147,26 +151,50 @@ export function indexerTradeRowToUserHistory(
   const isTaker = Boolean(rawTaker) && rawTaker === userBalanceManagerId;
   const role = isMaker ? 'Maker' : isTaker ? 'Taker' : '—';
 
-  let side: 'buy' | 'sell' = 'buy';
-  const rawSide = row.side ?? row.taker_side ?? row.takerSide;
+  let takerSide: 'buy' | 'sell' = 'buy';
+  const rawSide = row.side ?? row.type ?? row.taker_side ?? row.takerSide;
   if (rawSide === 'sell' || rawSide === 'buy') {
-    side = rawSide;
+    takerSide = rawSide;
   } else if (typeof row.taker_is_bid === 'boolean') {
-    side = row.taker_is_bid ? 'buy' : 'sell';
+    takerSide = row.taker_is_bid ? 'buy' : 'sell';
   } else if (typeof row.takerIsBid === 'boolean') {
-    side = row.takerIsBid ? 'buy' : 'sell';
+    takerSide = row.takerIsBid ? 'buy' : 'sell';
   }
+  const side = isMaker ? (takerSide === 'buy' ? 'sell' : 'buy') : takerSide;
 
   const ts =
     coerceFiniteNumber(row.timestamp) ??
     coerceFiniteNumber(row.time) ??
     coerceFiniteNumber(row.created_at) ??
     coerceFiniteNumber(row.createdAt);
-  const timeStr = ts != null ? new Date(ts * 1000).toLocaleString() : '—';
+  const timeStr =
+    ts != null ? new Date(ts >= 1_000_000_000_000 ? ts : ts * 1000).toLocaleString() : '—';
 
-  const fee = coerceFiniteNumber(row.fee) ?? coerceFiniteNumber(row.taker_fee) ?? coerceFiniteNumber(row.maker_fee);
-  const feeType = typeof row.fee_type === 'string' ? row.fee_type : typeof row.feeType === 'string' ? row.feeType : 'MYSO';
-  const quoteVolume = price * size;
+  const fee =
+    coerceFiniteNumber(row.fee) ??
+    (isMaker
+      ? coerceFiniteNumber(row.maker_fee ?? row.makerFee)
+      : coerceFiniteNumber(row.taker_fee ?? row.takerFee));
+  const explicitFeeType =
+    typeof row.fee_type === 'string'
+      ? row.fee_type
+      : typeof row.feeType === 'string'
+        ? row.feeType
+        : null;
+  const feeIsMyso = isMaker
+    ? row.maker_fee_is_myso === true || row.makerFeeIsMyso === true
+    : row.taker_fee_is_myso === true || row.takerFeeIsMyso === true;
+  const [baseSymbol = 'BASE', quoteSymbol = 'QUOTE'] = poolName.split('_');
+  const nativeFeeType = isMaker
+    ? takerSide === 'buy'
+      ? baseSymbol
+      : quoteSymbol
+    : takerSide === 'buy'
+      ? quoteSymbol
+      : baseSymbol;
+  const feeType = explicitFeeType ?? (feeIsMyso ? 'MYSO' : nativeFeeType);
+  const quoteVolume =
+    coerceFiniteNumber(row.quote_volume) ?? coerceFiniteNumber(row.quoteVolume) ?? price * size;
 
   return {
     id: String(row.id ?? row.order_id ?? row.fill_id ?? `${ts ?? Date.now()}-${price}-${size}`),

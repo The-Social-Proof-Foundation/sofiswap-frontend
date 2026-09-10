@@ -12,3 +12,19 @@ export function setDiscoveredOrderbookMarkets(network: NetworkType, value: Disco
   markets.set(network, value);
   revisions.set(network, orderbookMarketRevision(network) + 1);
 }
+
+/** Union indexer / GraphQL snapshots so BTC, ETH, MYSO, and later markets stay in one map. */
+export function mergeDiscoveredOrderbookMarkets(
+  network: NetworkType,
+  incoming: DiscoveredOrderbookMarkets
+) {
+  const prev = markets.get(network);
+  if (!prev) {
+    setDiscoveredOrderbookMarkets(network, incoming);
+    return;
+  }
+  setDiscoveredOrderbookMarkets(network, {
+    coins: { ...prev.coins, ...incoming.coins },
+    pools: { ...prev.pools, ...incoming.pools },
+  });
+}

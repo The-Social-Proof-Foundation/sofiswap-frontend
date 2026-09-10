@@ -61,6 +61,7 @@ import {
   parseDisplayAmountToBaseUnits,
 } from '@/lib/spt/amounts';
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
+import { readSptRules } from '@/lib/spt/pool-state';
 import {
   executeBuySpt,
   executeEnableSpt,
@@ -1253,7 +1254,7 @@ function SocialProofSwapCard({
             }
             if (!tradeAmountValid) return;
             const action = tradeMode === 'buy'
-              ? onBuy(buyQuote.tokenAmount, buyQuote.cost)
+              ? onBuy(buyQuote.tokenAmount, inputBaseUnits)
               : onSell(inputBaseUnits);
             void action.then((success) => { if (success) setDraft(''); });
           }}
@@ -1594,8 +1595,8 @@ export function TradeSocialProofTokenWorkspace({
     return () => { walletRequest.current += 1; window.clearInterval(interval); };
   }, [refreshWalletState]);
 
-  const afterTransaction = useCallback(async (message: string) => {
-    toast.success(message);
+  const afterTransaction = useCallback(async (message: string, description?: string) => {
+    toast.success(message, { description, duration: 5_500 });
     if (!mounted.current) return;
     onDataChanged?.();
     await refreshWalletState();
@@ -1618,13 +1619,10 @@ export function TradeSocialProofTokenWorkspace({
     const poolId = reservationPoolId || reservationPoolAddress;
     const principalAmount = parseDisplayAmountToBaseUnits(displayAmount);
     if (!auth || !poolId || !principalAmount || principalAmount <= BigInt(0) || transactionLock.current) return false;
-    const feeBps =
-      BigInt(Math.max(0, Math.trunc(reservationPlatformFeeBps ?? 0))) +
-      BigInt(Math.max(0, Math.trunc(reservationTreasuryFeeBps ?? 0))) +
-      BigInt(Math.max(0, Math.trunc(reservationCreatorFeeBps ?? 0)));
     transactionLock.current = true;
     setTransactionBusy(true);
     try {
+      const rules = await readSptRules(currentNetwork);
       const postContext = tokenType === SPT_TOKEN_TYPE_POST && subjectObjectId
         ? await resolvePostTransactionContext({
             network: currentNetwork,
@@ -1638,10 +1636,13 @@ export function TradeSocialProofTokenWorkspace({
         tokenType,
         reservationPoolId: poolId,
         principalAmount,
-        feeAmount: feeFromBps(principalAmount, feeBps),
+        feeAmount: feeFromBps(principalAmount, rules.reservationFeeBps),
         postContext,
       });
-      await afterTransaction('Reservation submitted');
+      await afterTransaction(
+        `Reserved ${baseUnitsToDisplay(principalAmount, 9)} MySo`,
+        'Reservation confirmed on-chain.'
+      );
       return true;
     } catch (error) {
       toast.error(friendlySptTransactionError(error));
@@ -1675,7 +1676,10 @@ export function TradeSocialProofTokenWorkspace({
         amount,
         postContext,
       });
-      await afterTransaction('Reservation withdrawn');
+      await afterTransaction(
+        `Withdrew ${baseUnitsToDisplay(amount, 9)} MySo`,
+        'Withdrawal confirmed on-chain.'
+      );
       return true;
     } catch (error) {
       toast.error(friendlySptTransactionError(error));
@@ -1699,7 +1703,10 @@ export function TradeSocialProofTokenWorkspace({
         tokenAmount,
         paymentAmount,
       });
-      await afterTransaction('Token purchase complete');
+      await afterTransaction(
+        `Bought ${baseUnitsToDisplay(tokenAmount, 9)} SPT`,
+        'Purchase confirmed on-chain.'
+      );
       return true;
     } catch (error) {
       toast.error(friendlySptTransactionError(error));
@@ -1722,7 +1729,10 @@ export function TradeSocialProofTokenWorkspace({
         poolId: livePoolId,
         tokenAmount,
       });
-      await afterTransaction('Token sale complete');
+      await afterTransaction(
+        `Sold ${baseUnitsToDisplay(tokenAmount, 9)} SPT`,
+        'Sale confirmed on-chain.'
+      );
       return true;
     } catch (error) {
       toast.error(friendlySptTransactionError(error));

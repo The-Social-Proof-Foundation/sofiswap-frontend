@@ -8,6 +8,7 @@
 import type { OrderbookPackageIds } from '@socialproof/orderbook';
 import { getDiscoveredOrderbookMarkets } from '@/lib/orderbook/discovered-markets';
 import {
+  localnetPackageIds,
   mainnetCoins,
   mainnetPackageIds,
   mainnetPools,
@@ -18,7 +19,6 @@ import {
 
 import {
   getResolvedOrderbookDeployment,
-  ORDERBOOK_REGISTRY_OBJECT_ID,
   type OrderbookRuntimeNetwork,
 } from '@/lib/orderbook/config';
 import { localnetPoolsFromTestnetDefaults } from '@/lib/orderbook/localnet-pool-map';
@@ -35,11 +35,17 @@ function packageIdsForPlugin(
   obNet: OrderbookRuntimeNetwork,
   orderbookPackageId: string
 ): OrderbookPackageIds {
-  const base = obNet === 'mainnet' ? mainnetPackageIds : testnetPackageIds;
+  const base =
+    obNet === 'mainnet'
+      ? mainnetPackageIds
+      : obNet === 'localnet'
+        ? localnetPackageIds
+        : testnetPackageIds;
+  const { registryId } = getResolvedOrderbookDeployment(obNet);
   return {
     ...base,
     ORDERBOOK_PACKAGE_ID: orderbookPackageId,
-    REGISTRY_ID: ORDERBOOK_REGISTRY_OBJECT_ID,
+    REGISTRY_ID: registryId,
   };
 }
 

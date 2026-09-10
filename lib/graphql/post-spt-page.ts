@@ -8,6 +8,7 @@ import type {
   SocialProofTokenPageSptPool,
 } from '@/lib/graphql/social-proof-token-page';
 import { scalarToBigInt } from '@/lib/spt/amounts';
+import { firstMediaUrl } from '@/lib/spt/media';
 import { readSptPoolState, readSptRules, resolveLiveSptPoolId, type SptPoolState, type SptRules } from '@/lib/spt/pool-state';
 import {
   mapSocialProofTokenPageToWorkspace,
@@ -213,21 +214,6 @@ export async function fetchPostSptPage(input: {
 function percentage(total: bigint, threshold: bigint): number {
   if (threshold <= BigInt(0)) return 0;
   return Math.min(100, Number((total * BigInt(10_000)) / threshold) / 100);
-}
-
-function firstMediaUrl(value: unknown): string | null {
-  if (Array.isArray(value)) {
-    const found = value.find((entry) => typeof entry === 'string' && entry.trim());
-    return typeof found === 'string' ? found.trim() : null;
-  }
-  if (typeof value === 'string') {
-    try {
-      return firstMediaUrl(JSON.parse(value));
-    } catch {
-      return value.trim() || null;
-    }
-  }
-  return null;
 }
 
 export function mapPostSptPageToWorkspace(

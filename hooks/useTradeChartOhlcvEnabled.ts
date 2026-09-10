@@ -14,7 +14,7 @@ export function useTradeChartOhlcvEnabled(workspaceActive: boolean): {
     () => typeof document === 'undefined' || document.visibilityState === 'visible'
   );
   const [node, setNode] = useState<HTMLDivElement | null>(null);
-  const [intersects, setIntersects] = useState(false);
+  const [intersects, setIntersects] = useState(true);
 
   const setChartContainerRef = useCallback((el: HTMLDivElement | null) => {
     setNode(el);
@@ -39,7 +39,7 @@ export function useTradeChartOhlcvEnabled(workspaceActive: boolean): {
       ([e]) => {
         setIntersects(Boolean(e?.isIntersecting));
       },
-      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' }
+      { threshold: 0 }
     );
     obs.observe(node);
     return () => obs.disconnect();

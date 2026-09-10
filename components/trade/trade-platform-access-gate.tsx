@@ -397,32 +397,13 @@ export function TradePlatformAccessGate({
         return;
       }
 
-      if (!effectiveOrderbookSkipped) {
-        const poll = await pollRegisteredBalanceManagerIdsAfterTx(currentNetwork, displayAddress);
-        await refreshTradingSetup();
-        if (poll.pollError) {
-          toast.error(`Trading setup verification failed: ${poll.pollError}`);
-          setTimeout(() => void runCheck(), 0);
-          return;
-        }
-        if (poll.timedOut || poll.ids.length === 0) {
-          toast.message(
-            'You have joined, but the trading registry has not updated yet. We will keep checking…'
-          );
-          setTimeout(() => void runCheck(), 0);
-          return;
-        }
-      }
-
-      setTradeGateOk(currentNetwork, config.platformGraphqlId, displayAddress);
       setJoinOpen(false);
       setRepairOpen(false);
-      setMode('hidden');
-      clearCachedProfilePortfolioOverview(currentNetwork, config.platformGraphqlId, displayAddress);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent(SOFISWAP_PROFILE_REVALIDATE_EVENT));
-      }
       toast.success('You have joined the platform.');
+      if (!effectiveOrderbookSkipped) {
+        await refreshTradingSetup();
+      }
+      setTimeout(() => void runCheck(), 0);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Join transaction failed';
       toast.error(msg);

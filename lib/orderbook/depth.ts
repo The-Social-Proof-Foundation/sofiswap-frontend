@@ -1,15 +1,14 @@
-/**
- * How the trade UI loads L2 depth: SDK (gRPC) by default, optional HTTP indexer.
- */
+/** How the trade UI loads L2 depth. Auto prefers the REST indexer and falls back to gRPC. */
 
 import { orderbookIndexerNotConfiguredMessage } from '@/lib/orderbook-indexer/ohlcv';
 import type { NetworkType } from '@/lib/network-utils';
 
-export type OrderbookDepthSource = 'sdk' | 'indexer';
+export type OrderbookDepthSource = 'auto' | 'sdk' | 'indexer';
 
 export function getOrderbookDepthSource(): OrderbookDepthSource {
   const raw = process.env.NEXT_PUBLIC_ORDERBOOK_DEPTH_SOURCE?.trim().toLowerCase();
-  return raw === 'indexer' ? 'indexer' : 'sdk';
+  if (raw === 'sdk' || raw === 'indexer') return raw;
+  return 'auto';
 }
 
 export function formatIndexerDepthError(message: string, network: NetworkType): string {

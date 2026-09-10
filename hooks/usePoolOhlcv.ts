@@ -3,6 +3,7 @@
 import type { CandlestickData } from 'lightweight-charts';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useAdaptiveTradePollMs } from '@/hooks/useAdaptiveTradePollMs';
 import {
   type OhlcvInterval,
   fetchPoolOhlcv,
@@ -17,6 +18,7 @@ export type UsePoolOhlcvArgs = {
   /** Passed to indexer as `end_time` (**milliseconds** since epoch). */
   endTime?: number;
   limit?: number;
+  pollIntervalMs?: number;
   /** When false, no request is made (e.g. gate not ready). */
   enabled?: boolean;
 };
@@ -27,6 +29,7 @@ export function usePoolOhlcv({
   startTime,
   endTime,
   limit,
+  pollIntervalMs: pollIntervalMsProp,
   enabled = true,
 }: UsePoolOhlcvArgs): {
   data: CandlestickData[] | null;
@@ -35,6 +38,8 @@ export function usePoolOhlcv({
   refresh: () => void;
 } {
   const { currentNetwork } = useNetwork();
+  const adaptiveMs = useAdaptiveTradePollMs(8000);
+  const pollIntervalMs = pollIntervalMsProp ?? adaptiveMs;
   const [data, setData] = useState<CandlestickData[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,37 +61,58 @@ export function usePoolOhlcv({
     setIsLoading(true);
     setError(null);
 
-    void fetchPoolOhlcv({
-      network: currentNetwork,
-      poolName: poolName.trim(),
-      interval,
-      startTime,
-      endTime,
-      limit,
-      signal: ac.signal,
-    })
-      .then((res) => {
-        if (ac.signal.aborted) return;
-        setIsLoading(false);
-        if (res.ok) {
-          setData(res.data);
-          setError(null);
-        } else {
-          setData(null);
-          setError(res.error);
-        }
+    const run = (endInitialLoading: boolean) =>
+      fetchPoolOhlcv({
+        network: currentNetwork,
+        poolName: poolName.trim(),
+        interval,
+        startTime,
+        endTime,
+        limit,
+        signal: ac.signal,
       })
-      .catch((e) => {
-        if (e instanceof DOMException && e.name === 'AbortError') return;
-        setIsLoading(false);
-        setData(null);
-        setError(e instanceof Error ? e.message : String(e));
-      });
+        .then((res) => {
+          if (ac.signal.aborted) return;
+          if (endInitialLoading) setIsLoading(false);
+          if (res.ok) {
+            setData(res.data);
+            setError(null);
+          } else {
+            setData(null);
+            setError(res.error);
+          }
+        })
+        .catch((e) => {
+          if (e instanceof DOMException && e.name === 'AbortError') return;
+          if (endInitialLoading) setIsLoading(false);
+          setData(null);
+          setError(e instanceof Error ? e.message : String(e));
+        });
+
+    void run(true);
+
+    const intervalId =
+      pollIntervalMs != null && pollIntervalMs > 0
+        ? window.setInterval(() => {
+            void run(false);
+          }, pollIntervalMs)
+        : null;
 
     return () => {
       ac.abort();
+      if (intervalId != null) window.clearInterval(intervalId);
     };
-  }, [enabled, poolName, interval, startTime, endTime, limit, refreshNonce, currentNetwork]);
+  }, [
+    enabled,
+    poolName,
+    interval,
+    startTime,
+    endTime,
+    limit,
+    pollIntervalMs,
+    refreshNonce,
+    currentNetwork,
+  ]);
 
   return { data, error, isLoading, refresh };
 }

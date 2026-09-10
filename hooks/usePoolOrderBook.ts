@@ -82,6 +82,7 @@ export function usePoolOrderBook({
   const useIndexerPath = useMemo(() => {
     if (level2Range != null) return false;
     if (depthSource === 'indexer') return Boolean(indexerBase);
+    if (depthSource === 'auto') return Boolean(indexerBase);
     return false;
   }, [depthSource, indexerBase, level2Range]);
 
@@ -135,6 +136,29 @@ export function usePoolOrderBook({
       }
     };
 
+    const runSdk = (endInitialLoading: boolean) =>
+      fetchPoolOrderBookFromSdk(sdkPayload)
+        .then((result) => applySdkResult(result, endInitialLoading))
+        .catch((e) => handleAsyncErr(e, endInitialLoading));
+
+    const runIndexer = (endInitialLoading: boolean) =>
+      fetchPoolOrderBook({
+        network: currentNetwork,
+        poolName: trimmedPool,
+        levelsPerSide,
+        signal: ac.signal,
+      })
+        .then((result) => {
+          if (!result.ok && depthSource === 'auto') {
+            return runSdk(endInitialLoading);
+          }
+          applyIndexerResult(result, endInitialLoading);
+        })
+        .catch((e) => {
+          if (depthSource === 'auto') return runSdk(endInitialLoading);
+          handleAsyncErr(e, endInitialLoading);
+        });
+
     const applySdkResult = (
       res: Awaited<ReturnType<typeof fetchPoolOrderBookFromSdk>>,
       endInitialLoading: boolean
@@ -175,17 +199,11 @@ export function usePoolOrderBook({
           setError(orderbookIndexerNotConfiguredMessage());
           return;
         }
-        void fetchPoolOrderBook({
-          network: currentNetwork,
-          poolName: trimmedPool,
-          signal: ac.signal,
-        })
-          .then((r) => applyIndexerResult(r, true))
-          .catch((e) => handleAsyncErr(e, true));
+        void runIndexer(true);
         return;
       }
 
-      void fetchPoolOrderBookFromSdk(sdkPayload).then((r) => applySdkResult(r, true)).catch((e) => handleAsyncErr(e, true));
+      void runSdk(true);
     };
 
     runOnce();
@@ -197,17 +215,9 @@ export function usePoolOrderBook({
     if (useInterval) {
       interval = window.setInterval(() => {
         if (useIndexerPath && indexerBase) {
-          void fetchPoolOrderBook({
-            network: currentNetwork,
-            poolName: trimmedPool,
-            signal: ac.signal,
-          })
-            .then((r) => applyIndexerResult(r, false))
-            .catch((e) => handleAsyncErr(e, false));
+          void runIndexer(false);
         } else {
-          void fetchPoolOrderBookFromSdk(sdkPayload)
-            .then((r) => applySdkResult(r, false))
-            .catch((e) => handleAsyncErr(e, false));
+          void runSdk(false);
         }
       }, pollIntervalMs);
     }

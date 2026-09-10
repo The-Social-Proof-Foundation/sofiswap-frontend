@@ -7,41 +7,72 @@ import {
 } from '@/lib/orderbook-indexer/ohlcv';
 import { z } from 'zod';
 
-const levelSchema = z.object({
-  price: z.number(),
-  size: z.number(),
+const finiteNumberSchema = z.union([z.number(), z.string()]).transform((value, ctx) => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Expected a finite number' });
+    return z.NEVER;
+  }
+  return parsed;
 });
 
+const levelSchema = z
+  .union([
+    z.object({ price: finiteNumberSchema, size: finiteNumberSchema }),
+    z.tuple([finiteNumberSchema, finiteNumberSchema]),
+  ])
+  .transform((level) =>
+    Array.isArray(level) ? { price: level[0], size: level[1] } : level
+  );
+
 /**
- * Expected JSON shape once the indexer exposes depth — adjust to match the real API.
- * GET `{NEXT_PUBLIC_ORDERBOOK_INDEXER_URL}orderbook/{poolName}`
+ * The live server returns `[price, size]` string tuples. Object levels and numeric
+ * values remain accepted for compatibility with older deployments.
  */
 const orderbookResponseSchema = z.object({
   asks: z.array(levelSchema),
   bids: z.array(levelSchema),
-  mid_price: z.number().optional(),
-  midPrice: z.number().optional(),
-  change_fraction: z.number().optional(),
-  changeFraction: z.number().optional(),
+  mid_price: finiteNumberSchema.optional(),
+  midPrice: finiteNumberSchema.optional(),
+  change_fraction: finiteNumberSchema.optional(),
+  changeFraction: finiteNumberSchema.optional(),
 });
 
 export type FetchPoolOrderBookResult =
   | { ok: true; data: OrderBookSnapshot }
   | { ok: false; error: string };
 
-export function buildPoolOrderBookUrl(baseRaw: string, poolName: string): string {
+export function buildPoolOrderBookUrl(
+  baseRaw: string,
+  poolName: string,
+  levelsPerSide?: number
+): string {
   const base = indexerOriginPathPrefix(baseRaw);
   const rel = `orderbook/${encodeURIComponent(poolName)}`;
-  return new URL(rel, base).toString();
+  const url = new URL(rel, base);
+  if (levelsPerSide != null && Number.isFinite(levelsPerSide) && levelsPerSide > 0) {
+    // The server's depth is the total across both sides and divides it by two.
+    url.searchParams.set('depth', String(Math.max(2, Math.trunc(levelsPerSide) * 2)));
+    url.searchParams.set('level', '2');
+  }
+  return url.toString();
 }
 
 function normalizeSnapshot(parsed: z.infer<typeof orderbookResponseSchema>): OrderBookSnapshot {
-  const midPrice = parsed.mid_price ?? parsed.midPrice;
+  const asks = [...parsed.asks].sort((a, b) => b.price - a.price);
+  const bids = [...parsed.bids].sort((a, b) => b.price - a.price);
+  const bestAsk = asks.at(-1)?.price;
+  const bestBid = bids[0]?.price;
+  const derivedMid =
+    bestAsk != null && bestBid != null
+      ? (bestAsk + bestBid) / 2
+      : bestAsk ?? bestBid;
+  const midPrice = parsed.mid_price ?? parsed.midPrice ?? derivedMid;
   const changeFraction = parsed.change_fraction ?? parsed.changeFraction;
   return {
     /** Asks descending by price (high → low), best ask last — align with UI. */
-    asks: [...parsed.asks].sort((a, b) => b.price - a.price),
-    bids: [...parsed.bids].sort((a, b) => b.price - a.price),
+    asks,
+    bids,
     midPrice,
     changeFraction,
   };
@@ -50,6 +81,7 @@ function normalizeSnapshot(parsed: z.infer<typeof orderbookResponseSchema>): Ord
 export async function fetchPoolOrderBook(input: {
   network: NetworkType;
   poolName: string;
+  levelsPerSide?: number;
   signal?: AbortSignal;
 }): Promise<FetchPoolOrderBookResult> {
   const base = getOrderbookIndexerRestBase(input.network);
@@ -60,7 +92,7 @@ export async function fetchPoolOrderBook(input: {
     };
   }
 
-  const url = buildPoolOrderBookUrl(base, input.poolName);
+  const url = buildPoolOrderBookUrl(base, input.poolName, input.levelsPerSide);
   let res: Response;
   try {
     res = await fetch(url, { signal: input.signal, cache: 'no-store' });

@@ -11,8 +11,11 @@ import { orderbookCoinsForSdkNetwork } from '@/lib/orderbook/sdk-surface';
 import {
   augmentOrderbookRegistryInspectError,
   getResolvedOrderbookDeployment,
+  isBalanceManagerLookupMissingAbort,
+  ORDERBOOK_DEPLOYMENT_ENV_HINT,
   type OrderbookRuntimeNetwork,
 } from '@/lib/orderbook/config';
+import { isUsableOnchainObjectId } from '@/lib/platform-config';
 
 export interface BalanceManagerIdsResult {
   ids: string[];
@@ -31,6 +34,12 @@ export async function fetchRegisteredBalanceManagerIds(
   const obNet = net as OrderbookRuntimeNetwork;
   try {
     const { orderbookPackageId, registryId } = getResolvedOrderbookDeployment(obNet);
+    if (!isUsableOnchainObjectId(registryId) || !isUsableOnchainObjectId(orderbookPackageId)) {
+      return {
+        ids: [],
+        error: `Orderbook registry/package is missing or 0x0. ${ORDERBOOK_DEPLOYMENT_ENV_HINT}`,
+      };
+    }
     const sender = normalizeMySoAddress(ownerAddress);
     const tx = new Transaction();
     tx.setSender(sender);
@@ -62,6 +71,9 @@ export async function fetchRegisteredBalanceManagerIds(
     return { ids, error: null };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (isBalanceManagerLookupMissingAbort(msg)) {
+      return { ids: [], error: null };
+    }
     return { ids: [], error: augmentOrderbookRegistryInspectError(msg) };
   }
 }

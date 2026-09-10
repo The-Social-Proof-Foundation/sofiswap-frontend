@@ -5,9 +5,17 @@ import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 import { Transaction } from '@socialproof/myso/transactions';
 import type { MySoTransactionBlockResponse } from '@socialproof/myso/jsonRpc';
 import { getMySoJsonRpcClient } from '../lib/myso-client';
+import {
+  getResolvedOrderbookDeployment,
+  isBalanceManagerLookupMissingAbort,
+  ORDERBOOK_REGISTRY_OBJECT_ID,
+} from '../lib/orderbook/config';
+import { fetchRegisteredBalanceManagerIds } from '../lib/orderbook/runtime';
+import { testnetPackageIds } from '@socialproof/orderbook';
 import { findCreatedBalanceManagerObjectId } from '../lib/orderbook/balance-manager-effects';
 import { signAndExecuteTradingSetup } from '../lib/tx/trading-setup';
-import { signAndExecuteJoinPlatform } from '../lib/tx/join-platform';
+import { buildJoinPlatformTransaction, signAndExecuteJoinPlatform } from '../lib/tx/join-platform';
+import { MYSO_CLOCK_OBJECT_ID } from '../lib/spt/chain-config';
 import { clearAllPendingBalanceManagerRegister, clearPendingBalanceManagerRegister, readPendingBalanceManagerRegister, writePendingBalanceManagerRegister } from '../lib/trading-setup-pending-storage';
 
 const signer = Ed25519Keypair.fromSecretKey(new Uint8Array(32).fill(9));
@@ -77,12 +85,60 @@ test('registry failure stops setup before any transaction', async () => {
   assert.equal(executed.length, 0);
 });
 
+test('join_platform passes registry, block list, platform, and clock', () => {
+  const tx = buildJoinPlatformTransaction(senderAddress, {
+    platformPackageId: '0x50c1',
+    platformRegistryObjectId: id(1),
+    blockListRegistryObjectId: id(2),
+    platformGraphqlId: id(3),
+  });
+  const data = tx.getData();
+  const call = data.commands.find((command) => command.$kind === 'MoveCall')?.MoveCall;
+  assert.ok(call);
+  assert.equal(call.function, 'join_platform');
+  assert.equal(call.arguments.length, 4);
+  const objectIds = data.inputs.flatMap((input) =>
+    input.$kind === 'UnresolvedObject' ? [input.UnresolvedObject.objectId] : []
+  );
+  assert.deepEqual(objectIds, [id(1), id(2), id(3), id(6)]);
+  assert.equal(objectIds[3].endsWith('6'), true);
+  assert.equal(MYSO_CLOCK_OBJECT_ID, '0x6');
+});
+
+test('platform join still executes when the orderbook registry view is down', async () => {
+  mock.method(rpc, 'devInspectTransactionBlock', async () => ({ error: 'Registry unavailable' }));
+  mock.method(Transaction.prototype, 'build', async () => new Uint8Array([1]));
+  mock.method(rpc, 'dryRunTransactionBlock', async () => ({ effects: { status: { status: 'success' } } }));
+  const config = { platformPackageId: '0x50c1', platformRegistryObjectId: id(1), blockListRegistryObjectId: id(2), platformGraphqlId: id(3) };
+  const joined = await signAndExecuteJoinPlatform({ ...auth, config });
+  assert.ok(joined.digest);
+  assert.equal(executed.length, 1);
+  assert.deepEqual(executed[0], ['join_platform']);
+});
+
+test('platform join succeeds when bundled balance-manager registration fails', async () => {
+  mock.method(Transaction.prototype, 'build', async () => new Uint8Array([1]));
+  mock.method(rpc, 'dryRunTransactionBlock', async () => ({ effects: { status: { status: 'success' } } }));
+  mock.method(rpc, 'signAndExecuteTransaction', async ({ transaction }: { transaction: Transaction }) => {
+    const functions = transaction.getData().commands.flatMap((c) => c.$kind === 'MoveCall' ? [c.MoveCall.function] : []);
+    executed.push(functions);
+    if (functions.includes('register_balance_manager')) throw new Error('register aborted');
+    return { digest: functions.includes('join_platform') ? 'joined' : 'created', effects: { status: { status: 'success' } }, objectChanges: createdBlock().objectChanges };
+  });
+  const config = { platformPackageId: '0x50c1', platformRegistryObjectId: id(1), blockListRegistryObjectId: id(2), platformGraphqlId: id(3) };
+  const joined = await signAndExecuteJoinPlatform({ ...auth, config });
+  assert.equal(joined.digest, 'joined');
+  assert.ok(executed[0].includes('join_platform'));
+  assert.ok(readPendingBalanceManagerRegister(network, senderAddress)?.createDigest);
+});
+
 test('bundled platform join records creation before a failing read and resumes on retry', async () => {
   mock.method(Transaction.prototype, 'build', async () => new Uint8Array([1]));
   let joined = false;
   mock.method(rpc, 'dryRunTransactionBlock', async () => ({ effects: { status: joined ? { status: 'failure', error: 'join_platform abort code: 3' } : { status: 'success' } } }));
   const config = { platformPackageId: '0x50c1', platformRegistryObjectId: id(1), blockListRegistryObjectId: id(2), platformGraphqlId: id(3) };
-  await assert.rejects(signAndExecuteJoinPlatform({ ...auth, config }), /read endpoint is behind/);
+  const first = await signAndExecuteJoinPlatform({ ...auth, config });
+  assert.ok(first.digest);
   assert.ok(executed[0].includes('join_platform'));
   assert.equal(readPendingBalanceManagerRegister(network, senderAddress)?.createDigest, 'created');
   joined = true; readable = true;
@@ -127,4 +183,40 @@ test('concurrent join requests share one bundled creation and registration', asy
   assert.equal(executed.length, 2);
   assert.ok(executed[0].includes('join_platform'));
   assert.deepEqual(executed[1], ['register_balance_manager']);
+});
+
+test('localnet registry prefers static env, then genesis 0x10, and never 0x0', () => {
+  const keys = [
+    'NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID',
+    'NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_LOCALNET',
+    'NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_TESTNET',
+    'NEXT_PUBLIC_ORDERBOOK_LOCALNET_MANIFEST_JSON',
+  ];
+  const prior = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  for (const key of keys) delete process.env[key];
+  try {
+    assert.equal(getResolvedOrderbookDeployment('localnet').registryId, ORDERBOOK_REGISTRY_OBJECT_ID);
+    assert.equal(getResolvedOrderbookDeployment('testnet').registryId, testnetPackageIds.REGISTRY_ID);
+    process.env.NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_LOCALNET =
+      '0x0000000000000000000000000000000000000000000000000000000000000000';
+    assert.equal(getResolvedOrderbookDeployment('localnet').registryId, ORDERBOOK_REGISTRY_OBJECT_ID);
+    const override = '0xe437b7872072ebb516d1bcbe14c532880cf53c72a10fd9143c5a092ab50f29c4';
+    process.env.NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_LOCALNET = override;
+    assert.equal(getResolvedOrderbookDeployment('localnet').registryId, override);
+  } finally {
+    for (const [key, value] of Object.entries(prior)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
+test('a missing registry child during BM lookup is treated as no managers', async () => {
+  const abort =
+    'ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000002, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1), source: Some(VMError { major_status: ABORTED, sub_status: Some(1) }), command: Some(0) } }';
+  assert.equal(isBalanceManagerLookupMissingAbort(abort), true);
+  assert.equal(isBalanceManagerLookupMissingAbort(abort.replace('borrow_child_object', 'borrow_child_object_mut')), false);
+  mock.method(rpc, 'devInspectTransactionBlock', async () => ({ error: abort }));
+  const result = await fetchRegisteredBalanceManagerIds(rpc, senderAddress);
+  assert.deepEqual(result, { ids: [], error: null });
 });

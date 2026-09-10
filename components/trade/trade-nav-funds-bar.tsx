@@ -115,7 +115,7 @@ export function TradeNavFundsBar({ poolName }: { poolName?: string }) {
     if (trading.orderbookSkipped) {
       return {
         primary: '—',
-        secondary: 'Spot balances require mainnet or testnet',
+        secondary: 'Spot balances are unavailable on this network',
       };
     }
     if (trading.isLoading && trading.balanceManagerIds.length === 0) {

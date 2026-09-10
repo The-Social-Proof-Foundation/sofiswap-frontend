@@ -6,6 +6,9 @@ const nextConfig = {
   images: { unoptimized: true },
   serverExternalPackages: ['resend'],
   experimental: {
+    // Avoid incomplete app-path manifests observed when the webpack build worker
+    // runs under the local Node toolchain; a single-process build is deterministic.
+    webpackBuildWorker: false,
     serverActions: {
       bodySizeLimit: '2mb',
     },

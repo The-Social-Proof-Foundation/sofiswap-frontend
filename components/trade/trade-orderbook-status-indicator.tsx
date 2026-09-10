@@ -43,12 +43,8 @@ const bar = {
 
 export function TradeOrderbookStatusIndicator() {
   const { currentNetwork } = useNetwork();
-  const obNet =
-    currentNetwork === 'mainnet' || currentNetwork === 'testnet'
-      ? currentNetwork
-      : null;
-
-  const statusUrl = obNet ? getOrderbookStatusUrl(obNet) : null;
+  const statusUrl = getOrderbookStatusUrl(currentNetwork);
+  const obNet = statusUrl ? currentNetwork : null;
 
   const [data, setData] = useState<OrderbookStatusResponse | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -160,7 +156,7 @@ export function TradeOrderbookStatusIndicator() {
               bar.triggerHover,
               bar.mutedHover
             )}
-            aria-label="Orderbook status unavailable on Localnet"
+            aria-label="Orderbook status unavailable"
           >
             <span
               className={cn(
@@ -179,8 +175,9 @@ export function TradeOrderbookStatusIndicator() {
         >
           <p className="font-medium text-[#e8e8e8]">Orderbook status</p>
           <p className="mt-2 leading-relaxed text-[#a8a8a8]">
-            Live orderbook health is only reported for Testnet and
-            Mainnet.
+            Set NEXT_PUBLIC_ORDERBOOK_INDEXER_LOCALNET_URL (or
+            NEXT_PUBLIC_ORDERBOOK_STATUS_URL_LOCALNET) to report live
+            indexer health on this network.
           </p>
         </HoverCardContent>
       </HoverCard>
@@ -284,7 +281,7 @@ export function TradeOrderbookStatusIndicator() {
         )}
 
         <p className="border-t border-white/10 pt-2 text-[10px] text-[#666]">
-          {obNet === 'testnet' ? 'Testnet' : 'Mainnet'} · Refreshes every{' '}
+          {obNet === 'testnet' ? 'Testnet' : obNet === 'localnet' ? 'Localnet' : 'Mainnet'} · Refreshes every{' '}
           {POLL_MS / 1000}s
         </p>
       </HoverCardContent>

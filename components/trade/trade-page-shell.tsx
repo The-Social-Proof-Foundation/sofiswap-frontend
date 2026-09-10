@@ -9,13 +9,16 @@ import { TradeSocialProofTokenContainer } from '@/components/trade/trade-social-
 import { TradeWorkspaceLayout } from '@/components/trade/trade-workspace-layout';
 import { useGraphqlProfileOverviewSWR } from '@/hooks/useGraphqlProfileOverviewSWR';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
+import { useOrderbookMarketTicker } from '@/hooks/useOrderbookMarketTicker';
 import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
+import { usePoolOrderBook } from '@/hooks/usePoolOrderBook';
 import { useTradeChartOhlcvEnabled } from '@/hooks/useTradeChartOhlcvEnabled';
 import { useTradeSpotlightPoolItems } from '@/hooks/useTradeSpotlightPoolItems';
 import { useSptDiscovery } from '@/hooks/useSptDiscovery';
 import { useSofiSwapPlatformConfig } from '@/hooks/useSofiSwapPlatformConfig';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
-import { OHLCV_INTERVALS } from '@/lib/orderbook-indexer/ohlcv';
+import { applyLivePriceToCandles, OHLCV_INTERVALS } from '@/lib/orderbook-indexer/ohlcv';
+import { marketDisplayPrice } from '@/lib/orderbook-indexer/ticker';
 import { useNetwork } from '@/lib/network-provider';
 import { getDefaultNetwork } from '@/lib/network-utils';
 import type { TradeNavSegment } from '@/lib/trade-nav-segment-storage';
@@ -25,7 +28,12 @@ import {
   writeTradeNavSegment,
 } from '@/lib/trade-nav-segment-storage';
 import { getDefaultTradePoolKey, tradePoolKeysForNetwork } from '@/lib/trade/pool-spotlight-items';
-import { parseTradePath, tradeOrderbookPath } from '@/lib/trade-route-path';
+import {
+  parseTradePath,
+  readTradePoolQuery,
+  tradeOrderbookPath,
+  tradePathWithPool,
+} from '@/lib/trade-route-path';
 import { cn } from '@/lib/utils';
 import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -116,6 +124,7 @@ function TradeChartWorkspace({
   ohlcvEnabled: boolean;
   chartContainerRef: RefCallback<HTMLDivElement>;
 }) {
+  const { currentNetwork } = useNetwork();
   const [chartInterval, setChartInterval] = useState<OhlcvInterval>(DEFAULT_INTERVAL);
   const { data, error, isLoading } = usePoolOhlcv({
     poolName,
@@ -123,14 +132,38 @@ function TradeChartWorkspace({
     limit: DEFAULT_LIMIT,
     enabled: ohlcvEnabled,
   });
+  const { data: book } = usePoolOrderBook({
+    poolName,
+    levelsPerSide: 4,
+    enabled: ohlcvEnabled,
+  });
+  const { markets } = useOrderbookMarketTicker(currentNetwork);
+
+  const liveQuote = useMemo(() => {
+    const mid = book?.midPrice;
+    if (mid != null && Number.isFinite(mid) && mid > 0) {
+      const bestBid = book?.bids[0]?.price;
+      const bestAsk = book?.asks.length ? book.asks[book.asks.length - 1]?.price : undefined;
+      return { price: mid, bid: bestBid, ask: bestAsk };
+    }
+    const summary = markets.find((row) => row.trading_pairs === poolName);
+    const price = summary ? marketDisplayPrice(summary) : null;
+    if (price == null) return undefined;
+    return { price, bid: summary?.highest_bid, ask: summary?.lowest_ask };
+  }, [book, markets, poolName]);
+
+  const chartData = useMemo(
+    () => applyLivePriceToCandles(data ?? [], liveQuote, chartInterval),
+    [data, liveQuote, chartInterval]
+  );
 
   const chartStatus = useMemo(() => {
     if (!ohlcvEnabled) return 'empty' as const;
-    if (isLoading) return 'loading' as const;
-    if (error) return 'error' as const;
-    if (!data?.length) return 'empty' as const;
+    if (isLoading && !chartData.length) return 'loading' as const;
+    if (error && !chartData.length) return 'error' as const;
+    if (!chartData.length) return 'empty' as const;
     return null;
-  }, [ohlcvEnabled, isLoading, error, data]);
+  }, [ohlcvEnabled, isLoading, error, chartData]);
 
   return (
     <div
@@ -162,7 +195,7 @@ function TradeChartWorkspace({
       </div>
       <TradeCandlestickChart
         className="flex-1"
-        data={data}
+        data={chartData}
         status={chartStatus}
         errorMessage={error}
         aria-label={`${poolName} candlestick chart`}
@@ -215,8 +248,9 @@ export function TradePageShell() {
 
   const tradeNavSegment: TradeNavSegment = isSptRoute ? 'social-proof-tokens' : inlineTradeSegment;
 
+  const poolFromQuery = readTradePoolQuery(searchParams);
   const [poolName, setPoolName] = useState(() =>
-    getDefaultTradePoolKey(getDefaultNetwork())
+    poolFromQuery || getDefaultTradePoolKey(getDefaultNetwork())
   );
   const [poolSpotlightOpen, setPoolSpotlightOpen] = useState(false);
   const showOrderbookWorkspace = tradeNavSegment === 'orderbook';
@@ -239,11 +273,16 @@ export function TradePageShell() {
     const valid = new Set<string>([
       ...(keys.length > 0 ? keys : [fallback]),
       ...spotlightPoolIds,
+      ...(poolFromQuery ? [poolFromQuery] : []),
     ]);
+    if (poolFromQuery && poolFromQuery !== poolName) {
+      setPoolName(poolFromQuery);
+      return;
+    }
     if (!valid.has(poolName)) {
       setPoolName(keys[0] ?? fallback);
     }
-  }, [currentNetwork, poolName, spotlightPoolIds]);
+  }, [currentNetwork, poolName, poolFromQuery, spotlightPoolIds]);
 
   const onPoolSpotlightSelect = useCallback(
     (item: SpotlightItem) => {
@@ -264,9 +303,9 @@ export function TradePageShell() {
         tradeNavSegmentStorageKey(displayAddress, isAuthenticated),
         'orderbook'
       );
-      router.replace(withSearch(tradeOrderbookPath()));
+      router.replace(tradePathWithPool(tradeOrderbookPath(), item.id, searchParams.toString()));
     },
-    [router, withSearch, displayAddress, isAuthenticated]
+    [router, searchParams, displayAddress, isAuthenticated]
   );
 
   const onTradeSegmentChange = useCallback(

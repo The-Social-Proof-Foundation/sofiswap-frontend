@@ -2,31 +2,26 @@ import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
 
 import type { OrderbookIndexerPoolRow } from '@/lib/orderbook-indexer/pools';
 import type { NetworkType } from '@/lib/network-utils';
-import { SOFI_SPOT_COINS, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
+import { spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
 
 function spotlightSortScore(poolName: string): number {
   if (poolName === 'MYSO_MYUSD') return 0;
-  if (poolName === 'MYSO_USDC') return 1;
-  if (poolName === 'MYUSD_USDC') return 2;
+  if (poolName === 'BTC_MYUSD') return 1;
+  if (poolName === 'ETH_MYUSD') return 2;
+  if (poolName === 'MYSO_USDC') return 3;
+  if (poolName === 'MYUSD_USDC') return 4;
   if (poolName.startsWith('MYSO_')) return 10;
   return 50;
 }
 
-function poolPassesSofiSpotFilter(row: OrderbookIndexerPoolRow): boolean {
-  return (
-    SOFI_SPOT_COINS.has(row.base_asset_symbol.trim()) &&
-    SOFI_SPOT_COINS.has(row.quote_asset_symbol.trim())
-  );
-}
-
 /**
- * Spotlight rows from GET /get_pools (filtered like the static SDK-backed catalog).
+ * Spotlight rows from GET /get_pools — every indexed spot market.
  */
 export function spotlightItemsFromIndexerPools(
   _network: NetworkType,
   pools: OrderbookIndexerPoolRow[]
 ): SpotlightItem[] {
-  const rows = [...pools].filter(poolPassesSofiSpotFilter);
+  const rows = [...pools];
   rows.sort((a, b) => {
     const d = spotlightSortScore(a.pool_name) - spotlightSortScore(b.pool_name);
     if (d !== 0) return d;

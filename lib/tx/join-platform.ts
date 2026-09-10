@@ -20,9 +20,11 @@ import {
 import { getMySoJsonRpcClient } from '@/lib/myso-client';
 import type { NetworkType } from '@/lib/network-utils';
 import {
+  assertJoinPlatformObjectIds,
   getJoinPlatformMoveTarget,
   type SofiSwapPlatformConfig,
 } from '@/lib/platform-config';
+import { MYSO_CLOCK_OBJECT_ID } from '@/lib/spt/chain-config';
 import {
   clearPendingBalanceManagerRegister,
   readPendingBalanceManagerRegister,
@@ -94,11 +96,15 @@ function noopJoinSuccessResponse(): MySoTransactionBlockResponse {
   };
 }
 
-/** Append `join_platform` Move calls only — caller sets `setSender`. */
+/**
+ * `social_contracts::platform::join_platform`:
+ * registry, block_list_registry, platform, clock (`0x6`). `TxContext` is implicit.
+ */
 export function appendJoinPlatformMoves(
   tx: Transaction,
   config: SofiSwapPlatformConfig
 ): void {
+  assertJoinPlatformObjectIds(config);
   const target = getJoinPlatformMoveTarget(config.platformPackageId);
   tx.moveCall({
     target,
@@ -106,6 +112,7 @@ export function appendJoinPlatformMoves(
       tx.object(config.platformRegistryObjectId),
       tx.object(config.blockListRegistryObjectId),
       tx.object(config.platformGraphqlId),
+      tx.object(MYSO_CLOCK_OBJECT_ID),
     ],
   });
 }
@@ -163,10 +170,20 @@ async function signAndExecuteJoinPlatformImpl(input: JoinPlatformInput): Promise
   const pending = readPendingBalanceManagerRegister(network, senderAddress);
 
   if (shouldAttachBalanceManagerCreate && obNet) {
-    const fresh = await fetchRegisteredBalanceManagerIds(client, senderAddress);
-    if (fresh.error) throw new Error(fresh.error);
-    if (fresh.ids.length > 0) {
-      clearPendingBalanceManagerRegister(network, senderAddress);
+    try {
+      const fresh = await fetchRegisteredBalanceManagerIds(client, senderAddress);
+      if (fresh.error) {
+        console.warn(
+          '[SofiSwap] Join: skipping bundled balance-manager create; registry view failed.',
+          fresh.error
+        );
+        shouldAttachBalanceManagerCreate = false;
+      } else if (fresh.ids.length > 0) {
+        clearPendingBalanceManagerRegister(network, senderAddress);
+        shouldAttachBalanceManagerCreate = false;
+      }
+    } catch (e) {
+      console.warn('[SofiSwap] Join: skipping bundled balance-manager create; registry view threw.', e);
       shouldAttachBalanceManagerCreate = false;
     }
   }
@@ -209,7 +226,15 @@ async function signAndExecuteJoinPlatformImpl(input: JoinPlatformInput): Promise
     });
   }
   if (tradingSetupBundledWithJoin()) {
-    return (await signAndExecuteTradingSetup({ network, senderAddress, signer })) ?? response;
+    try {
+      return (await signAndExecuteTradingSetup({ network, senderAddress, signer })) ?? response;
+    } catch (e) {
+      console.warn(
+        '[SofiSwap] Join succeeded; trading setup will continue from Enable trading.',
+        e
+      );
+      return response;
+    }
   }
   return response;
 }

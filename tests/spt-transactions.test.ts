@@ -3,7 +3,7 @@ import { afterEach, beforeEach, mock, test } from 'node:test';
 import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 import type { Transaction } from '@socialproof/myso/transactions';
 import { getMySoJsonRpcClient } from '../lib/myso-client';
-import { clearSptChainConfigCache } from '../lib/spt/chain-config';
+import { clearSptChainConfigCache, isSofiSwapPlatformName, resolveSptChainConfig } from '../lib/spt/chain-config';
 import { sptEscrowPayouts } from '../lib/spt/trade-routing';
 import {
   executeEnableSpt, executeLaunchSpt, executeReserveSpt, executeWithdrawSptReservation,
@@ -21,6 +21,7 @@ const config = {
   blockListRegistry: { nodes: [{ address: id(5) }] }, platformRegistry: { nodes: [{ address: id(7) }] },
 };
 let withPlatform = true;
+let graphqlPlatformId = id(8);
 let ownedAmounts: bigint[] = [];
 let poolTokenType: 1 | 2 = 1;
 let poolSupply = BigInt(0);
@@ -30,7 +31,7 @@ let captured: ReturnType<Transaction['getData']> | null = null;
 
 beforeEach(() => {
   clearSptChainConfigCache();
-  withPlatform = true; ownedAmounts = []; poolTokenType = 1; poolSupply = BigInt(0); poolRevenueManifest = null; vaultIndexed = true; captured = null;
+  withPlatform = true; graphqlPlatformId = id(8); ownedAmounts = []; poolTokenType = 1; poolSupply = BigInt(0); poolRevenueManifest = null; vaultIndexed = true; captured = null;
   mock.method(globalThis, 'fetch', async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     if (body.query.includes('SofiSwapSptObject')) {
@@ -46,9 +47,10 @@ beforeEach(() => {
     if (body.query.includes('SofiSwapSptVaultConfig')) return Response.json({ data: { pocConfig: { nodes: [{ address: id(9) }] } } });
     if (body.query.includes('SofiSwapSptTradeVault')) return Response.json({ data: { pocBeneficiaryVaultByBeneficiary: vaultIndexed ? { vaultId: id(14), beneficiary: body.variables.beneficiary } : null } });
     assert.match(body.query, /SofiSwapSptChainConfig/, 'Unexpected network request: offline tests must not reach a server');
-    return Response.json({ data: { ...config, platforms: withPlatform ? [{ platformId: id(8), name: 'SofiSwap' }] : [] } });
+    return Response.json({ data: { ...config, platforms: withPlatform ? [{ platformId: graphqlPlatformId, name: 'SofiSwap' }] : [] } });
   });
   const rpc = getMySoJsonRpcClient(network);
+  mock.method(rpc, 'getObject', async ({ id }: { id: string }) => ({ data: { objectId: id } }));
   mock.method(rpc, 'getBalance', async () => ({ totalBalance: '100000000000', coinObjectCount: 1 }));
   mock.method(rpc, 'getCoins', async () => ({ data: [{ coinObjectId: id(30), balance: '100000000000' }], hasNextPage: false, nextCursor: null }));
   mock.method(rpc, 'getOwnedObjects', async () => ({
@@ -165,6 +167,21 @@ test('an unindexed required vault blocks the trade before wallet signing', async
   assert.equal(captured, null);
 });
 
+test('reserve fails before signing when a shared object is missing on the fullnode', async () => {
+  mock.method(getMySoJsonRpcClient(network), 'getObject', async () => ({ data: null }));
+  await assert.rejects(
+    executeReserveSpt({
+      ...auth,
+      tokenType: 1,
+      reservationPoolId: id(12),
+      principalAmount: BigInt(1000000),
+      feeAmount: BigInt(10000),
+    }),
+    /not on the localnet fullnode/,
+  );
+  assert.equal(captured, null);
+});
+
 test('failed on-chain execution is not reported as success', async () => {
   mock.method(getMySoJsonRpcClient(network), 'signAndExecuteTransaction', async () => ({ digest: 'failed-test', effects: { status: { status: 'failure', error: 'MoveAbort' } } }));
   await assert.rejects(executeLaunchSpt({ ...auth, reservationPoolId: id(12) }), /MoveAbort/);
@@ -174,4 +191,41 @@ test('a lagging read endpoint does not turn successful execution into a retryabl
   mock.method(getMySoJsonRpcClient(network), 'waitForTransaction', async () => { throw new Error('read endpoint timeout'); });
   const result = await executeLaunchSpt({ ...auth, reservationPoolId: id(12) });
   assert.equal(result.effects?.status.status, 'success');
+});
+
+test('NEXT_PUBLIC_SOFISWAP_PLATFORM_ID fills a GraphQL zero platform object', async () => {
+  const prev = process.env.NEXT_PUBLIC_SOFISWAP_PLATFORM_ID;
+  graphqlPlatformId = '0x0000000000000000000000000000000000000000000000000000000000000000';
+  process.env.NEXT_PUBLIC_SOFISWAP_PLATFORM_ID = id(99);
+  try {
+    const chain = await resolveSptChainConfig(network, { force: true });
+    assert.equal(chain.platformId, id(99));
+  } finally {
+    if (prev === undefined) delete process.env.NEXT_PUBLIC_SOFISWAP_PLATFORM_ID;
+    else process.env.NEXT_PUBLIC_SOFISWAP_PLATFORM_ID = prev;
+  }
+});
+
+test('SoFiSwap GraphQL names match the approved platform', () => {
+  assert.equal(isSofiSwapPlatformName('SoFiSwap'), true);
+  assert.equal(isSofiSwapPlatformName('Sofi Swap'), true);
+  assert.equal(isSofiSwapPlatformName('Chatr'), false);
+});
+
+test('a GraphQL zero SofiSwap platform is treated as missing without env', async () => {
+  graphqlPlatformId = '0x0';
+  const chain = await resolveSptChainConfig(network, { force: true });
+  assert.equal(chain.platformId, null);
+});
+
+test('live GraphQL SofiSwap platform wins over stale NEXT_PUBLIC_SOFISWAP_PLATFORM_ID', async () => {
+  const prev = process.env.NEXT_PUBLIC_SOFISWAP_PLATFORM_ID;
+  process.env.NEXT_PUBLIC_SOFISWAP_PLATFORM_ID = id(99);
+  try {
+    const chain = await resolveSptChainConfig(network, { force: true });
+    assert.equal(chain.platformId, id(8));
+  } finally {
+    if (prev === undefined) delete process.env.NEXT_PUBLIC_SOFISWAP_PLATFORM_ID;
+    else process.env.NEXT_PUBLIC_SOFISWAP_PLATFORM_ID = prev;
+  }
 });

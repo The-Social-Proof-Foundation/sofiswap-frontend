@@ -2,6 +2,14 @@ import assert from 'node:assert/strict';
 import { afterEach, mock, test } from 'node:test';
 import { fetchSptDirectory, findSptProfileByUsername } from '../lib/graphql/spt-directory';
 import { sptSpotlightItems, type SptDiscoveryProfile, type SptDiscoveryPost } from '../lib/graphql/spt-discovery';
+import {
+  firstMediaUrl,
+  postDirectoryThumbUrl,
+  profileDirectoryThumbUrl,
+  resolveSocialMediaUrl,
+} from '../lib/spt/media';
+import { tickerSymbolFromLabel, trendingSptTickerItems } from '../lib/spt/ticker';
+import type { SptDiscoveryPool } from '../lib/graphql/spt-discovery';
 
 const id = (n: number) => `0x${n.toString(16).padStart(64, '0')}`;
 const profile = (n: number, changes: Partial<SptDiscoveryProfile> = {}): SptDiscoveryProfile => ({
@@ -45,6 +53,66 @@ test('owner directory views also exclude unenabled profiles and posts', async ()
   const result = await fetchSptDirectory({ network: 'localnet', offset: 0, owner: id(1) });
   assert.deepEqual(result.profiles, []);
   assert.deepEqual(result.posts.map((p) => p.postId), [id(3)]);
+});
+
+test('directory thumbs resolve profile avatars and post media previews', () => {
+  assert.equal(resolveSocialMediaUrl('//cdn.example/a.png'), 'https://cdn.example/a.png');
+  assert.equal(profileDirectoryThumbUrl(' https://cdn.example/avatar.jpg '), 'https://cdn.example/avatar.jpg');
+  assert.equal(firstMediaUrl(['', { url: '//cdn.example/post.webp' }]), 'https://cdn.example/post.webp');
+  assert.equal(firstMediaUrl('["https://cdn.example/from-json.png"]'), 'https://cdn.example/from-json.png');
+  assert.equal(
+    postDirectoryThumbUrl(['https://cdn.example/preview.jpg'], 'https://cdn.example/owner.jpg'),
+    'https://cdn.example/preview.jpg'
+  );
+  assert.equal(
+    postDirectoryThumbUrl([], 'https://cdn.example/owner.jpg'),
+    'https://cdn.example/owner.jpg'
+  );
+  assert.equal(postDirectoryThumbUrl([]), null);
+});
+
+test('ticker ranks trending SPT pools by volume and keeps native-style thumbs', () => {
+  assert.equal(tickerSymbolFromLabel('@alice'), 'ALICE');
+  const pool = (
+    n: number,
+    changes: Partial<SptDiscoveryPool> = {}
+  ): SptDiscoveryPool => ({
+    poolId: id(n + 200),
+    tokenType: 1,
+    owner: id(n),
+    price: 1,
+    priceChange24H: 0,
+    volume24H: 0,
+    ownerProfile: { address: id(n), username: `creator${n}`, displayName: null, profilePhoto: `https://cdn.example/${n}.jpg` },
+    holders: [],
+    ...changes,
+  });
+  const items = trendingSptTickerItems({
+    pools: [
+      pool(1, { volume24H: 10, priceChange24H: 1 }),
+      pool(2, {
+        tokenType: 2,
+        volume24H: 50,
+        priceChange24H: -3,
+        price: 2.5,
+        holders: [{
+          associatedId: id(12),
+          post: {
+            ...post(12, { mediaUrls: ['https://cdn.example/post.jpg'] }),
+            ownerProfile: { address: id(2), username: 'poster', displayName: null, profilePhoto: null },
+          },
+        }],
+      }),
+      pool(3, { volume24H: 20, priceChange24H: 9 }),
+    ],
+  });
+  assert.deepEqual(items.map((row) => row.symbol), ['POSTER', 'CREATO', 'CREATO']);
+  assert.equal(items[0].avatarShape, 'square');
+  assert.equal(items[0].avatarSrc, 'https://cdn.example/post.jpg');
+  assert.equal(items[0].href, `/trade/spt/post/${id(12)}`);
+  assert.equal(items[1].avatarShape, 'circle');
+  assert.equal(items[1].href, `/trade/spt/${id(3)}`);
+  assert.equal(items[1].changePercent, 9);
 });
 
 test('unenabled profiles remain searchable and exact username lookup still opens their profile', async () => {

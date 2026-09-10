@@ -15,18 +15,39 @@ export const OHLCV_INTERVALS = [
 
 export type OhlcvInterval = (typeof OHLCV_INTERVALS)[number];
 
+export const OHLCV_INTERVAL_MS: Record<OhlcvInterval, number> = {
+  '1m': 60_000,
+  '5m': 300_000,
+  '15m': 900_000,
+  '30m': 1_800_000,
+  '1h': 3_600_000,
+  '4h': 14_400_000,
+  '1d': 86_400_000,
+  '1w': 604_800_000,
+};
+
+const finiteNumber = z.union([z.number(), z.string()]).transform((value, ctx) => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Expected a finite number' });
+    return z.NEVER;
+  }
+  return parsed;
+});
+
 const candleRowSchema = z.tuple([
-  z.number(),
-  z.number(),
-  z.number(),
-  z.number(),
-  z.number(),
-  z.number(),
+  finiteNumber,
+  finiteNumber,
+  finiteNumber,
+  finiteNumber,
+  finiteNumber,
+  finiteNumber,
 ]);
 
-const ohlcvResponseSchema = z.object({
-  candles: z.array(candleRowSchema),
-});
+const ohlcvResponseSchema = z.union([
+  z.object({ candles: z.array(candleRowSchema) }),
+  z.array(candleRowSchema),
+]);
 
 export type IndexerCandleTuple = z.infer<typeof candleRowSchema>;
 
@@ -123,8 +144,10 @@ export function buildPoolOhlcvUrl(
 
 export function indexerTupleToCandlestick(row: IndexerCandleTuple): CandlestickData {
   const [time, open, high, low, close] = row;
+  // Server buckets are usually milliseconds; lightweight-charts wants Unix seconds.
+  const timeSec = time >= 1_000_000_000_000 ? Math.trunc(time / 1000) : Math.trunc(time);
   return {
-    time: time as UTCTimestamp,
+    time: timeSec as UTCTimestamp,
     open,
     high,
     low,
@@ -134,6 +157,87 @@ export function indexerTupleToCandlestick(row: IndexerCandleTuple): CandlestickD
 
 export function sortCandlestickDataAscending(data: CandlestickData[]): CandlestickData[] {
   return [...data].sort((a, b) => (a.time as number) - (b.time as number));
+}
+
+export function ohlcvBucketStartSec(interval: OhlcvInterval, nowMs = Date.now()): number {
+  const ms = OHLCV_INTERVAL_MS[interval];
+  return Math.floor(nowMs / ms) * (ms / 1000);
+}
+
+export type LiveCandleQuote = {
+  price: number;
+  bid?: number;
+  ask?: number;
+};
+
+function positivePrice(n: number | undefined): number | undefined {
+  return n != null && Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function resolveLiveQuote(
+  live: number | LiveCandleQuote | undefined
+): { price: number; bid?: number; ask?: number } | null {
+  if (typeof live === 'number') {
+    const price = positivePrice(live);
+    return price == null ? null : { price };
+  }
+  if (!live) return null;
+  const price = positivePrice(live.price);
+  if (price == null) return null;
+  return { price, bid: positivePrice(live.bid), ask: positivePrice(live.ask) };
+}
+
+/**
+ * Merge a live last/mid price into indexer candles so new books still render a
+ * current candle while `GET /ohclv` is empty or the last bucket is still forming.
+ */
+export function applyLivePriceToCandles(
+  candles: CandlestickData[],
+  live: number | LiveCandleQuote | undefined,
+  interval: OhlcvInterval,
+  nowMs = Date.now()
+): CandlestickData[] {
+  const quote = resolveLiveQuote(live);
+  if (!quote) {
+    return sortCandlestickDataAscending(candles);
+  }
+  const { price: livePrice, bid, ask } = quote;
+  const bucket = ohlcvBucketStartSec(interval, nowMs) as UTCTimestamp;
+  const sorted = sortCandlestickDataAscending(candles);
+  const last = sorted.at(-1);
+  const highBound = Math.max(livePrice, ask ?? livePrice);
+  const lowBound = Math.min(livePrice, bid ?? livePrice);
+  if (last && (last.time as number) === bucket) {
+    return [
+      ...sorted.slice(0, -1),
+      {
+        time: last.time,
+        open: last.open,
+        high: Math.max(last.high, highBound),
+        low: Math.min(last.low, lowBound),
+        close: livePrice,
+      },
+    ];
+  }
+  if (last && (last.time as number) > bucket) {
+    return sorted;
+  }
+  const open = last?.close ?? livePrice;
+  const next: CandlestickData = {
+    time: bucket,
+    open,
+    high: Math.max(open, highBound),
+    low: Math.min(open, lowBound),
+    close: livePrice,
+  };
+  if (sorted.length === 0) {
+    const prevTime = ((bucket as number) - OHLCV_INTERVAL_MS[interval] / 1000) as UTCTimestamp;
+    return [
+      { time: prevTime, open, high: open, low: open, close: open },
+      next,
+    ];
+  }
+  return [...sorted, next];
 }
 
 export type FetchPoolOhlcvResult =
@@ -191,6 +295,7 @@ export async function fetchPoolOhlcv(input: {
     return { ok: false, error: 'Unexpected OHLCV response shape from indexer.' };
   }
 
-  const data = sortCandlestickDataAscending(parsed.data.candles.map(indexerTupleToCandlestick));
+  const rows = Array.isArray(parsed.data) ? parsed.data : parsed.data.candles;
+  const data = sortCandlestickDataAscending(rows.map(indexerTupleToCandlestick));
   return { ok: true, data };
 }

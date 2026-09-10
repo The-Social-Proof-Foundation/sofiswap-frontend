@@ -1,4 +1,6 @@
+import type { CoinMap, PoolMap } from '@socialproof/orderbook';
 import type { NetworkType } from '@/lib/network-utils';
+import type { DiscoveredOrderbookMarkets } from '@/lib/orderbook/discovered-markets';
 import {
   getOrderbookIndexerRestBase,
   indexerOriginPathPrefix,
@@ -77,4 +79,41 @@ export async function fetchOrderbookIndexerPools(input: {
   }
 
   return { ok: true, data: parsed.data };
+}
+
+function coinSymbolKey(symbol: string): string {
+  return symbol.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+
+function coinEntry(
+  type: string | undefined,
+  decimals: number | undefined
+): CoinMap[string] | null {
+  if (!type?.includes('::') || decimals == null || decimals < 0 || decimals > 15) return null;
+  return {
+    address: type.split('::')[0] ?? type,
+    type,
+    scalar: 10 ** decimals,
+  };
+}
+
+/** Map GET /get_pools rows into the same coin/pool shape GraphQL discovery writes. */
+export function discoveredMarketsFromIndexerPools(
+  rows: OrderbookIndexerPoolRow[]
+): DiscoveredOrderbookMarkets {
+  const coins: CoinMap = {};
+  const pools: PoolMap = {};
+  for (const row of rows) {
+    const base = coinSymbolKey(row.base_asset_symbol);
+    const quote = coinSymbolKey(row.quote_asset_symbol);
+    if (!base || !quote) continue;
+    const baseCoin = coinEntry(row.base_asset_id, row.base_asset_decimals);
+    const quoteCoin = coinEntry(row.quote_asset_id, row.quote_asset_decimals);
+    if (baseCoin) coins[base] = baseCoin;
+    if (quoteCoin) coins[quote] = quoteCoin;
+    const key = row.pool_name.trim();
+    if (!key) continue;
+    pools[key] = { address: row.pool_id, baseCoin: base, quoteCoin: quote };
+  }
+  return { coins, pools };
 }

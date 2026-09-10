@@ -5,6 +5,8 @@ import {
   TRADE_BALANCE_MANAGER_KEY,
 } from '@/lib/orderbook/orderbook-read-client';
 import type { OrderbookRuntimeNetwork } from '@/lib/orderbook/config';
+import { fetchAccountOpenOrders } from '@/lib/orderbook-indexer/orders';
+import { getOrderbookIndexerRestBase } from '@/lib/orderbook-indexer/ohlcv';
 import { marketLabelFromPool, type OpenOrderRow } from '@/lib/trade/activity-tables';
 import { poolExistsOnOrderbookNetwork } from '@/lib/trade/trade-pool-catalog';
 import { FLOAT_SCALAR } from '@socialproof/orderbook';
@@ -82,6 +84,8 @@ export function useAccountOpenOrders({
 
     const poolKey = poolName.trim();
     const managerId = primaryBalanceManagerId;
+    const indexerBase = getOrderbookIndexerRestBase(obNet);
+    const abortController = new AbortController();
     let cancelled = false;
     let inFlight = false;
 
@@ -97,6 +101,22 @@ export function useAccountOpenOrders({
       setIsLoading(true);
       setError(null);
       try {
+        if (indexerBase) {
+          const indexed = await fetchAccountOpenOrders({
+            network: obNet,
+            poolName: poolKey,
+            balanceManagerId: managerId,
+            signal: abortController.signal,
+          });
+          if (cancelled) return;
+          if (indexed.ok) {
+            setRows(indexed.data);
+            setError(null);
+            return;
+          }
+          // Fall through to the direct chain reader when the indexer is unavailable.
+        }
+
         const client = getOrderbookUserClient(obNet, managerId);
         const { baseScalar, quoteScalar } = scalarsForPool(poolKey, obNet);
         const market = marketLabelFromPool(poolKey, obNet);
@@ -186,6 +206,7 @@ export function useAccountOpenOrders({
 
     return () => {
       cancelled = true;
+      abortController.abort();
       if (interval != null) window.clearInterval(interval);
     };
   }, [

@@ -13,36 +13,26 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useReservationPoolsMarquee } from '@/hooks/useReservationPoolsMarquee';
+import { useOrderbookMarketTicker } from '@/hooks/useOrderbookMarketTicker';
+import { useSptDiscovery } from '@/hooks/useSptDiscovery';
 import { useNetwork } from '@/lib/network-provider';
 import {
-  isProfileReservationPool,
-  reservationPoolVolumeChangePercent24h,
-  reservationPoolVolumeTrend,
-  type ReservationPoolRow,
-} from '@/lib/social-indexer/reservation-pools';
+  formatTickerPrice,
+  marketDisplayPrice,
+  type OrderbookMarketSummary,
+} from '@/lib/orderbook-indexer/ticker';
+import { trendingSptTickerItems, type SptTickerItem } from '@/lib/spt/ticker';
+import { TRADE_POOL_QUERY_KEY } from '@/lib/trade-route-path';
 import { cn } from '@/lib/utils';
-import { tradeSptPath, tradeSptPostPath } from '@/lib/trade-route-path';
-
-const THUMB_BOX_PX = 30;
-/** Ring radius in viewBox units (stroke centered on circle). */
-const THUMB_RING_R = 12;
-const THUMB_STROKE_WIDTH = 1.32;
-const THUMB_C = 2 * Math.PI * THUMB_RING_R;
-const THUMB_INSET = THUMB_BOX_PX / 2 - THUMB_RING_R;
-const THUMB_RECT_W = THUMB_RING_R * 2;
-const THUMB_POST_RX = 3.75;
-/** Inner avatar (larger photo, slightly thinner ring stroke). */
-const THUMB_INNER_PX = 21;
 
 export type TickerListMode = 'gainers' | 'losers' | '24h-change' | 'vol-pct' | 'new';
 
 const TICKER_MODE_LABEL: Record<TickerListMode, string> = {
-  gainers: 'Most filled',
-  losers: 'Least filled',
-  '24h-change': 'Largest reserve',
-  'vol-pct': '24h volume %',
-  new: 'Newest',
+  gainers: 'Gainers',
+  losers: 'Losers',
+  '24h-change': 'Largest move',
+  'vol-pct': 'Volume',
+  new: 'Markets',
 };
 
 /** Reference-style palette (dark terminal ticker); deltas use theme primary / destructive for brand parity */
@@ -60,58 +50,87 @@ const bar = {
   menuBorder: 'border-trade-shell',
 } as const;
 
-function reservationProgressPct(p: ReservationPoolRow): number {
-  const t = p.required_threshold;
-  if (t <= 0) return 0;
-  return (p.total_reserved / t) * 100;
+type TickerRow = {
+  id: string;
+  href: string;
+  symbol: string;
+  avatarSrc: string | null;
+  avatarShape: 'circle' | 'square';
+  price: number | null;
+  changePercent: number;
+  quoteVolume: number;
+  nativeRank: number;
+};
+
+function preferredMarketScore(pair: string): number {
+  if (pair === 'MYSO_MYUSD') return 0;
+  if (pair === 'BTC_MYUSD') return 1;
+  if (pair === 'ETH_MYUSD') return 2;
+  if (pair.startsWith('MYSO_')) return 10;
+  if (pair.startsWith('BTC_')) return 11;
+  if (pair.startsWith('ETH_')) return 12;
+  return 50;
 }
 
-function sortReservationPools(rows: ReservationPoolRow[], mode: TickerListMode): ReservationPoolRow[] {
-  const copy = [...rows];
-  const createdMs = (p: ReservationPoolRow) => {
-    const raw = p.created_at?.trim();
-    if (!raw) return 0;
-    const ms = Date.parse(raw);
-    return Number.isFinite(ms) ? ms : 0;
+function nativeTickerRow(market: OrderbookMarketSummary): TickerRow {
+  const symbol = tickerSymbolAbbr(market);
+  return {
+    id: `native:${market.trading_pairs}`,
+    href: `/trade?${TRADE_POOL_QUERY_KEY}=${encodeURIComponent(market.trading_pairs)}`,
+    symbol,
+    avatarSrc: tickerAvatarSrc(symbol),
+    avatarShape: 'circle',
+    price: marketDisplayPrice(market),
+    changePercent: market.price_change_percent_24h ?? 0,
+    quoteVolume: market.quote_volume ?? 0,
+    nativeRank: preferredMarketScore(market.trading_pairs),
   };
+}
+
+function sptTickerRow(item: SptTickerItem): TickerRow {
+  return {
+    ...item,
+    nativeRank: 200,
+  };
+}
+
+function sortTickerRows(rows: TickerRow[], mode: TickerListMode): TickerRow[] {
+  const copy = [...rows];
   switch (mode) {
     case 'gainers':
-      return copy.sort((a, b) => reservationProgressPct(b) - reservationProgressPct(a));
+      return copy.sort((a, b) => b.changePercent - a.changePercent);
     case 'losers':
-      return copy.sort((a, b) => reservationProgressPct(a) - reservationProgressPct(b));
+      return copy.sort((a, b) => a.changePercent - b.changePercent);
     case '24h-change':
-      return copy.sort((a, b) => b.total_reserved - a.total_reserved);
-    case 'vol-pct': {
-      return copy.sort((a, b) => {
-        const ap = reservationPoolVolumeChangePercent24h(a);
-        const bp = reservationPoolVolumeChangePercent24h(b);
-        const an = ap ?? Number.NEGATIVE_INFINITY;
-        const bn = bp ?? Number.NEGATIVE_INFINITY;
-        return bn - an;
-      });
-    }
+      return copy.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+    case 'vol-pct':
+      return copy.sort((a, b) => b.quoteVolume - a.quoteVolume);
     case 'new':
     default:
-      return copy.sort((a, b) => createdMs(b) - createdMs(a));
+      return copy.sort((a, b) => {
+        const d = a.nativeRank - b.nativeRank;
+        if (d !== 0) return d;
+        return a.symbol.localeCompare(b.symbol);
+      });
   }
 }
 
-function shortPoolId(id: string): string {
-  const t = id.trim();
-  if (t.length <= 14) return t;
-  return `${t.slice(0, 6)}…${t.slice(-4)}`;
+function tickerSymbolAbbr(market: OrderbookMarketSummary): string {
+  const raw = (market.base_currency || market.trading_pairs.split('_')[0] || market.trading_pairs).trim();
+  return raw.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 5) || raw.slice(0, 4).toUpperCase();
 }
 
-/** Marquee label: `@handle` from API (strip duplicate `@`); pool id fallback stays unprefixed. */
-function formatMarqueeHandle(secondaryLabel: string | null | undefined, poolId: string): string {
-  const raw = secondaryLabel?.trim();
-  if (!raw) return shortPoolId(poolId);
-  const handle = raw.replace(/^@+/, '').trim();
-  if (!handle) return shortPoolId(poolId);
-  return `@${handle}`;
+function tickerAvatarSrc(symbol: string): string | null {
+  return symbol === 'MYSO' ? '/MySo-icon-green.png' : null;
 }
 
-/** Small cap-style ▲ / ▼ (volume direction). */
+function tickerAvatarTone(symbol: string): string {
+  if (symbol === 'BTC') return 'bg-[#F7931A] text-white';
+  if (symbol === 'ETH') return 'bg-[#627EEA] text-white';
+  if (symbol === 'MYSO') return 'bg-primary/20 text-primary';
+  return 'bg-[#2a2a2a] text-[#e0e0e0]';
+}
+
 function VolumeTrendGlyph({ trend }: { trend: 'up' | 'down' }) {
   if (trend === 'up') {
     return (
@@ -127,137 +146,61 @@ function VolumeTrendGlyph({ trend }: { trend: 'up' | 'down' }) {
   );
 }
 
-function ReservationPoolMarqueeThumb({
-  iconUrl,
-  progressPct,
-  profile,
+function TickerThumb({
+  src,
+  symbol,
+  shape,
 }: {
-  iconUrl: string | null | undefined;
-  progressPct: number;
-  profile: boolean;
+  src: string | null;
+  symbol: string;
+  shape: 'circle' | 'square';
 }) {
-  const ringFillPct = Math.min(Math.max(progressPct, 0), 100);
-  const arcLen = (ringFillPct / 100) * THUMB_C;
-  const shape = profile ? 'rounded-full' : 'rounded-[3.75px]';
-
+  const containLogo = src === '/MySo-icon-green.png';
   return (
-    <div
-      className="relative shrink-0"
-      style={{ width: THUMB_BOX_PX, height: THUMB_BOX_PX }}
+    <span
+      className={cn(
+        'trade-ticker-thumb',
+        shape === 'circle' ? 'rounded-full' : 'rounded-[2px]',
+        src ? 'bg-[#1a1a1a]' : cn('inline-flex items-center justify-center', tickerAvatarTone(symbol))
+      )}
+      data-fit={containLogo ? 'contain' : 'cover'}
       aria-hidden
     >
-      <svg
-        className="absolute left-0 top-0 -rotate-90"
-        width={THUMB_BOX_PX}
-        height={THUMB_BOX_PX}
-        viewBox={`0 0 ${THUMB_BOX_PX} ${THUMB_BOX_PX}`}
-      >
-        {profile ? (
-          <>
-            <circle
-              cx={THUMB_BOX_PX / 2}
-              cy={THUMB_BOX_PX / 2}
-              r={THUMB_RING_R}
-              fill="none"
-              stroke="#2a2a2a"
-              strokeWidth={THUMB_STROKE_WIDTH}
-            />
-            <circle
-              cx={THUMB_BOX_PX / 2}
-              cy={THUMB_BOX_PX / 2}
-              r={THUMB_RING_R}
-              fill="none"
-              stroke="var(--primary)"
-              strokeWidth={THUMB_STROKE_WIDTH}
-              strokeLinecap="round"
-              strokeDasharray={`${arcLen} ${THUMB_C}`}
-            />
-          </>
-        ) : (
-          <>
-            <rect
-              x={THUMB_INSET}
-              y={THUMB_INSET}
-              width={THUMB_RECT_W}
-              height={THUMB_RECT_W}
-              rx={THUMB_POST_RX}
-              ry={THUMB_POST_RX}
-              fill="none"
-              stroke="#2a2a2a"
-              strokeWidth={THUMB_STROKE_WIDTH}
-            />
-            <rect
-              x={THUMB_INSET}
-              y={THUMB_INSET}
-              width={THUMB_RECT_W}
-              height={THUMB_RECT_W}
-              rx={THUMB_POST_RX}
-              ry={THUMB_POST_RX}
-              fill="none"
-              stroke="var(--primary)"
-              strokeWidth={THUMB_STROKE_WIDTH}
-              strokeLinecap="round"
-              pathLength={100}
-              strokeDasharray={`${ringFillPct} ${100 - ringFillPct}`}
-            />
-          </>
-        )}
-      </svg>
-      <div
-        className={cn(
-          'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 overflow-hidden bg-[#2a2a2a]',
-          shape
-        )}
-        style={{ width: THUMB_INNER_PX, height: THUMB_INNER_PX }}
-      >
-        {iconUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- external token icons; arbitrary origins
-          <img src={iconUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
-        ) : null}
-      </div>
-    </div>
+      {src ? (
+        // Decorative marquee thumb; next/image is a poor fit for auto-filled copies.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" width={20} height={20} />
+      ) : (
+        <span className="text-[8px] font-semibold leading-none">{symbol.slice(0, 1)}</span>
+      )}
+    </span>
   );
 }
 
-function PoolMarqueeItem({
-  pool,
-  progressPct,
-}: {
-  pool: ReservationPoolRow;
-  progressPct: number;
-}) {
-  const handleLabel = formatMarqueeHandle(pool.secondary_label, pool.pool_id);
-  const reservePctLabel = `${progressPct.toFixed(1)}%`;
-  const iconUrl = pool.icon?.trim();
-  const profile = isProfileReservationPool(pool);
-  const volPct = reservationPoolVolumeChangePercent24h(pool);
-  const volTrend = reservationPoolVolumeTrend(pool);
-  const volColorClass = volTrend === 'up' ? bar.up : volTrend === 'down' ? bar.down : bar.muted;
-  const reserveLabelClass =
-    'text-[11px] font-normal leading-none tabular-nums text-primary';
+function MarketMarqueeItem({ row }: { row: TickerRow }) {
+  const change = row.changePercent;
+  const trend = change > 0 ? 'up' : change < 0 ? 'down' : null;
+  const volColorClass = trend === 'up' ? bar.up : trend === 'down' ? bar.down : bar.muted;
+  const priceLabel = row.price == null ? '—' : `$${formatTickerPrice(row.price)}`;
+  const changeLabel = `${change > 0 ? '+' : change < 0 ? '-' : ''}${Math.abs(change).toFixed(2)}%`;
 
   return (
-    <Link href={profile ? tradeSptPath(pool.owner) : tradeSptPostPath(pool.associated_id || '')} className="inline-flex items-center gap-2 whitespace-nowrap px-5 text-[13px] leading-none tabular-nums pt-1 hover:opacity-80 focus-visible:outline focus-visible:outline-primary">
-      <ReservationPoolMarqueeThumb
-        iconUrl={iconUrl}
-        progressPct={progressPct}
-        profile={profile}
-      />
-      <span className="inline-flex items-center gap-2">
-        <span className="font-normal leading-none text-[var(--muted-foreground)]">{handleLabel}</span>
-        <span className={reserveLabelClass}>{reservePctLabel}</span>
-        {volPct !== null && volTrend ? (
-          <span
-            className={cn(
-              'inline-flex shrink-0 items-center gap-0.5 text-[11px] font-normal leading-none tabular-nums',
-              volColorClass
-            )}
-            title="24h volume change"
-          >
-            <VolumeTrendGlyph trend={volTrend} />
-            {`${Math.abs(volPct).toFixed(1)}%`}
-          </span>
-        ) : null}
+    <Link
+      href={row.href}
+      className="inline-flex h-10 items-center gap-2 whitespace-nowrap px-5 text-[13px] leading-none tabular-nums hover:opacity-80 focus-visible:outline focus-visible:outline-primary"
+    >
+      <TickerThumb src={row.avatarSrc} symbol={row.symbol} shape={row.avatarShape} />
+      <span className="font-semibold leading-none tracking-wide text-[#e0e0e0]">{row.symbol}</span>
+      <span className="font-medium leading-none text-[#e0e0e0]">{priceLabel}</span>
+      <span
+        className={cn(
+          'inline-flex shrink-0 items-center gap-0.5 text-[11px] font-normal leading-none tabular-nums',
+          volColorClass
+        )}
+        title="24h price change"
+      >
+        {trend ? <VolumeTrendGlyph trend={trend} /> : null}
+        {changeLabel}
       </span>
     </Link>
   );
@@ -270,19 +213,27 @@ const menuItemClass = cn(
 );
 
 const TICKER_SORT_OPTIONS: { value: TickerListMode; label: string }[] = [
-  { value: 'gainers', label: 'Most filled' },
-  { value: 'losers', label: 'Least filled' },
-  { value: '24h-change', label: 'Largest reserve' },
-  { value: 'vol-pct', label: '24h volume %' },
-  { value: 'new', label: 'Newest' },
+  { value: 'new', label: 'Markets' },
+  { value: 'gainers', label: 'Gainers' },
+  { value: 'losers', label: 'Losers' },
+  { value: '24h-change', label: 'Largest move' },
+  { value: 'vol-pct', label: 'Volume' },
 ];
 
 export function TradeMarketTicker({ className }: { className?: string }) {
   const { currentNetwork } = useNetwork();
-  const { pools, hasLiveData, isLoading, error } = useReservationPoolsMarquee(currentNetwork);
+  const natives = useOrderbookMarketTicker(currentNetwork);
+  const spt = useSptDiscovery(currentNetwork);
   const [listMode, setListMode] = useState<TickerListMode>('new');
 
-  const poolItems = useMemo(() => sortReservationPools(pools, listMode), [pools, listMode]);
+  const marketItems = useMemo(() => {
+    const nativeRows = natives.markets.map(nativeTickerRow);
+    const sptRows = trendingSptTickerItems(spt.data).map(sptTickerRow);
+    return sortTickerRows([...nativeRows, ...sptRows], listMode);
+  }, [natives.markets, spt.data, listMode]);
+  const hasLiveData = marketItems.length > 0;
+  const isLoading = !hasLiveData && (natives.isLoading || spt.isLoading);
+  const error = !hasLiveData ? natives.error || spt.error : null;
 
   return (
     <footer
@@ -292,7 +243,7 @@ export function TradeMarketTicker({ className }: { className?: string }) {
         bar.bg,
         className
       )}
-      aria-label="Reservation pools ticker"
+      aria-label="Markets ticker"
     >
       <div
         className={cn(
@@ -348,21 +299,27 @@ export function TradeMarketTicker({ className }: { className?: string }) {
       </div>
 
       <div className="trade-marquee-edge-mask flex min-h-0 min-w-0 flex-1 items-center justify-start overflow-hidden self-stretch">
-        {hasLiveData ? <Marquee
-          speed={22}
-          gradient={false}
-          pauseOnHover
-          autoFill
-          className="flex min-h-0 w-full items-center"
-        >
-          {poolItems.map((p, i) => (
-                <PoolMarqueeItem
-                  key={`${p.pool_id}-${i}`}
-                  pool={p}
-                  progressPct={reservationProgressPct(p)}
-                />
-              ))}
-        </Marquee> : <span className="truncate px-5 text-xs text-muted-foreground" role="status">{isLoading ? 'Loading reservation pools…' : error ? 'Reservation ticker unavailable' : 'No open reservation pools'}</span>}
+        {hasLiveData ? (
+          <Marquee
+            speed={22}
+            gradient={false}
+            pauseOnHover
+            autoFill
+            className="flex min-h-0 w-full items-center"
+          >
+            {marketItems.map((row, i) => (
+              <MarketMarqueeItem key={`${row.id}-${i}`} row={row} />
+            ))}
+          </Marquee>
+        ) : (
+          <span className="truncate px-5 text-xs text-muted-foreground" role="status">
+            {isLoading
+              ? 'Loading markets…'
+              : error
+                ? 'Market ticker unavailable'
+                : 'No markets indexed yet'}
+          </span>
+        )}
       </div>
 
       <div

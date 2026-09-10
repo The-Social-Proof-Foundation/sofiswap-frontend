@@ -169,6 +169,42 @@ function target(config: SptChainConfig, fn: string): `${string}::social_proof_to
   return `${config.packageId}::social_proof_tokens::${fn}`;
 }
 
+async function assertSptSharedObjectsExist(
+  network: NetworkType,
+  config: SptChainConfig,
+  extra: Array<{ id: string; label: string }> = []
+): Promise<void> {
+  const client = getMySoJsonRpcClient(network);
+  const objects = [
+    { id: config.tokenRegistryId, label: 'TokenRegistry' },
+    { id: config.sptConfigId, label: 'SocialProofTokensConfig' },
+    { id: config.ecosystemTreasuryId, label: 'EcosystemTreasury' },
+    { id: config.usernameRegistryId, label: 'UsernameRegistry' },
+    { id: config.blockListRegistryId, label: 'BlockListRegistry' },
+    { id: config.platformRegistryId, label: 'PlatformRegistry' },
+    ...(config.platformId ? [{ id: config.platformId, label: 'SofiSwap platform' }] : []),
+    ...extra,
+  ];
+  const missing = (
+    await Promise.all(
+      objects.map(async ({ id, label }) => {
+        try {
+          const result = await client.getObject({ id });
+          return result.data ? null : `${label} (${id})`;
+        } catch {
+          return `${label} (${id})`;
+        }
+      })
+    )
+  ).filter((value): value is string => Boolean(value));
+  if (missing.length) {
+    throw new Error(
+      `These SPT objects are not on the ${network} fullnode: ${missing.join(', ')}. ` +
+        'GraphQL and the chain are out of sync. Refresh after the indexer catches up, or unset stale NEXT_PUBLIC_SOFISWAP_* / registry env vars.'
+    );
+  }
+}
+
 function assertSucceeded(response: MySoTransactionBlockResponse, label: string): void {
   const status = response.effects?.status;
   if (!status) throw new Error(`${label}: the network response did not include execution effects.`);
@@ -337,6 +373,9 @@ export async function executeEnableSpt(input: {
   subjectObjectId: string;
 }): Promise<MySoTransactionBlockResponse> {
   const config = await resolveSptChainConfig(input.network, { force: true });
+  await assertSptSharedObjectsExist(input.network, config, [
+    { id: input.subjectObjectId, label: 'SPT subject' },
+  ]);
   const fn = input.tokenType === SPT_TOKEN_TYPE_POST
     ? 'enable_spt_for_post'
     : 'create_reservation_pool_for_profile';
@@ -364,6 +403,9 @@ export async function executeLaunchSpt(input: {
   reservationPoolId: string;
 }): Promise<MySoTransactionBlockResponse> {
   const config = await resolveSptChainConfig(input.network, { force: true });
+  await assertSptSharedObjectsExist(input.network, config, [
+    { id: input.reservationPoolId, label: 'reservation pool' },
+  ]);
   return executeAndWait({
     ...input,
     label: 'Launch Social Proof Token',
@@ -392,6 +434,13 @@ export async function executeReserveSpt(input: {
   postContext?: SptPostTransactionContext;
 }): Promise<MySoTransactionBlockResponse> {
   const config = await resolveSptChainConfig(input.network, { force: true });
+  await assertSptSharedObjectsExist(input.network, config, [
+    { id: input.reservationPoolId, label: 'reservation pool' },
+    ...(input.postContext?.postId ? [{ id: input.postContext.postId, label: 'post' }] : []),
+    ...(input.postContext?.beneficiaryVaultId
+      ? [{ id: input.postContext.beneficiaryVaultId, label: 'beneficiary vault' }]
+      : []),
+  ]);
   const client = getMySoJsonRpcClient(input.network);
   const totalPayment = input.principalAmount + input.feeAmount;
   const rules = await readSptRules(input.network);
@@ -512,6 +561,13 @@ export async function executeWithdrawSptReservation(input: {
   postContext?: SptPostTransactionContext;
 }): Promise<MySoTransactionBlockResponse> {
   const config = await resolveSptChainConfig(input.network, { force: true });
+  await assertSptSharedObjectsExist(input.network, config, [
+    { id: input.reservationPoolId, label: 'reservation pool' },
+    ...(input.postContext?.postId ? [{ id: input.postContext.postId, label: 'post' }] : []),
+    ...(input.postContext?.beneficiaryVaultId
+      ? [{ id: input.postContext.beneficiaryVaultId, label: 'beneficiary vault' }]
+      : []),
+  ]);
   const platform = config.platformId;
 
   return executeAndWait({
@@ -577,6 +633,9 @@ export async function executeBuySpt(input: {
   paymentAmount: bigint;
 }): Promise<MySoTransactionBlockResponse> {
   const config = await resolveSptChainConfig(input.network, { force: true });
+  await assertSptSharedObjectsExist(input.network, config, [
+    { id: input.poolId, label: 'SPT pool' },
+  ]);
   const client = getMySoJsonRpcClient(input.network);
   const [ownedToken, plan, routing] = await Promise.all([
     findOwnedSocialToken({ ...input, owner: input.sender, packageId: config.packageId }),
@@ -637,6 +696,9 @@ export async function executeSellSpt(input: {
   tokenAmount: bigint;
 }): Promise<MySoTransactionBlockResponse> {
   const config = await resolveSptChainConfig(input.network, { force: true });
+  await assertSptSharedObjectsExist(input.network, config, [
+    { id: input.poolId, label: 'SPT pool' },
+  ]);
   const ownedToken = await findOwnedSocialToken({
     ...input,
     owner: input.sender,

@@ -158,6 +158,21 @@
 
 /* h-dvh / min-h-dvh are not in Tailwind 3.3 defaults — use plain CSS for the trade shell */
 @layer components {
+  .landing-grain {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
+  }
+
+  .dark .landing-grain {
+    opacity: 0.055;
+    mix-blend-mode: overlay;
+  }
+
   .trade-viewport-shell {
     height: 100vh;
     max-height: 100vh;
@@ -179,6 +194,49 @@
    * react-fast-marquee's gradient paints a solid → transparent layer; transparency reveals bright
    * glyphs underneath and reads as a light wash on dark themes.
    */
+  .trade-marquee-edge-mask .rfm-marquee,
+  .trade-marquee-edge-mask .rfm-initial-child-container,
+  .trade-marquee-edge-mask .rfm-child {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+
+  /**
+   * Ticker thumbs must ignore image intrinsic size. Flex + <img> otherwise grows
+   * each mark to the photo’s natural width, so logos and avatars sit all over.
+   */
+  .trade-ticker-thumb {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 20px;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    max-width: 20px;
+    max-height: 20px;
+    overflow: hidden;
+  }
+
+  .trade-ticker-thumb img {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .trade-ticker-thumb[data-fit='contain'] img {
+    object-fit: contain;
+  }
+
   .trade-marquee-edge-mask {
     mask-image: linear-gradient(
       to right,

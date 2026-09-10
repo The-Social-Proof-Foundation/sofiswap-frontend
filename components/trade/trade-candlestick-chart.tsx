@@ -5,6 +5,7 @@ import {
   CrosshairMode,
   createChart,
   type CandlestickData,
+  type IChartApi,
   type ISeriesApi,
 } from 'lightweight-charts';
 import { useTheme } from 'next-themes';
@@ -23,6 +24,17 @@ function readCssVarOnElement(el: HTMLElement, name: string, fallback: string): s
   return v || fallback;
 }
 
+function priceFormatForCandles(data: CandlestickData[] | null): {
+  type: 'price';
+  precision: number;
+  minMove: number;
+} {
+  const prices = (data ?? []).flatMap((c) => [c.open, c.high, c.low, c.close]);
+  const min = Math.min(...prices.filter((n) => Number.isFinite(n) && n > 0));
+  const precision = !Number.isFinite(min) ? 4 : min >= 100 ? 2 : min >= 1 ? 4 : min >= 0.01 ? 5 : 6;
+  return { type: 'price', precision, minMove: 10 ** -precision };
+}
+
 export function TradeCandlestickChart({
   data,
   className,
@@ -37,6 +49,7 @@ export function TradeCandlestickChart({
   'aria-label'?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const dataRef = useRef(data);
   dataRef.current = data;
@@ -83,24 +96,38 @@ export function TradeCandlestickChart({
       borderVisible: true,
       wickUpColor: up,
       wickDownColor: down,
+      priceFormat: priceFormatForCandles(dataRef.current),
     });
 
     seriesRef.current = series;
+    chartRef.current = chart;
     const initial = dataRef.current;
-    if (initial?.length) series.setData(initial);
-    else series.setData([]);
+    if (initial?.length) {
+      series.setData(initial);
+      chart.timeScale().fitContent();
+    } else {
+      series.setData([]);
+    }
 
     return () => {
       chart.remove();
       seriesRef.current = null;
+      chartRef.current = null;
     };
   }, [resolvedTheme]);
 
   useEffect(() => {
     const series = seriesRef.current;
+    const chart = chartRef.current;
     if (!series) return;
-    if (data?.length) series.setData(data);
-    else series.setData([]);
+    if (data?.length) {
+      series.applyOptions({ priceFormat: priceFormatForCandles(data) });
+      series.setData(data);
+      chart?.timeScale().fitContent();
+      chart?.priceScale('right').applyOptions({ autoScale: true });
+    } else {
+      series.setData([]);
+    }
   }, [data]);
 
   const overlay =
@@ -114,7 +141,7 @@ export function TradeCandlestickChart({
       </div>
     ) : status === 'empty' ? (
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background/50 text-sm text-[var(--muted-foreground)]">
-        No candle data for this range.
+        No candle data yet for this market.
       </div>
     ) : null;
 

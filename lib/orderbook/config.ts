@@ -6,26 +6,35 @@
  *
  * **Trading network** (`orderbookTradingNetwork`): all supported networks, including localnet.
  *
- * **Deployment** (`getResolvedOrderbookDeployment`): orderbook Move package id from env / SDK defaults;
- * registry object id is fixed on-chain ({@link ORDERBOOK_REGISTRY_OBJECT_ID}) for all networks.
+ * **Deployment** (`getResolvedOrderbookDeployment`): orderbook Move package + registry object
+ * from env, localnet manifest, or `@socialproof/orderbook` network defaults.
  */
 
-import { mainnetPackageIds, testnetPackageIds } from '@socialproof/orderbook';
+import {
+  localnetPackageIds,
+  mainnetPackageIds,
+  testnetPackageIds,
+} from '@socialproof/orderbook';
 
 import type { NetworkType } from '@/lib/network-utils';
+import { isUsableOnchainObjectId } from '@/lib/platform-config';
+import {
+  registryIdFromLocalnetManifest,
+  tryReadLocalnetManifestFromEnv,
+} from '@/lib/orderbook/localnet-manifest';
 
 export type OrderbookRuntimeNetwork = 'mainnet' | 'testnet' | 'localnet';
 
 /**
- * On-chain orderbook BalanceManager registry — same fixed object id on every network (genesis / deploy).
- * Short form: `0x10`.
+ * @deprecated Prefer {@link getResolvedOrderbookDeployment}. Kept as the short-form id some
+ * local genesis notes still mention; live networks use the SDK registry object, not `0x10`.
  */
 export const ORDERBOOK_REGISTRY_OBJECT_ID =
   '0x0000000000000000000000000000000000000000000000000000000000000010';
 
 /** Single troubleshooting line for mismatched / missing deployment env (use in thrown errors and hints). */
 export const ORDERBOOK_DEPLOYMENT_ENV_HINT =
-  'Use NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID (or *_MAINNET / *_TESTNET) for the orderbook Move package. Registry is fixed at ORDERBOOK_REGISTRY_OBJECT_ID (0x10). Localnet: NEXT_PUBLIC_ORDERBOOK_LOCALNET_MANIFEST_JSON for coin Move types; optional pool patches: NEXT_PUBLIC_ORDERBOOK_LOCALNET_POOLS_JSON.';
+  'Use NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID and NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID (or *_MAINNET / *_TESTNET / *_LOCALNET) to match the published orderbook. Localnet can also take the Registry object from NEXT_PUBLIC_ORDERBOOK_LOCALNET_MANIFEST_JSON.';
 
 function trimPublic(value: string | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -37,38 +46,42 @@ function isCanonicalMysoHexId(value: string): boolean {
   return /^[0-9a-fA-F]{1,64}$/.test(hex);
 }
 
-function warnInvalidCanonical(name: string): void {
-  console.warn(`[orderbook] Ignoring ${name}: must be a canonical MySo id (0x + 64 hex).`);
+function usableCanonicalId(value: string | undefined): string | undefined {
+  const v = trimPublic(value);
+  if (!v) return undefined;
+  if (!isCanonicalMysoHexId(v) || !isUsableOnchainObjectId(v)) return undefined;
+  return v;
 }
 
-function packageIdUniversal(): string | undefined {
-  const v = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID);
-  if (!v) return undefined;
-  if (isCanonicalMysoHexId(v)) return v;
-  warnInvalidCanonical('NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID');
-  return undefined;
+function sdkPackageIds(network: OrderbookRuntimeNetwork) {
+  if (network === 'mainnet') return mainnetPackageIds;
+  if (network === 'localnet') return localnetPackageIds;
+  return testnetPackageIds;
 }
 
-function packageIdTier(network: OrderbookRuntimeNetwork): string | undefined {
-  if (network === 'localnet') {
-    const v = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_LOCALNET);
-    if (!v) return undefined;
-    if (isCanonicalMysoHexId(v)) return v;
-    warnInvalidCanonical('NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_LOCALNET');
-    return undefined;
-  }
-  if (network === 'mainnet') {
-    const v = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_MAINNET);
-    if (!v) return undefined;
-    if (isCanonicalMysoHexId(v)) return v;
-    warnInvalidCanonical('NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_MAINNET');
-    return undefined;
-  }
-  const v = trimPublic(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_TESTNET);
-  if (!v) return undefined;
-  if (isCanonicalMysoHexId(v)) return v;
-  warnInvalidCanonical('NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_TESTNET');
-  return undefined;
+/**
+ * Next only inlines `NEXT_PUBLIC_*` on static `process.env.NEXT_PUBLIC_*` reads.
+ * `process.env[name]` is empty in the browser, which used to drop the localnet
+ * registry and submit `0x0` / a stale SDK object to `get_balance_manager_ids`.
+ */
+function packageIdForNetwork(network: OrderbookRuntimeNetwork): string | undefined {
+  const tier =
+    network === 'localnet'
+      ? usableCanonicalId(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_LOCALNET)
+      : network === 'mainnet'
+        ? usableCanonicalId(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_MAINNET)
+        : usableCanonicalId(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID_TESTNET);
+  return tier || usableCanonicalId(process.env.NEXT_PUBLIC_ORDERBOOK_PACKAGE_ID);
+}
+
+function registryIdForNetwork(network: OrderbookRuntimeNetwork): string | undefined {
+  const tier =
+    network === 'localnet'
+      ? usableCanonicalId(process.env.NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_LOCALNET)
+      : network === 'mainnet'
+        ? usableCanonicalId(process.env.NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_MAINNET)
+        : usableCanonicalId(process.env.NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID_TESTNET);
+  return tier || usableCanonicalId(process.env.NEXT_PUBLIC_ORDERBOOK_REGISTRY_ID);
 }
 
 export interface ResolvedOrderbookDeployment {
@@ -79,14 +92,21 @@ export interface ResolvedOrderbookDeployment {
 export function getResolvedOrderbookDeployment(
   network: OrderbookRuntimeNetwork
 ): ResolvedOrderbookDeployment {
-  const defaults = network === 'mainnet' ? mainnetPackageIds : testnetPackageIds;
+  const defaults = sdkPackageIds(network);
+  const manifest = network === 'localnet' ? tryReadLocalnetManifestFromEnv() : null;
+  const pkg =
+    packageIdForNetwork(network) ??
+    usableCanonicalId(manifest?.packages.orderbook.packageId) ??
+    usableCanonicalId(defaults.ORDERBOOK_PACKAGE_ID) ??
+    defaults.ORDERBOOK_PACKAGE_ID;
+  const registry =
+    registryIdForNetwork(network) ??
+    usableCanonicalId(manifest ? registryIdFromLocalnetManifest(manifest) : undefined) ??
+    (network === 'localnet' ? ORDERBOOK_REGISTRY_OBJECT_ID : undefined) ??
+    usableCanonicalId(defaults.REGISTRY_ID) ??
+    defaults.REGISTRY_ID;
 
-  const fromUniversalPkg = packageIdUniversal();
-  const fromTierPkg = packageIdTier(network);
-  const pkg = fromTierPkg ?? fromUniversalPkg ??
-    (network === 'localnet' ? '0x0b0c' : defaults.ORDERBOOK_PACKAGE_ID);
-
-  return { orderbookPackageId: pkg, registryId: ORDERBOOK_REGISTRY_OBJECT_ID };
+  return { orderbookPackageId: pkg, registryId: registry };
 }
 
 export function orderbookRuntimeNetwork(network: NetworkType): OrderbookRuntimeNetwork {
@@ -115,6 +135,18 @@ export function augmentOrderbookReadErrorMessage(
     return message;
   }
   return `${message} ${ORDERBOOK_DEPLOYMENT_ENV_HINT}`;
+}
+
+/**
+ * `get_balance_manager_ids` looks up the owner in the registry map. Missing child / missing owner
+ * aborts `dynamic_field::borrow_child_object` (not `_mut`) with code 1 — that means “no managers”,
+ * not a broken deployment.
+ */
+export function isBalanceManagerLookupMissingAbort(message: string): boolean {
+  if (/borrow_child_object_mut/.test(message)) return false;
+  return /dynamic_field::borrow_child_object|function_name: Some\("borrow_child_object"\)/.test(
+    message
+  );
 }
 
 /** Dev-inspect / registry errors: same hint as read errors. */
