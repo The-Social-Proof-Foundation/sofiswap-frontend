@@ -44,7 +44,7 @@ type GateMode = 'idle' | 'blocked' | 'join' | 'repair' | 'hidden';
 
 const tradeGateDialogOverlayClassName = 'bg-black/45 backdrop-blur-md';
 const tradeGateDialogContentClassName = cn(
-  'border border-trade-shell bg-background/88 backdrop-blur-xl supports-[backdrop-filter]:bg-background/72 shadow-2xl',
+  'border border-trade-shell bg-background shadow-2xl',
   '[&>button:last-child]:hidden'
 );
 
@@ -429,41 +429,27 @@ export function TradePlatformAccessGate({
         senderAddress: displayAddress,
         signer: keypair,
       });
-      const skippedNewTransactions = setupResponse == null;
-      await refreshTradingSetup();
-      const poll = await pollRegisteredBalanceManagerIdsAfterTx(currentNetwork, displayAddress);
-      await refreshTradingSetup();
-      if (poll.pollError) {
-        toast.error(`Could not confirm trading setup: ${poll.pollError}`);
-        setTimeout(() => void runCheck(), 0);
-        return;
-      }
-      if (poll.timedOut || poll.ids.length === 0) {
-        toast.message(
-          skippedNewTransactions
-            ? 'Could not confirm your balance manager on the registry yet. We will keep checking…'
-            : 'Transaction succeeded. Waiting for registry to list your balance manager…'
-        );
-        setTimeout(() => void runCheck(), 0);
-        return;
-      }
       if (config) {
         setTradeGateOk(currentNetwork, config.platformGraphqlId, displayAddress);
       }
+      repairPromptDismissedRef.current = true;
       setRepairOpen(false);
       setMode('hidden');
       toast.success(
-        skippedNewTransactions
+        setupResponse == null
           ? 'You already have a registered balance manager.'
           : 'Trading setup complete.'
       );
+      void pollRegisteredBalanceManagerIdsAfterTx(currentNetwork, displayAddress)
+        .then(() => refreshTradingSetup())
+        .catch(() => {});
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Trading setup failed';
       toast.error(msg);
     } finally {
       setRepairPending(false);
     }
-  }, [config, currentNetwork, displayAddress, keypair, runCheck, refreshTradingSetup]);
+  }, [config, currentNetwork, displayAddress, keypair, refreshTradingSetup]);
 
   /** Close join prompt without signing out (e.g. switch network in header). Resets when network or account changes. */
   const onJoinDismiss = useCallback(() => {
@@ -610,7 +596,7 @@ export function TradePlatformAccessGate({
             keys can sign the join transaction.
           </p>
         ) : null}
-        <DialogFooter className="flex-col gap-2 sm:justify-stretch">
+        <DialogFooter className="sm:justify-stretch">
           <Button
             type="button"
             className="w-full"
@@ -618,9 +604,6 @@ export function TradePlatformAccessGate({
             onClick={() => void onJoin()}
           >
             {joinPending ? 'Joining…' : 'Join platform'}
-          </Button>
-          <Button type="button" variant="ghost" className="w-full" disabled={joinPending} onClick={onJoinDismiss}>
-            Not now
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -6,11 +6,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { ArrowRight, FileText, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, type UnderlineTabItem } from '@/components/ui/tabs';
+import { SptPortfolioPanel } from '@/components/trade/spt-portfolio-panel';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { usePolledResource } from '@/hooks/usePolledResource';
+import { useSptPortfolio } from '@/hooks/useSptPortfolio';
 import { fetchSptDirectory } from '@/lib/graphql/spt-directory';
 import { useNetwork } from '@/lib/network-provider';
 import { postDirectoryThumbUrl, profileDirectoryThumbUrl } from '@/lib/spt/media';
+import { sptOwnedSubjectKeys, sptSubjectKey } from '@/lib/spt/owned-positions';
 import { tradeSptPath, tradeSptPostPath } from '@/lib/trade-route-path';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +62,12 @@ export function SptMarketDirectory() {
   const [filter, setFilter] = useState<DirectoryFilter>('all');
   const load = useCallback(() => fetchSptDirectory({ network: currentNetwork, offset: page * 50 }), [currentNetwork, page]);
   const { data, error, isLoading, revalidate } = usePolledResource(`${currentNetwork}:${page}`, load, 30_000);
+  const portfolio = useSptPortfolio({
+    network: currentNetwork,
+    owner: displayAddress,
+    enabled: isAuthenticated && Boolean(displayAddress),
+  });
+  const ownedKeys = useMemo(() => sptOwnedSubjectKeys(portfolio.positions), [portfolio.positions]);
   const rows = useMemo(() => {
     const profiles = (data?.profiles ?? []).map((p) => ({
       id: p.address, kind: 'profile' as const, title: p.displayName || p.username || short(p.address),
@@ -80,9 +89,19 @@ export function SptMarketDirectory() {
         <div className="flex flex-wrap items-start justify-between gap-5">
           <div><p className="text-xs font-semibold uppercase tracking-widest text-primary">Social markets</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight">Social Proof Tokens</h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">Explore enabled profile and post tokens. Reserve before launch or trade live tokens. Use the search in the header to find a profile, post, or wallet.</p></div>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">Explore enabled profile and post tokens. Reserve before launch or trade live tokens. Tokens your signed-in wallet holds appear first. Use the search in the header to find a profile, post, or wallet.</p></div>
           {isAuthenticated && displayAddress ? <Button asChild variant="outline" className="rounded-full"><Link href={tradeSptPath(displayAddress)}>Manage my profile <ArrowRight className="ml-2 size-4" /></Link></Button> : null}
         </div>
+        {isAuthenticated && displayAddress ? (
+          <SptPortfolioPanel
+            className="mt-8"
+            positions={portfolio.positions}
+            walletTokens={portfolio.walletTokens}
+            isLoading={portfolio.isLoading}
+            error={portfolio.error}
+            onRefresh={portfolio.revalidate}
+          />
+        ) : null}
         <div className="mt-8">
           <Tabs
             tabs={DIRECTORY_FILTER_TABS}
@@ -100,14 +119,18 @@ export function SptMarketDirectory() {
           {error ? <div className="py-12 text-center" role="alert"><p className="text-sm text-destructive">{error}</p><Button variant="outline" onClick={revalidate} className="mt-4">Try again</Button></div>
             : !data && isLoading ? <p className="py-12 text-center text-sm text-muted-foreground" role="status">Loading enabled Social Proof Tokens…</p>
               : rows.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">{data?.hasNext ? 'No enabled Social Proof Tokens on this page. Try the next page.' : 'No enabled Social Proof Tokens to show on this page yet.'}</p>
-                : rows.map((row) => (
+                : rows.map((row) => {
+                  const owned = ownedKeys.has(sptSubjectKey(row.kind, row.id));
+                  return (
                   <Link key={`${row.kind}:${row.id}`} href={row.href} className="group flex min-w-0 items-center gap-3 py-4 transition-colors hover:bg-muted/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:gap-4">
                     <DirectoryThumb kind={row.kind} src={row.thumbUrl} alt="" />
                     <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{row.title}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{row.detail} · {row.kind === 'profile' ? 'Profile' : 'Post'}</span></span>
+                    {owned ? <span className="shrink-0 rounded-full bg-primary/20 px-2.5 py-1 text-[11px] font-medium text-primary">Owned</span> : null}
                     <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-[11px]', row.status === 'Trading' ? 'bg-primary/15 text-primary' : 'bg-muted/40 text-muted-foreground')}>{row.status}</span>
                     <ArrowRight className="mr-1 hidden size-4 shrink-0 text-muted-foreground group-hover:text-foreground sm:block" />
                   </Link>
-                ))}
+                  );
+                })}
         </div>
         <div className="mt-5 flex items-center justify-between gap-3 text-xs text-muted-foreground">
           <span>Page {page + 1} · {rows.length} shown</span>

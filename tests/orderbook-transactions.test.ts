@@ -59,6 +59,10 @@ test('native deposit uses the user gas coin only on the user-paid path; withdraw
 test('sponsored native deposit resolves sender coins, never sponsor gas, and pins the network', async () => {
   const urls: string[] = [];
   mock.method(getMySoJsonRpcClient('testnet'), 'getBalance', async () => ({ totalBalance: '500000', coinObjectCount: 1 }));
+  // The submission path reads the epoch and chain id once to pin a Validity window — with a
+  // fresh nonce, so each rebuild lands as a new digest — that survives a slow confirmation.
+  mock.method(getMySoJsonRpcClient('testnet'), 'getLatestMySoSystemState', async () => ({ epoch: '42', chainIdentifier: 'chain' }));
+  mock.method(getMySoJsonRpcClient('testnet'), 'getChainIdentifier', async () => 'abcd1234');
   mock.method(Transaction.prototype, 'build', async function (this: Transaction) { captured = this.getData(); return new Uint8Array([1, 2, 3]); });
   mock.method(signer, 'signTransaction', async () => ({ signature: 'offline-signature', bytes: 'AQID' }));
   mock.method(globalThis, 'fetch', async (url: unknown) => {
@@ -74,6 +78,10 @@ test('sponsored native deposit resolves sender coins, never sponsor gas, and pin
   assert.match(String(intent?.$Intent?.data.type), /::myso::MYSO$/);
   assert.notEqual(intent?.$Intent?.data.type, 'gas');
   assert.equal(captured!.gasData.owner, id(90));
+  const expiration = captured!.expiration as { ValidDuring?: { minEpoch?: string; maxEpoch?: string; chain?: string } } | null;
+  assert.equal(expiration?.ValidDuring?.chain, 'abcd1234');
+  assert.equal(expiration?.ValidDuring?.minEpoch, '42');
+  assert.equal(expiration?.ValidDuring?.maxEpoch, '52');
 });
 
 test('limit buys, market sells, and cancel use discovered pool and manager objects', async () => {

@@ -97,10 +97,17 @@ export function usePoolOrderBook({
 
   const rangeKey = level2Range ? `${level2Range.priceLow}-${level2Range.priceHigh}` : '';
 
+  /**
+   * A refresh updates the ladder in place; only a *different* subject drops it. `enabled` is left
+   * out on purpose: the rail/tab flipping off and on must not clear a book that is still valid.
+   */
+  useEffect(() => {
+    setData(null);
+    setError(null);
+  }, [poolName, rangeKey, currentNetwork]);
+
   useEffect(() => {
     if (!enabled || !poolName.trim()) {
-      setData(null);
-      setError(null);
       setIsLoading(false);
       return;
     }
@@ -131,7 +138,7 @@ export function usePoolOrderBook({
         setData(res.data);
         setError(null);
       } else {
-        setData(null);
+        // Keep the last good book on screen: a failed poll reports, it does not delete.
         setError(formatIndexerDepthError(res.error, currentNetwork));
       }
     };
@@ -170,7 +177,7 @@ export function usePoolOrderBook({
         setData(res.data);
         setError(null);
       } else {
-        setData(null);
+        // Same rule as the indexer path: report the failure, keep the levels already drawn.
         setError(res.error);
       }
     };
@@ -178,7 +185,6 @@ export function usePoolOrderBook({
     const handleAsyncErr = (e: unknown, endInitialLoading: boolean) => {
       if (e instanceof DOMException && e.name === 'AbortError') return;
       if (endInitialLoading) setIsLoading(false);
-      setData(null);
       setError(e instanceof Error ? e.message : String(e));
     };
 

@@ -3,7 +3,7 @@ import type { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519';
 import type { Transaction } from '@socialproof/myso/transactions';
 
 import { getMySoGraphQLClient } from '@/lib/myso-graphql-client';
-import { getMySoJsonRpcClient } from '@/lib/myso-client';
+import { fetchOwnedObjectsPage, getMySoJsonRpcClient } from '@/lib/myso-client';
 import type { NetworkType } from '@/lib/network-utils';
 import { isSponsoredGasAllowed } from '@/lib/network-utils';
 import {
@@ -260,12 +260,10 @@ export async function findOwnedSocialToken(input: {
   const tokens: Array<{ objectId: string; poolId: string; amount: bigint }> = [];
 
   do {
-    const page = await client.getOwnedObjects({
+    const page = await fetchOwnedObjectsPage(client, {
       owner: input.owner,
-      filter: { StructType: `${packageId}::social_proof_tokens::SocialToken` },
-      options: { showContent: true, showType: true },
+      structType: `${packageId}::social_proof_tokens::SocialToken`,
       cursor,
-      limit: 100,
     });
     for (const item of page.data) {
       const data = item.data;
@@ -765,6 +763,14 @@ function appendSptVaultSettlement(
 export function friendlySptTransactionError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   const lower = message.toLowerCase();
+  // Network-level rejections that are not Move aborts: the trade was built against a
+  // snapshot the chain had already moved past.
+  if (lower.includes('transaction expired')) {
+    return 'The network moved past this quote before it landed. Refresh the token and try again; no funds moved.';
+  }
+  if (lower.includes('not available for consumption') || lower.includes('invalid object')) {
+    return 'One of the balances in this trade was already used on chain. Refresh the token and try again; no funds moved.';
+  }
   if (lower.includes('social_proof_tokens')) {
     const code = lower.match(/(?:abort(?:ed)?(?: with)? code[:\s]*|\},\s*)(\d+)/)?.[1];
     const messages: Record<string, string> = {

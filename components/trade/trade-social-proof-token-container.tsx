@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { TradeSocialProofTokenWorkspace } from '@/components/trade/trade-social-proof-token-workspace';
+import { SptOwnedPositionsStrip } from '@/components/trade/spt-owned-positions-strip';
 import { SptMarketDirectory } from '@/components/trade/spt-market-directory';
 import type { GraphqlProfileOverviewData } from '@/hooks/useGraphqlProfileOverviewSWR';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
@@ -115,6 +116,7 @@ export function TradeSocialProofTokenContainer({
           Partial data: {error}
         </div>
       ) : null}
+      <SptOwnedPositionsStrip profileAddress={profileAddress} postId={postIdOverride} />
       <TradeSocialProofTokenWorkspace
         key={`${currentNetwork}:${postIdOverride || profileAddress}:${displayAddress}`}
         token={mapped.token}

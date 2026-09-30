@@ -75,11 +75,11 @@ function TradeSpotlightSearchTrigger({
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className
       )}
-      aria-label="Open search: tokens, pools, and wallets. Press / anywhere outside a field."
+      aria-label="Open search: your tokens, markets, and wallets. Press / anywhere outside a field."
     >
       <Search className="shrink-0 opacity-65" size={16} strokeWidth={1.75} aria-hidden />
       <span className="min-w-0 flex-1 truncate sm:hidden lg:block">
-        Search tokens, pools, and wallets
+        Search your tokens, markets, and wallets
       </span>
       <Kbd
         className="hidden h-5 min-w-[1.25rem] shrink-0 justify-center px-1 py-0 font-mono text-[9px] leading-none lg:inline-flex"

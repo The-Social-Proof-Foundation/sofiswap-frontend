@@ -14,7 +14,12 @@ import { usePoolOhlcv } from '@/hooks/usePoolOhlcv';
 import { usePoolOrderBook } from '@/hooks/usePoolOrderBook';
 import { useTradeChartOhlcvEnabled } from '@/hooks/useTradeChartOhlcvEnabled';
 import { useTradeSpotlightPoolItems } from '@/hooks/useTradeSpotlightPoolItems';
+import { useOwnedSptPositions } from '@/hooks/useSptPortfolio';
 import { useSptDiscovery } from '@/hooks/useSptDiscovery';
+import {
+  mergeOwnedSpotlightItems,
+  sptOwnedPositionSpotlightItems,
+} from '@/lib/spt/owned-positions';
 import { useSofiSwapPlatformConfig } from '@/hooks/useSofiSwapPlatformConfig';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
 import { applyLivePriceToCandles, OHLCV_INTERVALS } from '@/lib/orderbook-indexer/ohlcv';
@@ -260,12 +265,34 @@ export function TradePageShell() {
 
   const { items: spotlightItems, error: marketError, isLoading: marketsLoading, revalidate: refreshMarkets, revision: marketRevision } = useTradeSpotlightPoolItems(currentNetwork);
   const { items: sptSpotlightItems } = useSptDiscovery(currentNetwork);
+  // Tokens the connected wallet holds are indexed ahead of the native spot markets, so
+  // "my tokens" searches and the initial result list lead with what is tradable today.
+  const { positions: ownedPositions } = useOwnedSptPositions({
+    network: currentNetwork,
+    owner: displayAddress,
+    enabled: isAuthenticated,
+  });
+  const ownedSpotlightItems = useMemo(
+    () => sptOwnedPositionSpotlightItems(ownedPositions),
+    [ownedPositions]
+  );
   const allSpotlightItems = useMemo(
-    () => [...spotlightItems, ...sptSpotlightItems],
-    [spotlightItems, sptSpotlightItems]
+    () => mergeOwnedSpotlightItems(ownedSpotlightItems, [...spotlightItems, ...sptSpotlightItems]),
+    [ownedSpotlightItems, spotlightItems, sptSpotlightItems]
   );
 
   const spotlightPoolIds = useMemo(() => spotlightItems.map((item) => item.id), [spotlightItems]);
+
+  /**
+   * Markets are polled, and a single failed poll empties the list. Once the workspace has been
+   * shown for this network it stays mounted, so a refresh never swaps the whole exchange out for
+   * a loading panel and back.
+   */
+  const [marketsSeenFor, setMarketsSeenFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (spotlightItems.length > 0) setMarketsSeenFor(currentNetwork);
+  }, [spotlightItems.length, currentNetwork]);
+  const hasMarkets = spotlightItems.length > 0 || marketsSeenFor === currentNetwork;
 
   useEffect(() => {
     const keys = tradePoolKeysForNetwork(currentNetwork);
@@ -392,7 +419,7 @@ export function TradePageShell() {
         <Suspense fallback={null}>
           <TradeAuthMessage />
         </Suspense>
-        {spotlightItems.length === 0 ? (
+        {!hasMarkets ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center" role="status">
             <p className="font-semibold">{marketsLoading ? 'Loading markets…' : marketError ? 'Markets are unavailable' : 'No orderbook markets on this network yet'}</p>
             <p className="max-w-lg text-sm text-muted-foreground">{marketError || (!marketsLoading && 'Deployed markets will appear here automatically when the network indexes them.')}</p>
@@ -432,7 +459,7 @@ export function TradePageShell() {
         onSelect={onPoolSpotlightSelect}
         isOpen={poolSpotlightOpen}
         onClose={() => setPoolSpotlightOpen(false)}
-        placeholder="Search tokens, pools, and wallets"
+        placeholder="Search your tokens, markets, and wallets"
         showInitialResults
         showRecent={false}
         maxResults={32}

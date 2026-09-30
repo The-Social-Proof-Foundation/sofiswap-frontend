@@ -13,6 +13,7 @@ import {
   Settings,
   Sun,
   User,
+  Wallet,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -615,6 +616,16 @@ export function TradeNavProfileMenu({
               </Link>
             </DropdownMenuItem>
           ) : null}
+          <DropdownMenuItem asChild>
+            <Link
+              href="/trade/spt"
+              className={profileMenuRowLinkClass}
+            >
+              <Wallet className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">My Social Proof Tokens</span>
+              <ChevronRight className={profileMenuChevronClass} aria-hidden />
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem asChild>
             <Link
               href={MYSOCIAL_CREATE_POOL_HREF}

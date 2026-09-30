@@ -49,10 +49,17 @@ export function usePoolOhlcv({
     setRefreshNonce((n) => n + 1);
   }, []);
 
+  /**
+   * A refresh redraws the same series in place; only a *different* subject drops it. `enabled` is
+   * left out on purpose so a tab or intersection flip keeps the candles already drawn.
+   */
+  useEffect(() => {
+    setData(null);
+    setError(null);
+  }, [poolName, interval, startTime, endTime, limit, currentNetwork]);
+
   useEffect(() => {
     if (!enabled || !poolName.trim()) {
-      setData(null);
-      setError(null);
       setIsLoading(false);
       return;
     }
@@ -78,14 +85,13 @@ export function usePoolOhlcv({
             setData(res.data);
             setError(null);
           } else {
-            setData(null);
+            // Keep the drawn candles: a failed poll reports, it does not delete.
             setError(res.error);
           }
         })
         .catch((e) => {
           if (e instanceof DOMException && e.name === 'AbortError') return;
           if (endInitialLoading) setIsLoading(false);
-          setData(null);
           setError(e instanceof Error ? e.message : String(e));
         });
 

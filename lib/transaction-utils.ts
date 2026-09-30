@@ -122,6 +122,57 @@ export interface ExecuteTransactionWithSmartGasParams {
   minimalGasBudget?: bigint;
 }
 
+/**
+ * Epochs are ~60s on localnet. Protocol 112 signs `ValidDuring` (min/max epoch + chain + nonce).
+ * The SDK default is only `currentEpoch … currentEpoch+1`, so a create+register that crosses an
+ * epoch — or a retry of the same digest — is rejected as `Transaction Expired { k#… }`.
+ * A wider window plus a fresh nonce keeps Enable trading and reviewed quotes executable.
+ */
+export const TX_EXPIRATION_EPOCHS = 10;
+
+/** How many times a submission is rebuilt after the chain rejects it as stale. */
+export const MAX_SUBMISSION_ATTEMPTS = 2;
+
+/**
+ * Rejections a rebuilt transaction can survive, because they only mean the read endpoint
+ * served a version the chain has already moved past. On-chain aborts never match these.
+ */
+const TRANSIENT_SUBMISSION_ERROR =
+  /transaction expired|not available for consumption|is not available|already (?:used|consumed)|object .*version/i;
+
+export function isTransientSubmissionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return TRANSIENT_SUBMISSION_ERROR.test(message);
+}
+
+/**
+ * Pins a `ValidDuring` window that outlives a quote review and makes each rebuild a new digest.
+ * Best effort: without a readable system state the SDK default still applies rather than blocking.
+ */
+export async function applyTransactionExpiration(tx: Transaction, client: MySoJsonRpcClient): Promise<void> {
+  try {
+    const [{ epoch }, chainIdentifier] = await Promise.all([
+      client.getLatestMySoSystemState(),
+      client.getChainIdentifier(),
+    ]);
+    const current = Number(epoch);
+    if (!Number.isSafeInteger(current) || current < 0) return;
+    if (typeof chainIdentifier !== 'string' || !chainIdentifier.trim()) return;
+    tx.setExpiration({
+      ValidDuring: {
+        minEpoch: String(current),
+        maxEpoch: String(current + TX_EXPIRATION_EPOCHS),
+        minTimestamp: null,
+        maxTimestamp: null,
+        chain: chainIdentifier,
+        nonce: (Math.random() * 0x100000000) >>> 0,
+      },
+    });
+  } catch (error) {
+    console.warn('[SofiSwap] Could not widen the transaction expiration window.', error);
+  }
+}
+
 export async function executeTransactionWithSmartGas(
   params: ExecuteTransactionWithSmartGasParams
 ): Promise<MySoTransactionBlockResponse> {
@@ -165,55 +216,75 @@ export async function executeTransactionWithSmartGas(
   const needSponsored =
     sponsoredAllowed && (forceSponsored || forceSponsoredForGasCoin || !canAfford);
 
-  const tx = new Transaction();
-  tx.setSender(sender);
-  build(tx, { sponsored: needSponsored });
+  /** A fresh PTB per attempt, so a retry resolves current object versions instead of reusing stale ones. */
+  const submit = async (): Promise<MySoTransactionBlockResponse> => {
+    const tx = new Transaction();
+    tx.setSender(sender);
+    build(tx, { sponsored: needSponsored });
 
-  if (!needSponsored) {
-    console.log('✅ Smart gas: user-paid path', { network, sender });
-    const response = await client.signAndExecuteTransaction({
-      signer,
-      transaction: tx,
-      options: { ...executeOptions, showEffects: true },
+    if (!needSponsored) {
+      console.log('✅ Smart gas: user-paid path', { network, sender });
+      await applyTransactionExpiration(tx, client);
+      return client.signAndExecuteTransaction({
+        signer,
+        transaction: tx,
+        options: { ...executeOptions, showEffects: true },
+      });
+    }
+
+    console.log('🛢️ Smart gas: sponsored path', {
+      network,
+      sender,
+      forceSponsored: forceSponsored || forceSponsoredForGasCoin,
+      canAfford,
+      coinObjectCount,
     });
-    assertTransactionSucceeded(response);
-    return response;
+
+    const reservation = await reserveGas(undefined, undefined, network);
+    const { sponsor_address, reservation_id, gas_coins } = reservation.result;
+
+    tx.setGasOwner(sponsor_address);
+    tx.setGasPayment(
+      gas_coins.map((c) => ({
+        objectId: c.objectId,
+        version: c.version,
+        digest: c.digest,
+      }))
+    );
+
+    await applyTransactionExpiration(tx, client);
+    const transactionBytes = await tx.build({ client });
+    const { signature, bytes: txBytesB64 } =
+      await signer.signTransaction(transactionBytes);
+
+    const sponsored = await executeSponsoredTransaction(
+      reservation_id,
+      txBytesB64,
+      signature,
+      network
+    );
+
+    return normalizeSponsoredExecuteToBlockResponse(sponsored);
+  };
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_SUBMISSION_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await submit();
+      assertTransactionSucceeded(response);
+      return response;
+    } catch (error) {
+      lastError = error;
+      // A transaction the chain rejected as stale never moved funds, so rebuilding it
+      // with re-read versions is safe. On-chain aborts are final and never retried.
+      if (attempt >= MAX_SUBMISSION_ATTEMPTS || !isTransientSubmissionError(error)) throw error;
+      console.warn(
+        '[SofiSwap] Transaction rejected as stale by the network; rebuilding with fresh object versions.',
+        error instanceof Error ? error.message : error
+      );
+    }
   }
-
-  console.log('🛢️ Smart gas: sponsored path', {
-    network,
-    sender,
-    forceSponsored: forceSponsored || forceSponsoredForGasCoin,
-    canAfford,
-    coinObjectCount,
-  });
-
-  const reservation = await reserveGas(undefined, undefined, network);
-  const { sponsor_address, reservation_id, gas_coins } = reservation.result;
-
-  tx.setGasOwner(sponsor_address);
-  tx.setGasPayment(
-    gas_coins.map((c) => ({
-      objectId: c.objectId,
-      version: c.version,
-      digest: c.digest,
-    }))
-  );
-
-  const transactionBytes = await tx.build({ client });
-  const { signature, bytes: txBytesB64 } =
-    await signer.signTransaction(transactionBytes);
-
-  const sponsored = await executeSponsoredTransaction(
-    reservation_id,
-    txBytesB64,
-    signature,
-    network
-  );
-
-  const response = normalizeSponsoredExecuteToBlockResponse(sponsored);
-  assertTransactionSucceeded(response);
-  return response;
+  throw lastError;
 }
 
 /** A submitted transaction can still abort; never clear a form or show success without effects. */

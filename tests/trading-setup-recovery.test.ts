@@ -24,6 +24,7 @@ const network = 'localnet' as const;
 const auth = { network, senderAddress, signer };
 const id = (n: number) => `0x${n.toString(16).padStart(64, '0')}`;
 const managerId = id(50);
+const { orderbookPackageId: localnetOrderbookPackageId } = getResolvedOrderbookDeployment(network);
 const rpc = getMySoJsonRpcClient(network);
 let executed: string[][];
 let readable: boolean;
@@ -35,6 +36,12 @@ beforeEach(() => {
   executed = []; readable = false; registryIds = [];
   mock.method(globalThis, 'fetch', async () => { throw new Error('Unexpected request: recovery tests are offline'); });
   mock.method(rpc, 'getBalance', async () => ({ totalBalance: '1000000000', coinObjectCount: 1 }));
+  mock.method(rpc, 'getObject', async ({ id: objectId }: { id: string }) => {
+    if (objectId === managerId) {
+      return { data: { type: `${localnetOrderbookPackageId}::balance_manager::BalanceManager` } };
+    }
+    return { data: null };
+  });
   mock.method(rpc, 'devInspectTransactionBlock', async () => ({ results: [{ returnValues: [[Array.from(bcs.vector(bcs.Address).serialize(registryIds).toBytes()), 'vector<address>']] }] }));
   mock.method(rpc, 'signAndExecuteTransaction', async ({ transaction }: { transaction: Transaction }) => {
     const functions = transaction.getData().commands.flatMap((c) => c.$kind === 'MoveCall' ? [c.MoveCall.function] : []);
@@ -209,6 +216,92 @@ test('localnet registry prefers static env, then genesis 0x10, and never 0x0', (
       else process.env[key] = value;
     }
   }
+});
+
+test('registration returns without waiting for waitForTransaction to settle', async () => {
+  mock.method(rpc, 'waitForTransaction', () => new Promise(() => {}));
+  mock.method(rpc, 'signAndExecuteTransaction', async ({ transaction }: { transaction: Transaction }) => {
+    const functions = transaction.getData().commands.flatMap((c) =>
+      c.$kind === 'MoveCall' ? [c.MoveCall.function] : []
+    );
+    executed.push(functions);
+    if (functions.includes('register_balance_manager')) {
+      return { digest: 'registered', effects: { status: { status: 'success' } } };
+    }
+    return {
+      digest: 'created',
+      effects: { status: { status: 'success' } },
+      objectChanges: createdBlock().objectChanges,
+    };
+  });
+  const registered = await Promise.race([
+    signAndExecuteTradingSetup(auth),
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('setup blocked on waitForTransaction')), 200);
+    }),
+  ]);
+  assert.equal(registered?.digest, 'registered');
+});
+
+test('stale pending id that is gone from chain creates a new manager then registers', async () => {
+  const staleId = id(99);
+  writePendingBalanceManagerRegister(network, senderAddress, {
+    managerObjectId: staleId,
+    createDigest: 'stale-create',
+  });
+  mock.method(rpc, 'signAndExecuteTransaction', async ({ transaction }: { transaction: Transaction }) => {
+    const functions = transaction.getData().commands.flatMap((c) =>
+      c.$kind === 'MoveCall' ? [c.MoveCall.function] : []
+    );
+    executed.push(functions);
+    if (functions.includes('register_balance_manager')) {
+      return { digest: 'registered', effects: { status: { status: 'success' } } };
+    }
+    return {
+      digest: 'created',
+      effects: { status: { status: 'success' } },
+      objectChanges: createdBlock().objectChanges,
+    };
+  });
+  const registered = await signAndExecuteTradingSetup(auth);
+  assert.equal(registered?.digest, 'registered');
+  assert.equal(executed.length, 2);
+  assert.ok(executed[0].includes('new_with_custom_owner'));
+  assert.deepEqual(executed[1], ['register_balance_manager']);
+  assert.equal(readPendingBalanceManagerRegister(network, senderAddress)?.managerObjectId, managerId);
+});
+
+test('register does-not-exist for the pending manager recreates once then registers', async () => {
+  writePendingBalanceManagerRegister(network, senderAddress, {
+    managerObjectId: managerId,
+    createDigest: 'created',
+  });
+  let registerAttempts = 0;
+  mock.method(rpc, 'signAndExecuteTransaction', async ({ transaction }: { transaction: Transaction }) => {
+    const functions = transaction.getData().commands.flatMap((c) =>
+      c.$kind === 'MoveCall' ? [c.MoveCall.function] : []
+    );
+    executed.push(functions);
+    if (functions.includes('register_balance_manager')) {
+      registerAttempts += 1;
+      if (registerAttempts === 1) {
+        throw new Error(
+          `The following input objects are invalid: Object ${managerId} does not exist`
+        );
+      }
+      return { digest: 'registered', effects: { status: { status: 'success' } } };
+    }
+    return {
+      digest: 'created-retry',
+      effects: { status: { status: 'success' } },
+      objectChanges: createdBlock().objectChanges,
+    };
+  });
+  const registered = await signAndExecuteTradingSetup(auth);
+  assert.equal(registered?.digest, 'registered');
+  assert.equal(registerAttempts, 2);
+  assert.ok(executed.some((fns) => fns.includes('new_with_custom_owner')));
+  assert.equal(readPendingBalanceManagerRegister(network, senderAddress)?.managerObjectId, managerId);
 });
 
 test('a missing registry child during BM lookup is treated as no managers', async () => {

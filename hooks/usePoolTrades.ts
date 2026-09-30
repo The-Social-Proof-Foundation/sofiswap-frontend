@@ -37,10 +37,17 @@ export function usePoolTrades({
     setRefreshNonce((n) => n + 1);
   }, []);
 
+  /**
+   * The tape updates in place: a failed poll reports instead of emptying the list, and flipping the
+   * rail tab off and on keeps the prints already received. Only a different pool drops them.
+   */
+  useEffect(() => {
+    setData([]);
+    setError(null);
+  }, [poolName, tradeRows, currentNetwork]);
+
   useEffect(() => {
     if (!enabled || !poolName.trim()) {
-      setData([]);
-      setError(null);
       setIsLoading(false);
       return;
     }
@@ -71,14 +78,13 @@ export function usePoolTrades({
             setData(res.data);
             setError(null);
           } else {
-            setData([]);
+            // Report the failure; the tape keeps its last prints.
             setError(res.error);
           }
         })
         .catch((e) => {
           if (e instanceof DOMException && e.name === 'AbortError') return;
           setIsLoading(false);
-          setData([]);
           setError(e instanceof Error ? e.message : String(e));
         });
     };
@@ -100,13 +106,11 @@ export function usePoolTrades({
                 setData(res.data);
                 setError(null);
               } else {
-                setData([]);
                 setError(res.error);
               }
             })
             .catch((e) => {
               if (e instanceof DOMException && e.name === 'AbortError') return;
-              setData([]);
               setError(e instanceof Error ? e.message : String(e));
             });
         }, pollIntervalMs)

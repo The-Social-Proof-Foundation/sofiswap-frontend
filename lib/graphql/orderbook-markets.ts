@@ -2,7 +2,7 @@ import type { CoinMap, PoolMap } from '@socialproof/orderbook';
 import { getMySoGraphQLClient } from '@/lib/myso-graphql-client';
 import type { NetworkType } from '@/lib/network-utils';
 import { getResolvedOrderbookDeployment } from '@/lib/orderbook/config';
-import { setDiscoveredOrderbookMarkets } from '@/lib/orderbook/discovered-markets';
+import { mergeDiscoveredOrderbookMarkets } from '@/lib/orderbook/discovered-markets';
 
 export const ORDERBOOK_MARKETS_QUERY = /* GraphQL */ `
   query SofiSwapOrderbookMarkets($type: String!, $after: String) {
@@ -82,6 +82,12 @@ export async function refreshOrderbookMarkets(network: NetworkType) {
     pools[key] = { address: row.address, baseCoin, quoteCoin };
   }
   const result = { coins, pools };
-  setDiscoveredOrderbookMarkets(network, result);
+  /**
+   * Union rather than replace: the indexer path merges its own snapshot on top of this map, so a
+   * replace/merge pair alternating every poll kept changing `orderbookMarketRevision` — and that
+   * revision keys the trade workspace, so the whole UI (ladder, chart, panels) was torn down and
+   * rebuilt on a timer instead of updating in place. New markets still overwrite by key.
+   */
+  mergeDiscoveredOrderbookMarkets(network, result);
   return result;
 }

@@ -27,11 +27,12 @@ function parseCreatedObjectIdsFromExecutedEffects(
   return ids;
 }
 
-async function objectIsOrderbookBalanceManager(
+export async function objectIsOrderbookBalanceManager(
   client: MySoJsonRpcClient,
   objectId: string,
   orderbookPackageId: string
 ): Promise<boolean> {
+  if (!objectId.trim()) return false;
   try {
     const o = await client.getObject({
       id: objectId,
