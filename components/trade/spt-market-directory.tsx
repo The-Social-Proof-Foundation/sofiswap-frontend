@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
 import { ArrowRight, FileText, UserRound } from 'lucide-react';
@@ -11,13 +10,14 @@ import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { usePolledResource } from '@/hooks/usePolledResource';
 import { useSptPortfolio } from '@/hooks/useSptPortfolio';
 import { fetchSptDirectory } from '@/lib/graphql/spt-directory';
+import { formatReservationPercent, isProfileReservationStage, reservationFillPercent } from '@/lib/graphql/spt-discovery';
 import { useNetwork } from '@/lib/network-provider';
 import { postDirectoryThumbUrl, profileDirectoryThumbUrl } from '@/lib/spt/media';
 import { sptOwnedSubjectKeys, sptSubjectKey } from '@/lib/spt/owned-positions';
 import { tradeSptPath, tradeSptPostPath } from '@/lib/trade-route-path';
 import { cn } from '@/lib/utils';
 
-function short(value: string) { return `${value.slice(0, 8)}…${value.slice(-6)}`; }
+function short(value: string) { return value.length > 19 ? `${value.slice(0, 8)}…${value.slice(-8)}` : value; }
 
 function DirectoryThumb({
   kind,
@@ -28,20 +28,22 @@ function DirectoryThumb({
   src: string | null;
   alt: string;
 }) {
-  const shape = kind === 'profile' ? 'rounded-full' : 'rounded-[3.75px]';
+  const shape = kind === 'profile' ? 'rounded-full' : 'rounded-md';
   return (
     <span
       className={cn(
-        'relative grid size-10 shrink-0 place-items-center overflow-hidden bg-primary/10 text-primary',
+        'relative inline-flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden bg-muted text-[11px] font-semibold text-foreground',
         shape
       )}
     >
       {src ? (
-        <Image src={src} alt={alt} fill className="object-cover" unoptimized sizes="40px" />
+        // Absolute so a wide photo cannot stretch the row.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt={alt} className="absolute inset-0 h-full w-full object-cover" />
       ) : kind === 'profile' ? (
-        <UserRound className="size-4" />
+        <UserRound className="size-3.5" />
       ) : (
-        <FileText className="size-4" />
+        <FileText className="size-3.5" />
       )}
     </span>
   );
@@ -72,7 +74,11 @@ export function SptMarketDirectory() {
     const profiles = (data?.profiles ?? []).map((p) => ({
       id: p.address, kind: 'profile' as const, title: p.displayName || p.username || short(p.address),
       detail: p.username ? `@${p.username}` : short(p.address), href: tradeSptPath(p.address),
-      status: p.socialProofToken?.poolId || p.socialProofToken?.isActive ? 'Trading' : 'Reservations',
+      status: isProfileReservationStage(p)
+        ? formatReservationPercent(reservationFillPercent(p.socialProofToken?.reservationPercentage) ?? 0)
+        : p.socialProofToken?.poolId || p.socialProofToken?.isActive
+          ? 'Trading'
+          : 'Enabled',
       thumbUrl: profileDirectoryThumbUrl(p.profilePhoto),
     }));
     const posts = (data?.posts ?? []).map((p) => ({
@@ -122,18 +128,21 @@ export function SptMarketDirectory() {
                 : rows.map((row) => {
                   const owned = ownedKeys.has(sptSubjectKey(row.kind, row.id));
                   return (
-                  <Link key={`${row.kind}:${row.id}`} href={row.href} className="group flex min-w-0 items-center gap-3 py-4 transition-colors hover:bg-muted/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:gap-4">
+                  <Link key={`${row.kind}:${row.id}`} href={row.href} className="group flex min-w-0 items-center gap-3 px-2 py-3 transition-colors hover:bg-foreground/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring sm:gap-3">
                     <DirectoryThumb kind={row.kind} src={row.thumbUrl} alt="" />
-                    <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{row.title}</span><span className="mt-1 block truncate text-xs text-muted-foreground">{row.detail} · {row.kind === 'profile' ? 'Profile' : 'Post'}</span></span>
-                    {owned ? <span className="shrink-0 rounded-full bg-primary/20 px-2.5 py-1 text-[11px] font-medium text-primary">Owned</span> : null}
-                    <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-[11px]', row.status === 'Trading' ? 'bg-primary/15 text-primary' : 'bg-muted/40 text-muted-foreground')}>{row.status}</span>
-                    <ArrowRight className="mr-1 hidden size-4 shrink-0 text-muted-foreground group-hover:text-foreground sm:block" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-[#1c2820] dark:text-[#e8ece9]">{row.title}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">{row.detail} {row.kind === 'profile' ? 'Profile' : 'Post'}</span>
+                    </span>
+                    {owned ? <span className="shrink-0 rounded-full bg-foreground/10 px-2.5 py-1 text-[11px] font-medium text-[#1c2820] dark:text-[#e8ece9]">Owned</span> : null}
+                    <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">{row.status}</span>
+                    <ArrowRight className="mr-1 size-3.5 shrink-0 text-muted-foreground" />
                   </Link>
                   );
                 })}
         </div>
         <div className="mt-5 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-          <span>Page {page + 1} · {rows.length} shown</span>
+          <span>Page {page + 1}, {rows.length} shown</span>
           <div className="flex gap-2"><Button variant="outline" size="sm" disabled={page === 0 || isLoading} onClick={() => setPage((n) => n - 1)}>Previous</Button><Button variant="outline" size="sm" disabled={!data?.hasNext || isLoading} onClick={() => setPage((n) => n + 1)}>Next</Button></div>
         </div>
       </div>

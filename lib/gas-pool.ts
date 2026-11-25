@@ -44,8 +44,27 @@ export interface ExecuteTransactionResponse {
 }
 
 /**
+ * Turns a non-OK proxy response into a user-facing message. The proxy returns a stable
+ * `{ error, code }` envelope and never echoes upstream bodies, so read that first and only
+ * fall back to a status line.
+ */
+async function describeGasPoolFailure(response: Response, action: string): Promise<string> {
+  let message: string | null = null;
+  try {
+    const payload = (await response.json()) as { error?: unknown };
+    if (typeof payload?.error === 'string' && payload.error.trim()) message = payload.error.trim();
+  } catch {
+    /* non-JSON error body */
+  }
+  if (message) return message;
+  if (response.status === 429) return `${action} is rate limited. Please wait a moment and try again.`;
+  if (response.status === 503) return 'The gas pool service is not configured.';
+  return `${action} failed (${response.status}). Please try again.`;
+}
+
+/**
  * Reserve gas for a sponsored transaction
- * Note: The gasBudget here is only used to reserve enough coins from the gas pool.
+ * Note: the gasBudget here is only used to reserve enough coins from the gas pool.
  * The actual transaction will NOT enforce this budget - the SDK calculates the minimum gas needed automatically
  * since we don't call tx.setGasBudget() on the transaction.
  */
@@ -76,13 +95,9 @@ export async function reserveGas(
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ Gas reservation failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
-      })
-      throw new Error(`Gas reservation failed: ${response.status} ${response.statusText} - ${errorText}`)
+      const message = await describeGasPoolFailure(response, 'Gas reservation')
+      console.error('❌ Gas reservation failed:', { status: response.status, message })
+      throw new Error(message)
     }
 
     const data: GasReservationResponse = await response.json()
@@ -135,13 +150,9 @@ export async function executeSponsoredTransaction(
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      console.error('❌ Sponsored transaction execution failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
-      })
-      throw new Error(`Sponsored transaction execution failed: ${response.status} ${response.statusText} - ${errorText}`)
+      const message = await describeGasPoolFailure(response, 'Sponsored transaction submission')
+      console.error('❌ Sponsored transaction execution failed:', { status: response.status, message })
+      throw new Error(message)
     }
 
     const data: any = await response.json()

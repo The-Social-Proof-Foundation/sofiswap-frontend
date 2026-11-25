@@ -7,11 +7,11 @@ export const SPT_DIRECTORY_QUERY = /* GraphQL */ `
   query SofiSwapSptDirectory($limit: Int!, $offset: Int!, $owner: String, $viewer: MySoAddress!, $mine: Boolean!) {
     profiles(limit: $limit, offset: $offset) @skip(if: $mine) {
       address profileId username displayName bio profilePhoto reservationPoolAddress
-      socialProofToken { poolId reservationPoolId tokenType isActive }
+      socialProofToken { poolId reservationPoolId tokenType isActive reservationPercentage }
     }
     myProfile: profile(address: $viewer) @include(if: $mine) {
       address profileId username displayName bio profilePhoto reservationPoolAddress
-      socialProofToken { poolId reservationPoolId tokenType isActive }
+      socialProofToken { poolId reservationPoolId tokenType isActive reservationPercentage }
     }
     posts(owner: $owner, limit: $limit, offset: $offset) {
       postId owner content mediaUrls createdAt enableSpt sptId

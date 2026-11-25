@@ -1,8 +1,7 @@
 'use client';
 
-import '@sehaj23/react-spotlight-search/dist/index.css';
-
 import { TradeChartPoolHeader } from '@/components/trade/trade-chart-pool-header';
+import { TradeMarketSearch } from '@/components/trade/trade-market-search';
 import { TradePlatformAccessGate } from '@/components/trade/trade-platform-access-gate';
 import { TradeTopNav } from '@/components/trade/trade-top-nav';
 import { TradeSocialProofTokenContainer } from '@/components/trade/trade-social-proof-token-container';
@@ -23,7 +22,7 @@ import {
 import { useSofiSwapPlatformConfig } from '@/hooks/useSofiSwapPlatformConfig';
 import type { OhlcvInterval } from '@/lib/orderbook-indexer/ohlcv';
 import { applyLivePriceToCandles, OHLCV_INTERVALS } from '@/lib/orderbook-indexer/ohlcv';
-import { marketDisplayPrice } from '@/lib/orderbook-indexer/ticker';
+import { formatTickerPrice, marketDisplayPrice } from '@/lib/orderbook-indexer/ticker';
 import { useNetwork } from '@/lib/network-provider';
 import { getDefaultNetwork } from '@/lib/network-utils';
 import type { TradeNavSegment } from '@/lib/trade-nav-segment-storage';
@@ -39,32 +38,35 @@ import {
   tradeOrderbookPath,
   tradePathWithPool,
 } from '@/lib/trade-route-path';
+import { tradeChartWellClass, tradeDownTextClass, tradeUpTextClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
 import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Suspense,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useState,
   type RefCallback,
 } from 'react';
 
+const INTERVAL_LABEL: Record<OhlcvInterval, string> = {
+  '1m': '1m',
+  '5m': '5m',
+  '15m': '15m',
+  '30m': '30m',
+  '1h': '1h',
+  '4h': '4h',
+  '1d': 'D',
+  '1w': 'W',
+};
+
 const TradeCandlestickChart = dynamic(
   () =>
     import('@/components/trade/trade-candlestick-chart').then((m) => ({
       default: m.TradeCandlestickChart,
-    })),
-  { ssr: false }
-);
-
-const Spotlight = dynamic(
-  () =>
-    import('@sehaj23/react-spotlight-search/dist/index.esm.js').then((m) => ({
-      default: m.Spotlight,
     })),
   { ssr: false }
 );
@@ -131,6 +133,12 @@ function TradeChartWorkspace({
 }) {
   const { currentNetwork } = useNetwork();
   const [chartInterval, setChartInterval] = useState<OhlcvInterval>(DEFAULT_INTERVAL);
+  const [hoverCandle, setHoverCandle] = useState<{
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+  } | null>(null);
   const { data, error, isLoading } = usePoolOhlcv({
     poolName,
     interval: chartInterval,
@@ -162,6 +170,14 @@ function TradeChartWorkspace({
     [data, liveQuote, chartInterval]
   );
 
+  const market = useMemo(
+    () => markets.find((row) => row.trading_pairs === poolName) ?? null,
+    [markets, poolName]
+  );
+
+  const legend = hoverCandle ?? chartData.at(-1) ?? null;
+  const legendUp = legend != null && legend.close >= legend.open;
+
   const chartStatus = useMemo(() => {
     if (!ohlcvEnabled) return 'empty' as const;
     if (isLoading && !chartData.length) return 'loading' as const;
@@ -173,36 +189,69 @@ function TradeChartWorkspace({
   return (
     <div
       ref={chartContainerRef}
-      className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden"
+      className={cn('flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden', tradeChartWellClass)}
     >
       <TradeChartPoolHeader
         className="shrink-0"
         poolName={poolName}
         onPoolPickerOpen={onOpenPoolSpotlight}
+        lastPrice={liveQuote?.price ?? (market ? marketDisplayPrice(market) : null)}
+        changePercent={market?.price_change_percent_24h ?? null}
+        quoteVolume={market?.quote_volume ?? null}
+        marketPrice={liveQuote?.price ?? (market ? marketDisplayPrice(market) : null)}
+        bestBid={liveQuote?.bid ?? market?.highest_bid ?? null}
+        bestAsk={liveQuote?.ask ?? market?.lowest_ask ?? null}
       />
-      <div className="flex shrink-0 items-center gap-1 px-3 py-1.5 border-b border-trade-shell">
-        {OHLCV_INTERVALS.map((iv) => (
-          <button
-            key={iv}
-            type="button"
-            onClick={() => setChartInterval(iv)}
-            className={cn(
-              'rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors',
-              iv === chartInterval
-                ? 'bg-primary/15 text-foreground'
-                : 'text-[var(--muted-foreground)] hover:bg-muted/60 hover:text-foreground'
-            )}
-            aria-pressed={iv === chartInterval}
-          >
-            {iv}
-          </button>
-        ))}
+      <div className="flex shrink-0 items-center gap-2 border-b border-black/10 px-2 py-1 dark:border-white/5">
+        <div className="hidden min-w-0 flex-1 items-center gap-2 overflow-hidden pl-1 font-mono text-[11px] tabular-nums md:flex">
+          {legend ? (
+            <>
+              <span className="text-muted-foreground">{INTERVAL_LABEL[chartInterval]}</span>
+              <span className="text-muted-foreground">
+                O <span className="text-foreground">{formatTickerPrice(legend.open)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                H <span className="text-foreground">{formatTickerPrice(legend.high)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                L <span className="text-foreground">{formatTickerPrice(legend.low)}</span>
+              </span>
+              <span className="text-muted-foreground">
+                C{' '}
+                <span className={legendUp ? tradeUpTextClass : tradeDownTextClass}>
+                  {formatTickerPrice(legend.close)}
+                </span>
+              </span>
+            </>
+          ) : (
+            <span className="text-muted-foreground">OHLC</span>
+          )}
+        </div>
+        <div className="ml-auto flex items-center gap-0.5">
+          {OHLCV_INTERVALS.map((iv) => (
+            <button
+              key={iv}
+              type="button"
+              onClick={() => setChartInterval(iv)}
+              className={cn(
+                'rounded px-1.5 py-0.5 text-[11px] font-medium tabular-nums transition-colors',
+                iv === chartInterval
+                  ? 'bg-foreground/10 text-foreground'
+                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+              )}
+              aria-pressed={iv === chartInterval}
+            >
+              {INTERVAL_LABEL[iv]}
+            </button>
+          ))}
+        </div>
       </div>
       <TradeCandlestickChart
         className="flex-1"
         data={chartData}
         status={chartStatus}
         errorMessage={error}
+        onLegendChange={setHoverCandle}
         aria-label={`${poolName} candlestick chart`}
       />
     </div>
@@ -375,31 +424,6 @@ export function TradePageShell() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  useLayoutEffect(() => {
-    if (!poolSpotlightOpen) return;
-    let cancelled = false;
-    let attempts = 0;
-    const maxAttempts = 40;
-
-    const tryFocus = () => {
-      if (cancelled) return;
-      const input = document.querySelector<HTMLInputElement>(
-        '.spotlight-overlay .spotlight-input input, .spotlight-overlay .MuiInputBase-input'
-      );
-      if (input) {
-        input.focus({ preventScroll: true });
-        return;
-      }
-      attempts += 1;
-      if (attempts < maxAttempts) requestAnimationFrame(tryFocus);
-    };
-
-    tryFocus();
-    return () => {
-      cancelled = true;
-    };
-  }, [poolSpotlightOpen]);
-
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden font-sans text-foreground">
       <TradeTopNav
@@ -411,8 +435,8 @@ export function TradePageShell() {
       <TradePlatformAccessGate verifyOrderbookTradingSetup={showOrderbookWorkspace} />
       <div
         className={cn(
-          'flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain md:overflow-hidden',
-          !showOrderbookWorkspace && 'hidden'
+          'min-h-0 min-w-0 flex-col overflow-y-auto overscroll-y-contain md:overflow-hidden',
+          showOrderbookWorkspace ? 'flex min-h-0 flex-1' : 'hidden'
         )}
         aria-hidden={!showOrderbookWorkspace}
       >
@@ -427,6 +451,7 @@ export function TradePageShell() {
           </div>
         ) : <TradeWorkspaceLayout
           key={`${currentNetwork}:${marketRevision}`}
+          className="h-full min-h-0 flex-1"
           chart={
             <TradeChartWorkspace
               poolName={poolName}
@@ -440,8 +465,8 @@ export function TradePageShell() {
       </div>
       <div
         className={cn(
-          'flex min-h-0 min-w-0 w-full flex-1 flex-col overflow-hidden bg-background',
-          showOrderbookWorkspace && 'hidden'
+          'min-h-0 min-w-0 w-full flex-col overflow-hidden bg-background',
+          showOrderbookWorkspace ? 'hidden' : 'flex min-h-0 flex-1'
         )}
         aria-hidden={showOrderbookWorkspace}
       >
@@ -454,15 +479,11 @@ export function TradePageShell() {
           />
         </Suspense>
       </div>
-      <Spotlight
+      <TradeMarketSearch
+        open={poolSpotlightOpen}
         items={allSpotlightItems}
-        onSelect={onPoolSpotlightSelect}
-        isOpen={poolSpotlightOpen}
         onClose={() => setPoolSpotlightOpen(false)}
-        placeholder="Search your tokens, markets, and wallets"
-        showInitialResults
-        showRecent={false}
-        maxResults={32}
+        onSelect={onPoolSpotlightSelect}
       />
     </div>
   );

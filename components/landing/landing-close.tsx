@@ -28,7 +28,7 @@ export function LandingClose() {
               asChild
               size="lg"
               variant="secondary"
-              className="h-12 rounded-full bg-[var(--background)] px-7 text-[var(--foreground)] hover:bg-[var(--background)]/90 active:scale-[0.98]"
+              className="h-12 rounded-full bg-[hsl(var(--background))] px-7 text-[hsl(var(--foreground))] hover:bg-[hsl(var(--background))]/90 active:scale-[0.98]"
             >
               <Link href="/trade">
                 Enter SofiSwap <ArrowRight className="ml-2 size-4" />

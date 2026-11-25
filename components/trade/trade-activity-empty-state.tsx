@@ -17,13 +17,13 @@ export function TradeActivityEmptyState({
   return (
     <div
       className={cn(
-        'flex min-h-[12rem] flex-1 flex-col items-center justify-center gap-3 px-4 py-8',
+        'flex h-full min-h-[12rem] flex-1 flex-col items-center justify-center gap-3 px-4 py-8',
         className
       )}
       role="status"
     >
-      <Inbox className="h-10 w-10 shrink-0 text-[var(--muted-foreground)]" strokeWidth={1.25} aria-hidden />
-      <p className="text-sm text-[var(--muted-foreground)]">No data</p>
+      <Inbox className="h-10 w-10 shrink-0 text-muted-foreground" strokeWidth={1.25} aria-hidden />
+      <p className="text-sm text-muted-foreground">No data</p>
       {showGetStarted && onGetStarted ? (
         <Button type="button" className="mt-1" onClick={onGetStarted}>
           Get Started

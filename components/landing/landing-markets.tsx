@@ -6,92 +6,82 @@ export function LandingMarkets() {
     <section
       id="markets"
       data-motion-section
-      className="scroll-mt-24 border-b border-border/50 px-5 py-24 sm:px-8 sm:py-32"
+      className="scroll-mt-16 border-b border-border px-5 py-16 sm:px-8 sm:py-20"
     >
       <div className="mx-auto max-w-[90rem]">
         <div data-motion-reveal className="max-w-xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-primary">
-            Two market systems
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Markets
           </p>
-          <h2 className="mt-5 text-[clamp(2.2rem,5vw,4.4rem)] font-medium leading-[0.95] tracking-[-0.05em]">
-            One exchange for assets and attention.
+          <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            Spot books and Social Proof Tokens.
           </h2>
         </div>
 
-        <div className="mt-16 grid gap-16 lg:mt-24 lg:grid-cols-12 lg:gap-8">
-          <article
-            data-motion-reveal
-            className="lg:col-span-7 lg:pr-10"
-          >
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Exchange</p>
-            <h3 className="mt-4 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
-              Native spot order books
-            </h3>
-            <p className="mt-5 max-w-lg text-base leading-7 text-muted-foreground">
-              Deposit to a balance manager, place market or limit orders, cancel what is
-              still open, and withdraw from the same workspace.
+        <div className="mt-12 grid gap-12 lg:grid-cols-2 lg:gap-16">
+          <article data-motion-reveal>
+            <h3 className="text-xl font-semibold tracking-tight text-foreground">Native spot order books</h3>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
+              Deposit to a balance manager, place market or limit orders, cancel open orders,
+              and withdraw from the same workspace.
             </p>
-            <Link
-              href="/trade"
-              className="mt-8 inline-flex items-center text-sm font-semibold text-primary hover:underline"
-            >
-              Explore exchange markets <ArrowRight className="ml-2 size-4" />
-            </Link>
-
-            <dl className="mt-10 grid max-w-md grid-cols-2 gap-x-8 gap-y-6 border-t border-border/50 pt-8 text-sm">
+            <dl className="mt-6 grid max-w-md grid-cols-2 gap-x-8 gap-y-4 border-t border-border pt-6 text-sm">
               <div>
                 <dt className="text-muted-foreground">Orders</dt>
-                <dd className="mt-1 font-medium">Market and limit</dd>
+                <dd className="mt-1 font-medium text-foreground">Market and limit</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Custody</dt>
-                <dd className="mt-1 font-medium">Wallet-signed</dd>
+                <dd className="mt-1 font-medium text-foreground">Wallet-signed</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Discovery</dt>
-                <dd className="mt-1 font-medium">Automatic pools</dd>
+                <dd className="mt-1 font-medium text-foreground">Automatic pools</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Quote pairs</dt>
-                <dd className="mt-1 font-medium">MYSO, MYUSD</dd>
+                <dd className="mt-1 font-medium text-foreground">MYSO, MYUSD</dd>
               </div>
             </dl>
+            <Link
+              href="/trade"
+              className="mt-6 inline-flex items-center text-sm font-medium text-foreground hover:underline"
+            >
+              Open the exchange <ArrowRight className="ml-1.5 size-3.5" />
+            </Link>
           </article>
 
           <article
             id="social-proof"
             data-motion-reveal
-            className="scroll-mt-24 border-t border-primary/25 pt-12 lg:col-span-5 lg:mt-28 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-0"
+            className="scroll-mt-16 border-t border-border pt-10 lg:border-l lg:border-t-0 lg:pl-12 lg:pt-0"
           >
-            <p className="font-mono text-xs uppercase tracking-[0.18em] text-primary">Social proof</p>
-            <h3 className="mt-4 text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
-              Profile + post tokens
-            </h3>
-            <p className="mt-5 max-w-md text-base leading-7 text-muted-foreground">
-              Reserve MySo toward a published threshold, withdraw while the pool is
-              open, then buy or sell against the live curve.
+            <h3 className="text-xl font-semibold tracking-tight text-foreground">Social Proof Tokens</h3>
+            <p className="mt-3 max-w-lg text-sm leading-6 text-muted-foreground">
+              Profile and post tokens start as reservations. Supporters commit MySo toward a
+              published threshold, and can withdraw before launch. After launch, the token
+              trades on its curve.
             </p>
+            <dl className="mt-6 space-y-0 border-t border-border text-sm">
+              <div className="flex items-baseline justify-between gap-4 border-b border-border py-3">
+                <dt className="font-medium text-foreground">Profile</dt>
+                <dd className="text-muted-foreground">One token for a profile</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4 border-b border-border py-3">
+                <dt className="font-medium text-foreground">Post</dt>
+                <dd className="text-muted-foreground">One token for a post</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4 py-3">
+                <dt className="font-medium text-foreground">Reservation</dt>
+                <dd className="text-muted-foreground">Withdrawable until launch</dd>
+              </div>
+            </dl>
             <Link
               href="/trade/spt"
-              className="mt-8 inline-flex items-center text-sm font-semibold text-primary hover:underline"
+              className="mt-6 inline-flex items-center text-sm font-medium text-foreground hover:underline"
             >
-              Discover Social Proof Tokens <ArrowRight className="ml-2 size-4" />
+              Browse Social Proof Tokens <ArrowRight className="ml-1.5 size-3.5" />
             </Link>
-
-            <div className="mt-10 space-y-4 text-sm">
-              <div className="flex items-baseline justify-between gap-4 border-b border-border/40 pb-3">
-                <span className="font-medium">grove</span>
-                <span className="text-muted-foreground">Profile</span>
-              </div>
-              <div className="flex items-baseline justify-between gap-4 border-b border-border/40 pb-3">
-                <span className="font-medium">north-field</span>
-                <span className="text-muted-foreground">Post</span>
-              </div>
-              <div className="flex items-baseline justify-between gap-4 pb-1">
-                <span className="font-medium">kiln</span>
-                <span className="text-muted-foreground">Profile</span>
-              </div>
-            </div>
           </article>
         </div>
       </div>

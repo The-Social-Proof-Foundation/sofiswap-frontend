@@ -50,7 +50,7 @@ export function AnimatedThemeToggle() {
           id={id}
           checked={isLight}
           onCheckedChange={handleToggle}
-          className="peer data-[state=unchecked]:bg-[var(--foreground)] data-[state=checked]:bg-[var(--foreground)] absolute inset-0 h-[inherit] w-auto rounded-lg [&>*]:z-10 [&>*]:h-full [&>*]:w-1/2 [&>*]:rounded-md [&>*]:!bg-[var(--background)] [&>*]:transition-transform [&>*]:duration-300 [&>*]:ease-out [&>*]:data-[state=checked]:translate-x-full [&>*]:data-[state=checked]:rtl:-translate-x-full"
+          className="peer data-[state=unchecked]:bg-foreground data-[state=checked]:bg-foreground absolute inset-0 h-[inherit] w-auto rounded-lg [&>*]:z-10 [&>*]:h-full [&>*]:w-1/2 [&>*]:rounded-md [&>*]:!bg-background [&>*]:transition-transform [&>*]:duration-300 [&>*]:ease-out [&>*]:data-[state=checked]:translate-x-full [&>*]:data-[state=checked]:rtl:-translate-x-full"
         />
         <span className="pointer-events-none relative ms-0.5 flex min-w-12 items-center justify-center text-center transition-transform duration-300 ease-out peer-data-[state=checked]:invisible peer-data-[state=unchecked]:translate-x-full peer-data-[state=unchecked]:rtl:-translate-x-full text-slate-900">
           <MoonIcon size={16} aria-hidden="true" />

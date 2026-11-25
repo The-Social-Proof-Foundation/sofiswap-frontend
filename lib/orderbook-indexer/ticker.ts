@@ -1,5 +1,6 @@
 import type { NetworkType } from '@/lib/network-utils';
 import {
+  fetchPoolOhlcv,
   getOrderbookIndexerRestBase,
   indexerOriginPathPrefix,
   orderbookIndexerNotConfiguredMessage,
@@ -55,6 +56,74 @@ export function marketDisplayPrice(row: OrderbookMarketSummary): number | null {
   const ask = row.lowest_ask != null && row.lowest_ask > 0 ? row.lowest_ask : null;
   if (bid != null && ask != null) return (bid + ask) / 2;
   return bid ?? ask;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 24h change in percent points. The summary endpoint only reports a change when a pool
+ * traded in both the last day and the day before, so a quiet book stays at 0. The price
+ * that was still in effect 24 hours ago is the close of the last candle at or before that
+ * boundary, measured against the current last trade or bid/ask mid.
+ */
+export function priceChangePercent24hFromCandles(
+  candles: readonly { time: number; open: number; close: number }[],
+  currentPrice: number | null,
+  nowMs: number
+): number | null {
+  if (currentPrice == null || !(currentPrice > 0) || candles.length === 0) return null;
+  const cutoffSec = (nowMs - DAY_MS) / 1000;
+  let reference: { time: number; close: number } | null = null;
+  let earliest: { time: number; open: number } | null = null;
+  for (const candle of candles) {
+    const time = candle.time >= 1_000_000_000_000 ? candle.time / 1000 : candle.time;
+    if (!Number.isFinite(time)) continue;
+    if (earliest == null || time < earliest.time) earliest = { time, open: candle.open };
+    if (time <= cutoffSec && (reference == null || time > reference.time)) {
+      reference = { time, close: candle.close };
+    }
+  }
+  const baseline = reference?.close ?? earliest?.open;
+  if (baseline == null || !(baseline > 0)) return null;
+  return (currentPrice / baseline - 1) * 100;
+}
+
+async function withCandle24hChange(
+  network: NetworkType,
+  markets: OrderbookMarketSummary[],
+  signal?: AbortSignal
+): Promise<OrderbookMarketSummary[]> {
+  const nowMs = Date.now();
+  return Promise.all(
+    markets.map(async (market) => {
+      const reported = market.price_change_percent_24h;
+      if (reported != null && reported !== 0) return market;
+      try {
+        const candles = await fetchPoolOhlcv({
+          network,
+          poolName: market.trading_pairs,
+          interval: '1h',
+          limit: 72,
+          signal,
+        });
+        if (!candles.ok) return market;
+        const change = priceChangePercent24hFromCandles(
+          candles.data.flatMap((candle) =>
+            typeof candle.time === 'number'
+              ? [{ time: candle.time, open: candle.open, close: candle.close }]
+              : []
+          ),
+          marketDisplayPrice(market),
+          nowMs
+        );
+        if (change == null) return market;
+        return { ...market, price_change_percent_24h: change };
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') throw error;
+        return market;
+      }
+    })
+  );
 }
 
 export function formatTickerPrice(n: number | null): string {
@@ -245,11 +314,17 @@ export async function fetchOrderbookMarketSummaries(input: {
     });
     return {
       ok: true,
-      data: mergeOrderbookMarketSummaries(pools.data, summaries, depthQuotes),
+      data: await withCandle24hChange(
+        input.network,
+        mergeOrderbookMarketSummaries(pools.data, summaries, depthQuotes),
+        input.signal
+      ),
     };
   }
 
-  if (first.ok) return { ok: true, data: first.data };
+  if (first.ok) {
+    return { ok: true, data: await withCandle24hChange(input.network, first.data, input.signal) };
+  }
   const summaryHint = first.body ? ` — ${first.body.slice(0, 160)}` : '';
   return {
     ok: false,

@@ -190,7 +190,7 @@ export function TradeDepositDialog({
                 'rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
                 coinKey === 'quote'
                   ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-trade-shell bg-muted/40 text-[var(--muted-foreground)] hover:bg-muted/70'
+                  : 'border-trade-shell bg-muted/40 text-muted-foreground hover:bg-muted/70'
               )}
             >
               {quoteSymbol}
@@ -204,7 +204,7 @@ export function TradeDepositDialog({
                 'rounded-lg border px-3 py-2 text-sm font-medium transition-colors',
                 coinKey === 'base'
                   ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-trade-shell bg-muted/40 text-[var(--muted-foreground)] hover:bg-muted/70'
+                  : 'border-trade-shell bg-muted/40 text-muted-foreground hover:bg-muted/70'
               )}
             >
               {baseSymbol}
@@ -214,7 +214,7 @@ export function TradeDepositDialog({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="deposit-amount">Amount</Label>
-              <span className="text-[11px] text-[var(--muted-foreground)]">
+              <span className="text-[11px] text-muted-foreground">
                 {mode === 'deposit'
                   ? managerBalance != null
                     ? `Manager: ${managerBalance} ${activeSymbol}`

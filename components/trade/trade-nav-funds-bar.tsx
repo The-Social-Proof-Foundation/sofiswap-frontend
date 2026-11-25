@@ -76,7 +76,7 @@ function ManageFundsMenuRow({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold leading-tight text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs leading-snug text-[var(--muted-foreground)]">{subtitle}</p>
+        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{subtitle}</p>
       </div>
     </DropdownMenuItem>
   );
@@ -139,7 +139,7 @@ export function TradeNavFundsBar({ poolName }: { poolName?: string }) {
     const byCoin = trading.balanceManagerBalances?.byCoin;
     const lines = BALANCE_MANAGER_SAMPLE_COIN_KEYS.map((k) => formatSpotEntryLine(k, byCoin?.[k]));
     return {
-      primary: lines.join(' · '),
+      primary: lines.join(' '),
       secondary: 'Balance manager spot balances',
     };
   })();
@@ -195,19 +195,19 @@ export function TradeNavFundsBar({ poolName }: { poolName?: string }) {
               'bg-muted/40 dark:bg-zinc-800/75'
             )}
           >
-            <p className="text-xs font-medium text-[var(--muted-foreground)]">Spot balances</p>
+            <p className="text-xs font-medium text-muted-foreground">Spot balances</p>
             <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <span className="min-w-0 flex-1 text-lg font-bold tabular-nums tracking-tight text-foreground sm:text-xl">
                 {spotHeaderContent.primary}
               </span>
               <span
-                className="text-xs font-medium tabular-nums text-[var(--muted-foreground)]"
+                className="text-xs font-medium tabular-nums text-muted-foreground"
                 aria-hidden
               >
                 —
               </span>
             </div>
-            <p className="mt-1 text-[11px] leading-snug text-[var(--muted-foreground)]">
+            <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
               {spotHeaderContent.secondary}
             </p>
           </div>
@@ -279,7 +279,7 @@ export function TradeNavFundsBar({ poolName }: { poolName?: string }) {
             'supports-[backdrop-filter]:bg-popover/78'
           )}
         >
-          <div className="px-4 py-10 text-center text-sm text-[var(--muted-foreground)]">
+          <div className="px-4 py-10 text-center text-sm text-muted-foreground">
             No notifications yet
           </div>
         </DropdownMenuContent>

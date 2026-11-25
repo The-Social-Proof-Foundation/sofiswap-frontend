@@ -20,7 +20,7 @@ const post = (n: number, changes: Partial<SptDiscoveryPost> = {}): SptDiscoveryP
   postId: id(n), owner: id(1), content: `Post ${n}`, mediaUrls: [], createdAt: 0,
   enableSpt: false, sptId: null, ownerProfile: null, ...changes,
 });
-const spt = { poolId: null, reservationPoolId: null, tokenType: 1, isActive: false };
+const spt = { poolId: null, reservationPoolId: null, tokenType: 1, isActive: false, reservationPercentage: null };
 afterEach(() => mock.restoreAll());
 
 test('main SPT directory excludes unenabled subjects but retains reservations and live tokens', async () => {
@@ -115,10 +115,10 @@ test('ticker ranks trending SPT pools by volume and keeps native-style thumbs', 
   assert.equal(items[1].changePercent, 9);
 });
 
-test('unenabled profiles remain searchable and exact username lookup still opens their profile', async () => {
+test('profiles without an enabled SPT are omitted from search, and username lookup still opens a profile', async () => {
   const unenabled = profile(1);
   const items = sptSpotlightItems({ profiles: [unenabled], posts: [], pools: [] });
-  assert.equal(items[0].url, `/trade/spt/${id(1)}`);
+  assert.equal(items.length, 0);
   mock.method(globalThis, 'fetch', async (_url: unknown, init?: RequestInit) => {
     const { query } = JSON.parse(String(init?.body));
     if (query.includes('SofiSwapSptUsername')) return Response.json({ data: { usernameRegistryEntry: { profileId: id(101) } } });

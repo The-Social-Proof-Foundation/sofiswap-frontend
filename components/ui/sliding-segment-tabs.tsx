@@ -9,10 +9,10 @@ import { cn } from '@/lib/utils';
 /** Text + interaction only; the pill background is the sliding thumb. */
 export const slidingSegmentTriggerClass = cn(
   'relative z-[1] flex h-full min-h-0 w-full min-w-0 items-center justify-center rounded-lg font-medium shadow-none',
-  'bg-transparent text-[var(--muted-foreground)] transition-colors duration-200',
+  'bg-transparent text-muted-foreground transition-colors duration-200',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
   'data-[state=inactive]:hover:text-foreground/90',
-  'data-[state=active]:bg-transparent data-[state=active]:text-[var(--foreground)] data-[state=active]:shadow-none',
+  'data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none',
   'dark:data-[state=active]:bg-transparent dark:data-[state=active]:text-white dark:data-[state=active]:shadow-none'
 );
 

@@ -82,7 +82,7 @@ export function EmailSignup() {
       <form onSubmit={handleSubmit} className="flex flex-col gap-3 w-full max-w-xl mx-auto" >
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1 min-w-[280px]">
-            <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-[var(--muted-foreground)]" />
+            <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               type="email"
               placeholder="email address"
@@ -91,7 +91,7 @@ export function EmailSignup() {
                 setEmail(e.target.value)
                 setIsValid(true)
               }}
-              className={`pl-10 border-[var(--border)] placeholder:text-[var(--muted-foreground)] ${
+              className={`pl-10 border-border placeholder:text-muted-foreground ${
                 !isValid ? "border-red-500 focus:border-red-500" : ""
               }`}
               required
@@ -100,7 +100,7 @@ export function EmailSignup() {
           <Button
             type="submit"
             disabled={isLoading}
-            className="bg-[var(--foreground)] hover:bg-[var(--foreground)] text-[var(--background)]"
+            className="bg-foreground hover:bg-foreground text-background"
           >
             {isLoading ? (
               <>
@@ -112,7 +112,7 @@ export function EmailSignup() {
             )}
           </Button>
         </div>
-        <div className="text-xs text-[var(--muted-foreground)] text-center">Enter your email to get notified when we launch</div>
+        <div className="text-xs text-muted-foreground text-center">Enter your email to get notified when we launch</div>
         {!isValid && (
           <p className="text-red-500 text-sm mt-1">
             {message || "Please enter a valid email address"}

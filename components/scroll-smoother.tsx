@@ -30,23 +30,38 @@ export function ScrollSmootherWrapper({ children }: ScrollSmootherWrapperProps) 
         smoothTouch: 0.05,
       });
 
-      const anchors = contentRef.current.querySelectorAll<HTMLAnchorElement>('a[href^="#"]');
+      const fitWrapperToContent = () => {
+        const wrapper = containerRef.current;
+        const content = contentRef.current;
+        if (!wrapper || !content) return;
+        wrapper.style.height = `${content.offsetHeight}px`;
+      };
+      fitWrapperToContent();
+      ScrollTrigger.addEventListener('refresh', fitWrapperToContent);
+      anchorCleanups.push(() => ScrollTrigger.removeEventListener('refresh', fitWrapperToContent));
 
-      anchors.forEach((anchor) => {
-        const handleClick = (event: MouseEvent) => {
-          const targetSelector = anchor.getAttribute('href');
-          const target = targetSelector ? document.querySelector(targetSelector) : null;
+      const scrollToHash = (hash: string) => {
+        const target = document.querySelector(hash);
+        if (!target) return;
+        smoother?.scrollTo(target, true, 'top 72px');
+        window.history.replaceState(null, '', hash);
+      };
 
-          if (!targetSelector || targetSelector === '#' || !target) return;
+      const handleAnchorClick = (event: MouseEvent) => {
+        const anchor = (event.target as Element | null)?.closest?.('a[href^="#"]');
+        if (!(anchor instanceof HTMLAnchorElement)) return;
+        const hash = anchor.getAttribute('href');
+        if (!hash || hash === '#' || !document.querySelector(hash)) return;
+        event.preventDefault();
+        scrollToHash(hash);
+      };
 
-          event.preventDefault();
-          smoother?.scrollTo(target, true, 'top 88px');
-          window.history.replaceState(null, '', targetSelector);
-        };
+      document.addEventListener('click', handleAnchorClick);
+      anchorCleanups.push(() => document.removeEventListener('click', handleAnchorClick));
 
-        anchor.addEventListener('click', handleClick);
-        anchorCleanups.push(() => anchor.removeEventListener('click', handleClick));
-      });
+      if (window.location.hash && document.querySelector(window.location.hash)) {
+        requestAnimationFrame(() => scrollToHash(window.location.hash));
+      }
     }
 
     return () => {
@@ -55,8 +70,8 @@ export function ScrollSmootherWrapper({ children }: ScrollSmootherWrapperProps) 
     };
   }, []);
 
-  return (
-    <div ref={containerRef} id="smooth-wrapper" className="min-h-screen">
+    return (
+    <div ref={containerRef} id="smooth-wrapper">
       <div ref={contentRef} id="smooth-content">
         {children}
       </div>

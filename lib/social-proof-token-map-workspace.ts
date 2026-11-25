@@ -290,8 +290,8 @@ function mapPoolTransactions(rows: readonly SocialProofTokenPagePoolTransaction[
 }
 
 function truncateMiddle(addr: string): string {
-  if (addr.length <= 14) return addr;
-  return `${addr.slice(0, 8)}…${addr.slice(-6)}`;
+  if (addr.length <= 19) return addr;
+  return `${addr.slice(0, 8)}…${addr.slice(-8)}`;
 }
 
 function holderDisplay(p: SocialProofTokenPagePoolHolder['profile']): string {

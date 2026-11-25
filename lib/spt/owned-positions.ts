@@ -86,7 +86,7 @@ function sameAddress(a: string | null | undefined, b: string | null | undefined)
 }
 
 function shortAddress(value: string): string {
-  return value.length > 20 ? `${value.slice(0, 10)}…${value.slice(-6)}` : value;
+  return value.length > 19 ? `${value.slice(0, 8)}…${value.slice(-8)}` : value;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -441,8 +441,9 @@ export function sptOwnedPositionSpotlightItems(
 ): SpotlightItem[] {
   return positions.map((position) => ({
     id: `owned:${position.poolId}`,
-    name: `${position.symbol} · ${position.title} · ${position.amountDisplay} held`,
+    name: `${position.symbol} ${position.title} ${position.amountDisplay} held`,
     url: position.href,
+    icon: position.thumbUrl ?? undefined,
     tags: Array.from(
       new Set(
         [
@@ -480,6 +481,7 @@ export function mergeOwnedSpotlightItems(
     if (!match) return item;
     return {
       ...item,
+      icon: item.icon || match.icon,
       tags: Array.from(new Set([...(item.tags ?? []), ...(match.tags ?? [])])),
     };
   });

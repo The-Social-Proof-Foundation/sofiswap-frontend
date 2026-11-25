@@ -4,6 +4,7 @@ import {
   TradePanelCenteredState,
   TradePanelCenteredStateFrame,
 } from '@/components/trade/trade-panel-centered-state';
+import { tradeDownTextClass, tradeUpTextClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
 import { formatCompactDecimal, formatOrderPrice } from '@/lib/trade/orderbook-format';
 import type { TradePrint } from '@/lib/trade/orderbook-types';
@@ -50,7 +51,7 @@ export function TradeHistoryPanel({
       aria-busy={busy}
       aria-label="Trade history"
     >
-      <div className={cn(rowClass, 'shrink-0 font-sans text-[var(--muted-foreground)]')} role="row">
+      <div className={cn(rowClass, 'shrink-0 font-sans text-muted-foreground')} role="row">
         <span role="columnheader" className="text-left text-[10px] font-medium">
           Price
         </span>
@@ -79,9 +80,7 @@ export function TradeHistoryPanel({
               <span
                 className={cn(
                   'text-left',
-                  t.side === 'buy'
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-rose-500 dark:text-rose-400'
+                  t.side === 'buy' ? tradeUpTextClass : tradeDownTextClass
                 )}
               >
                 {formatOrderPrice(t.price)}

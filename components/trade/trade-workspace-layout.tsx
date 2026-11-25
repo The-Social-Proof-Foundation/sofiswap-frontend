@@ -15,7 +15,6 @@ import { TradeOpenOrdersTable } from '@/components/trade/trade-open-orders-table
 import { TradeOrderBookPanel } from '@/components/trade/trade-order-book-panel';
 import { TradeOrderPanel } from '@/components/trade/trade-order-panel';
 import { TradeUserTradeHistoryTable } from '@/components/trade/trade-user-trade-history-table';
-import { SlidingSegmentTabs } from '@/components/ui/sliding-segment-tabs';
 import { Tabs, type UnderlineTabItem } from '@/components/ui/tabs';
 import { useAccountOpenOrders } from '@/hooks/useAccountOpenOrders';
 import { useAccountTradeHistory } from '@/hooks/useAccountTradeHistory';
@@ -34,7 +33,7 @@ import { executePlaceMarketOrder } from '@/lib/tx/place-market-order';
 import { poolTickerForKey, spotAssetSymbolDisplay } from '@/lib/trade/trade-pool-catalog';
 import { generateClientOrderId } from '@/lib/trade/order-placement-utils';
 import { ORDERBOOK_DEFAULT_LEVELS_PER_SIDE } from '@/lib/trade/orderbook-types';
-import { tradeRailSegmentListClass } from '@/lib/trade-shell-styles';
+import { tradeRailWellClass } from '@/lib/trade-shell-styles';
 import { cn } from '@/lib/utils';
 import { ArrowRightToLine, Menu } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
@@ -157,13 +156,13 @@ function OpenTradesSection({
   const tabs = useMemo((): UnderlineTabItem[] => {
     const tradeHistorySuffix =
       tradeHistoryCount > 0 ? (
-        <span className="text-[10px] font-normal tabular-nums text-[var(--muted-foreground)]">
+        <span className="text-[10px] font-normal tabular-nums text-muted-foreground">
           ({tradeHistoryCount})
         </span>
       ) : undefined;
     const myTradesSuffix =
       myTradesCount > 0 ? (
-        <span className="text-[10px] font-normal tabular-nums text-[var(--muted-foreground)]">
+        <span className="text-[10px] font-normal tabular-nums text-muted-foreground">
           ({myTradesCount})
         </span>
       ) : undefined;
@@ -262,18 +261,19 @@ function OpenTradesSection({
   return (
     <section
       className={cn(
-        'flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-trade-shell bg-background',
+        'flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-trade-shell',
+        tradeRailWellClass,
         className
       )}
       aria-label="Open orders and trade history"
     >
-      <div className="shrink-0 pt-1 md:pt-1.5">
+      <div className="shrink-0 border-b border-black/10 bg-[#f4f6f5] dark:border-white/10 dark:bg-[#2c3230]">
         <Tabs
           tabs={tabs}
           activeTab={segment}
           onTabChange={(id) => setSegment(id)}
           aria-label="Panel view"
-          listClassName="gap-3 pb-1"
+          listClassName="gap-3 pb-0"
           tabStripInsetClassName="px-2 md:px-3"
           triggerClassName="px-2 py-1 font-medium"
         />
@@ -300,7 +300,7 @@ function OpenTradesSection({
                 headlineClassName="text-primary"
               />
             </TradePanelCenteredStateFrame>
-          ) : openOrdersLoading ? (
+          ) : openOrdersLoading && openOrderRows.length === 0 ? (
             <TradePanelCenteredStateFrame>
               <TradePanelCenteredState
                 variant="muted"
@@ -310,7 +310,11 @@ function OpenTradesSection({
             </TradePanelCenteredStateFrame>
           ) : openOrdersError ? (
             <TradePanelCenteredStateFrame>
-              <TradePanelCenteredState headline="Unable to load open orders" message={openOrdersError} />
+              <TradePanelCenteredState
+                headline="Unable to load open orders"
+                message={openOrdersError}
+                onRetry={refreshOpenOrders}
+              />
             </TradePanelCenteredStateFrame>
           ) : openOrderRows.length > 0 ? (
             <TradeOpenOrdersTable
@@ -364,7 +368,7 @@ function OpenTradesSection({
                 message="Complete trading setup to see your trade history."
               />
             </TradePanelCenteredStateFrame>
-          ) : myTradesTabActive && myTradesLoading ? (
+          ) : myTradesTabActive && myTradesLoading && myTradeRows.length === 0 ? (
             <TradePanelCenteredStateFrame>
               <TradePanelCenteredState
                 variant="muted"
@@ -374,7 +378,11 @@ function OpenTradesSection({
             </TradePanelCenteredStateFrame>
           ) : myTradesTabActive && myTradesError ? (
             <TradePanelCenteredStateFrame>
-              <TradePanelCenteredState headline="Unable to load your trades" message={myTradesError} />
+              <TradePanelCenteredState
+                headline="Unable to load your trades"
+                message={myTradesError}
+                onRetry={refreshMyTrades}
+              />
             </TradePanelCenteredStateFrame>
           ) : myTradesTabActive && myTradeRows.length > 0 ? (
             <TradeUserTradeHistoryTable rows={myTradeRows} />
@@ -389,18 +397,10 @@ function OpenTradesSection({
 
 type OrderBookRailSegment = 'orderbook' | 'trade-history';
 
-const orderBookRailSegmentItems = [
-  {
-    value: 'orderbook',
-    label: 'Orderbook',
-    triggerClassName: 'px-2 py-0 text-[13px] leading-tight',
-  },
-  {
-    value: 'trade-history',
-    label: 'History',
-    triggerClassName: 'px-2 py-0 text-[13px] leading-tight',
-  },
-] as const;
+const orderBookRailTabs: UnderlineTabItem[] = [
+  { id: 'orderbook', label: 'Orderbook' },
+  { id: 'trade-history', label: 'History' },
+];
 
 function OrderBookSection({
   className,
@@ -453,19 +453,20 @@ function OrderBookSection({
   return (
     <div
       className={cn(
-        'flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-trade-shell bg-muted/20 md:border-t-0',
+        'flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-trade-shell md:border-t-0',
+        tradeRailWellClass,
         className
       )}
       aria-label="Orderbook"
     >
-      <div className="flex shrink-0 items-center gap-2 border-b border-trade-shell px-2 py-2">
+      <div className="flex shrink-0 items-center gap-1 pr-1">
         {onClosePanel ? (
           <button
             type="button"
             onClick={onClosePanel}
             className={cn(
-              'inline-flex size-6 shrink-0 items-center justify-center rounded-md p-0',
-              'text-[var(--muted-foreground)] hover:bg-muted/80 hover:text-foreground',
+              'ml-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md p-0',
+              'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
               'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
             )}
             aria-label="Leave order book and history panel"
@@ -474,13 +475,15 @@ function OrderBookSection({
             <ArrowRightToLine className="h-3.5 w-3.5" aria-hidden />
           </button>
         ) : null}
-        <SlidingSegmentTabs
-          value={segment}
-          onValueChange={(v) => setSegment(v as OrderBookRailSegment)}
-          className="min-w-0 flex-1"
-          listClassName={cn(tradeRailSegmentListClass, 'h-10 w-full')}
+        <Tabs
+          tabs={orderBookRailTabs}
+          activeTab={segment}
+          onTabChange={(id) => setSegment(id as OrderBookRailSegment)}
           aria-label="Orderbook panel"
-          items={orderBookRailSegmentItems}
+          className="min-w-0 flex-1"
+          listClassName="gap-3 pb-0"
+          tabStripInsetClassName="px-2"
+          triggerClassName="px-1 py-1 text-[13px] font-medium"
         />
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -512,25 +515,6 @@ type SwapOrderTypeSegment = 'market' | 'limit';
 const swapOrderTypeTabs = [
   { id: 'market', label: 'Market' },
   { id: 'limit', label: 'Limit' },
-] as const;
-
-const swapSideSegmentItems = [
-  {
-    value: 'buy',
-    label: 'Buy',
-    triggerClassName: cn(
-      'px-2 py-0 text-[13px] leading-tight',
-      'data-[state=active]:text-[var(--primary)] dark:data-[state=active]:text-[var(--primary)]'
-    ),
-  },
-  {
-    value: 'sell',
-    label: 'Sell',
-    triggerClassName: cn(
-      'px-2 py-0 text-[13px] leading-tight',
-      'data-[state=active]:text-[var(--destructive)] dark:data-[state=active]:text-[var(--destructive)]'
-    ),
-  },
 ] as const;
 
 function SwappingInputsSection({
@@ -580,11 +564,13 @@ function SwappingInputsSection({
 
   const {
     data: orderBook,
+    error: orderBookError,
     refresh: refreshOrderBook,
   } = usePoolOrderBook({ poolName, enabled: Boolean(poolName.trim()) });
 
   const {
     data: onchainMeta,
+    error: onchainMetaError,
     refresh: refreshOnchainMeta,
   } = usePoolOnchainMeta({
     poolName,
@@ -595,6 +581,7 @@ function SwappingInputsSection({
   const {
     baseBalance,
     quoteBalance,
+    error: balancesError,
     refresh: refreshBalances,
   } = usePoolBalanceManagerBalances({
     network: currentNetwork,
@@ -610,6 +597,13 @@ function SwappingInputsSection({
   const bestAsk = orderBook?.asks.length ? orderBook.asks[orderBook.asks.length - 1]!.price : null;
   const bookParams = onchainMeta?.bookParams ?? null;
   const takerFee = onchainMeta?.tradeParams.takerFee ?? null;
+
+  /**
+   * Each of these nulls its data on failure, which independently disables order entry. They
+   * used to be discarded, so a dev-inspect hiccup greyed out Buy/Sell with "Available —" and
+   * dead percentage buttons and no explanation of why.
+   */
+  const orderEntryError = balancesError ?? onchainMetaError ?? orderBookError ?? null;
 
   const refreshLocalAfterTrade = useCallback(() => {
     refreshOrderBook();
@@ -695,54 +689,44 @@ function SwappingInputsSection({
   return (
     <aside
       className={cn(
-        'flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-trade-shell bg-muted/30',
+        'flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-trade-shell bg-background',
         className
       )}
       style={style}
       aria-label="Swapping inputs"
     >
-      <div className="flex shrink-0 flex-col">
-        <div className="flex items-center gap-2 border-b border-trade-shell px-2 py-2 md:px-3">
-          {showOrderBookToggle && onToggleOrderBook && orderBookCollapsed ? (
-            <button
-              type="button"
-              onClick={onToggleOrderBook}
-              className={cn(
-                'inline-flex size-6 shrink-0 items-center justify-center rounded-md p-0',
-                'text-[var(--muted-foreground)] hover:bg-muted/80 hover:text-foreground',
-                'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
-              )}
-              aria-label="Show order book and history panel"
-              aria-expanded={false}
-              aria-controls="trade-orderbook-panel"
-            >
-              <Menu className="h-3.5 w-3.5" aria-hidden />
-            </button>
-          ) : null}
-          <SlidingSegmentTabs
-            value={side}
-            onValueChange={(v) => setSide(v as SwapSideSegment)}
-            className="min-w-0 flex-1"
-            listClassName={cn(tradeRailSegmentListClass, 'h-10 w-full')}
-            aria-label="Buy or sell"
-            items={swapSideSegmentItems}
-          />
-        </div>
-        <div className="pb-1.5 pt-1">
-          <Tabs
-            tabs={[...swapOrderTypeTabs]}
-            activeTab={orderType}
-            onTabChange={(id) => setOrderType(id as SwapOrderTypeSegment)}
-            aria-label="Order type"
-            listClassName="gap-4 pb-1"
-            tabStripInsetClassName="px-2 md:px-3"
-            triggerClassName="px-2 py-1 font-semibold"
-          />
-        </div>
+      <div className="flex shrink-0 items-center">
+        {showOrderBookToggle && onToggleOrderBook && orderBookCollapsed ? (
+          <button
+            type="button"
+            onClick={onToggleOrderBook}
+            className={cn(
+              'ml-2 inline-flex size-6 shrink-0 items-center justify-center rounded-md p-0',
+              'text-muted-foreground hover:bg-muted/80 hover:text-foreground',
+              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
+            )}
+            aria-label="Show order book and history panel"
+            aria-expanded={false}
+            aria-controls="trade-orderbook-panel"
+          >
+            <Menu className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ) : null}
+        <Tabs
+          tabs={[...swapOrderTypeTabs]}
+          activeTab={orderType}
+          onTabChange={(id) => setOrderType(id as SwapOrderTypeSegment)}
+          aria-label="Order type"
+          className="min-w-0 flex-1"
+          listClassName="gap-4 pb-0"
+          tabStripInsetClassName="px-3"
+          triggerClassName="px-1 py-1 text-[13px] font-semibold"
+        />
       </div>
       <TradeOrderPanel
         poolName={poolName}
         side={side}
+        onSideChange={setSide}
         orderType={orderType}
         midPrice={midPrice}
         bestBid={bestBid}
@@ -752,6 +736,8 @@ function SwappingInputsSection({
         bookParams={bookParams}
         takerFee={takerFee}
         isSubmitting={isSubmitting}
+        dataError={orderEntryError}
+        onRetryData={refreshLocalAfterTrade}
         onSubmitOrder={onSubmitOrder}
         className="text-left"
       />
@@ -790,9 +776,11 @@ function useIsViewport2xl() {
 export function TradeWorkspaceLayout({
   chart,
   poolName = 'MYSO_MYUSD',
+  className,
 }: {
   chart: ReactNode;
   poolName?: string;
+  className?: string;
 }) {
   const isMd = useIsMd();
   const isViewport2xl = useIsViewport2xl();
@@ -826,6 +814,7 @@ export function TradeWorkspaceLayout({
       <div
         className={cn(
           'flex w-full flex-col overflow-x-hidden',
+        className,
           /* Below md: height follows content so the scrollable page column can move. */
           'md:min-h-0 md:flex-1 md:overflow-hidden'
         )}
@@ -857,14 +846,14 @@ export function TradeWorkspaceLayout({
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-row overflow-hidden"
+      className={cn('flex h-full min-h-0 flex-1 flex-row overflow-hidden', className)}
       aria-label="Trading workspace"
     >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-trade-shell md:border-r">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-trade-shell md:border-r">
         <ResizablePanelGroup
           direction="vertical"
           autoSaveId="sofiswap-trade-chart-v"
-          className="min-h-0 flex-1"
+          className="h-full min-h-0 flex-1"
         >
           <ResizablePanel
             defaultSize={72}
@@ -906,7 +895,7 @@ export function TradeWorkspaceLayout({
             className="min-h-0 min-w-0"
           >
             <OpenTradesSection
-              className="border-t-0"
+              className="h-full min-h-0 border-t-0"
               poolName={poolName}
               refreshNonce={tradeRefreshNonce}
             />

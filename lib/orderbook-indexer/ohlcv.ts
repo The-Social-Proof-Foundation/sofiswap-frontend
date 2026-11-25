@@ -142,17 +142,22 @@ export function buildPoolOhlcvUrl(
   return url.toString();
 }
 
-export function indexerTupleToCandlestick(row: IndexerCandleTuple): CandlestickData {
-  const [time, open, high, low, close] = row;
+/** Indexer candle plus base volume from the sixth tuple field, when the server sent one. */
+export type TradeCandle = CandlestickData & { volume?: number };
+
+export function indexerTupleToCandlestick(row: IndexerCandleTuple): TradeCandle {
+  const [time, open, high, low, close, volume] = row;
   // Server buckets are usually milliseconds; lightweight-charts wants Unix seconds.
   const timeSec = time >= 1_000_000_000_000 ? Math.trunc(time / 1000) : Math.trunc(time);
-  return {
+  const candle: TradeCandle = {
     time: timeSec as UTCTimestamp,
     open,
     high,
     low,
     close,
   };
+  if (Number.isFinite(volume) && volume > 0) candle.volume = volume;
+  return candle;
 }
 
 export function sortCandlestickDataAscending(data: CandlestickData[]): CandlestickData[] {
@@ -208,6 +213,7 @@ export function applyLivePriceToCandles(
   const highBound = Math.max(livePrice, ask ?? livePrice);
   const lowBound = Math.min(livePrice, bid ?? livePrice);
   if (last && (last.time as number) === bucket) {
+    const volume = (last as TradeCandle).volume;
     return [
       ...sorted.slice(0, -1),
       {
@@ -216,6 +222,7 @@ export function applyLivePriceToCandles(
         high: Math.max(last.high, highBound),
         low: Math.min(last.low, lowBound),
         close: livePrice,
+        ...(volume != null ? { volume } : {}),
       },
     ];
   }

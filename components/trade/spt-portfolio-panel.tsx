@@ -55,7 +55,7 @@ function OwnedPositionRow({ position }: { position: SptOwnedPosition }) {
           </span>
         </span>
         <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-          {position.tokenType === 2 ? 'Post SPT' : 'Profile SPT'} · {position.detail}
+          {position.tokenType === 2 ? 'Post SPT' : 'Profile SPT'} {position.detail}
         </span>
       </span>
       <span className="shrink-0 text-right">
@@ -115,8 +115,8 @@ export function SptPortfolioPanel({
     if (positions.length === 0) return 'Trading tokens held by the wallet you are signed in with';
     const live = positions.filter((position) => position.live).length;
     const held = `${positions.length} Social Proof Token${positions.length === 1 ? '' : 's'} held`;
-    const tradable = live === positions.length ? '' : ` · ${live} live`;
-    return `${held}${tradable} · ≈ ${ownedValueDisplay} MySo on the curve`;
+    const tradable = live === positions.length ? '' : `, ${live} live`;
+    return `${held}${tradable}, about ${ownedValueDisplay} MySo on the curve`;
   }, [isLoading, positions, ownedValueDisplay]);
 
   return (

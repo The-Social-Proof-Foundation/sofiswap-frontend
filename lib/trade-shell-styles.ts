@@ -79,4 +79,22 @@ export const tradeWorkspaceRouteEmptyRootClass =
   'flex min-h-[40vh] flex-col items-center justify-center px-6 py-12 text-center font-satoshi';
 
 export const tradeWorkspaceRouteLoadingClass =
-  'flex min-h-[40vh] items-center justify-center px-6 font-satoshi text-sm text-[var(--muted-foreground)]';
+  'flex min-h-[40vh] items-center justify-center px-6 font-satoshi text-sm text-muted-foreground';
+
+/**
+ * Tape colors for the exchange. Semantic `destructive` is too dark to read as text on the
+ * charcoal shell, and stock emerald/rose sit outside the mint brand.
+ */
+export const tradeUpTextClass = 'text-[#3d6b48] dark:text-[#9AE19D]';
+export const tradeDownTextClass = 'text-[#DC2626] dark:text-[#f07167]';
+export const tradeUpFillClass =
+  'bg-[#3d6b48] text-[#f3faf4] hover:bg-[#3d6b48]/90 dark:bg-[#9AE19D] dark:text-[#1c2820] dark:hover:bg-[#9AE19D]/90';
+export const tradeDownFillClass =
+  'bg-[#DC2626] text-white hover:bg-[#DC2626]/90 dark:bg-[#f07167] dark:text-[#2a1210] dark:hover:bg-[#f07167]/90';
+export const tradeUpDepthClass = 'bg-[#3d6b48]/12 dark:bg-[#9AE19D]/16';
+export const tradeDownDepthClass = 'bg-[#DC2626]/10 dark:bg-[#f07167]/16';
+
+/** Chart plot: the deepest well, so the candles sit behind the rails. */
+export const tradeChartWellClass = 'bg-[#d5dbd8] dark:bg-[#1a1d1c]';
+/** Order book and the activity band: one step under the page, above the chart. */
+export const tradeRailWellClass = 'bg-[#e3e7e5] dark:bg-[#232725]';

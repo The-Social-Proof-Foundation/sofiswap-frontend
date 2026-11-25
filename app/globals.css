@@ -72,33 +72,41 @@
   }
 }
 
+/**
+ * Semantic colors are stored as bare HSL channel triplets (`H S% L%`) so Tailwind can
+ * compose them as `hsl(var(--token) / <alpha-value>)`, which is what makes both the
+ * `text-foreground` utilities and their alpha modifiers (`bg-muted/40`) resolve.
+ * Hex is the source of truth in the trailing comment — keep the two in sync.
+ * Tokens that are only ever consumed as `var(--token)` (badge, radius, profile menu,
+ * trade-shell-border) stay literal hex so existing consumers keep working.
+ */
 @layer base {
   :root {
-    --background: #9AE19D;
-    --foreground: #2C302E;
-    --card: #9AE19D;
-    --card-foreground: #2C302E;
-    --popover: #9AE19D;
-    --popover-foreground: #2C302E;
-    --primary: #537A5A;
-    --primary-foreground: #9AE19D;
-    --secondary: #909590;
-    --secondary-foreground: #7F4F24;
-    --muted: #909590;
-    --muted-foreground: #474A48;
-    --accent: #537A5A;
-    --accent-foreground: #9AE19D;
+    --background: 123 54% 74%; /* #9AE19D */
+    --foreground: 150 4% 18%; /* #2C302E */
+    --card: 123 54% 74%; /* #9AE19D */
+    --card-foreground: 150 4% 18%; /* #2C302E */
+    --popover: 123 54% 74%; /* #9AE19D */
+    --popover-foreground: 150 4% 18%; /* #2C302E */
+    --primary: 131 19% 31%; /* #405F46 — darkened from #537A5A: 3.17:1 -> 4.63:1 on the mint canvas */
+    --primary-foreground: 123 54% 74%; /* #9AE19D */
+    --secondary: 120 2% 57%; /* #909590 */
+    --secondary-foreground: 28 56% 32%; /* #7F4F24 */
+    --muted: 120 2% 57%; /* #909590 */
+    --muted-foreground: 140 2% 28%; /* #474A48 */
+    --accent: 131 19% 40%; /* #537A5A */
+    --accent-foreground: 123 54% 74%; /* #9AE19D */
     --badge: #ffffff;
-    --destructive: #DC2626; /* red for destructive */
-    --destructive-foreground: #FFFFFF;
-    --border: #909590;
-    --input: #909590;
-    --ring: #2C302E;
-    --chart-1: #537A5A;
-    --chart-2: #9AE19D;
-    --chart-3: #909590;
-    --chart-4: #474A48;
-    --chart-5: #2C302E;
+    --destructive: 0 72% 51%; /* #DC2626 */
+    --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+    --border: 120 2% 57%; /* #909590 */
+    --input: 120 2% 57%; /* #909590 */
+    --ring: 150 4% 18%; /* #2C302E */
+    --chart-1: 131 19% 40%; /* #537A5A */
+    --chart-2: 123 54% 74%; /* #9AE19D */
+    --chart-3: 120 2% 57%; /* #909590 */
+    --chart-4: 140 2% 28%; /* #474A48 */
+    --chart-5: 150 4% 18%; /* #2C302E */
     --radius: 0.5rem;
     /* Profile / account menu — sign out row */
     --profile-menu-signout: #dc2626;
@@ -109,31 +117,31 @@
   }
 
   .dark {
-    --background: #2c302e;
-    --foreground: #9AE19D;
-    --card: #303330;
-    --card-foreground: #9AE19D;
-    --popover: #2C302E;
-    --popover-foreground: #9AE19D;
-    --primary: #9AE19D;
-    --primary-foreground: #303330;
-    --secondary: #474A48;
-    --secondary-foreground: #A68A64;
-    --muted: #474A48;
-    --muted-foreground: #909590;
-    --accent: #537A5A;
-    --accent-foreground: #9AE19D;
+    --background: 150 4% 18%; /* #2c302e */
+    --foreground: 123 54% 74%; /* #9AE19D */
+    --card: 120 3% 19%; /* #303330 */
+    --card-foreground: 123 54% 74%; /* #9AE19D */
+    --popover: 150 4% 18%; /* #2C302E */
+    --popover-foreground: 123 54% 74%; /* #9AE19D */
+    --primary: 123 54% 74%; /* #9AE19D */
+    --primary-foreground: 120 3% 19%; /* #303330 */
+    --secondary: 140 2% 28%; /* #474A48 */
+    --secondary-foreground: 35 27% 52%; /* #A68A64 */
+    --muted: 140 2% 28%; /* #474A48 */
+    --muted-foreground: 120 2% 58%; /* #939793 — nudged from #909590 for 4.52:1 on charcoal */
+    --accent: 131 19% 40%; /* #537A5A */
+    --accent-foreground: 123 54% 74%; /* #9AE19D */
     --badge: #9AE19D;
-    --destructive: #B91C1C;
-    --destructive-foreground: #FFFFFF;
-    --border: #474A48;
-    --input: #474A48;
-    --ring: #9AE19D;
-    --chart-1: #9AE19D;
-    --chart-2: #537A5A;
-    --chart-3: #909590;
-    --chart-4: #474A48;
-    --chart-5: #303330;
+    --destructive: 0 74% 42%; /* #B91C1C */
+    --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+    --border: 140 2% 28%; /* #474A48 */
+    --input: 140 2% 28%; /* #474A48 */
+    --ring: 123 54% 74%; /* #9AE19D */
+    --chart-1: 123 54% 74%; /* #9AE19D */
+    --chart-2: 131 19% 40%; /* #537A5A */
+    --chart-3: 120 2% 57%; /* #909590 */
+    --chart-4: 140 2% 28%; /* #474A48 */
+    --chart-5: 120 3% 19%; /* #303330 */
     --profile-menu-signout: #f87171;
     --profile-menu-signout-bg: rgba(248, 113, 113, 0.12);
     --profile-menu-signout-bg-hover: rgba(248, 113, 113, 0.2);
@@ -173,11 +181,44 @@
     mix-blend-mode: overlay;
   }
 
+  html:has(.trade-viewport-shell),
+  html:has(.trade-viewport-shell) body {
+    height: 100%;
+    overflow: hidden;
+  }
+
   .trade-viewport-shell {
     height: 100vh;
     max-height: 100vh;
     height: 100dvh;
     max-height: 100dvh;
+  }
+
+  /*
+   * Light exchange is paper and ink. The site mint stays on the landing page;
+   * a full mint canvas makes the book, chart, and ticket unreadable.
+   */
+  html:not(.dark) .trade-viewport-shell {
+    --background: 140 8% 90%; /* #e3e7e5 ticket and nav */
+    --foreground: 150 8% 14%; /* #212623 */
+    --card: 140 8% 94%; /* #eef1ef */
+    --card-foreground: 150 8% 14%;
+    --popover: 140 8% 94%;
+    --popover-foreground: 150 8% 14%;
+    --primary: 145 42% 26%; /* #265c3c */
+    --primary-foreground: 140 24% 97%;
+    --secondary: 140 6% 84%;
+    --secondary-foreground: 28 32% 28%;
+    --muted: 140 6% 82%; /* #cdd3d0 inputs */
+    --muted-foreground: 150 5% 32%;
+    --accent: 145 10% 80%;
+    --accent-foreground: 150 8% 14%;
+    --destructive: 0 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 140 6% 74%;
+    --input: 140 6% 74%;
+    --ring: 145 42% 26%;
+    --trade-shell-border: #c5ccc8;
   }
 
   /** Structural borders in /trade (matches market ticker chrome) */
@@ -235,6 +276,39 @@
 
   .trade-ticker-thumb[data-fit='contain'] img {
     object-fit: contain;
+  }
+
+  /**
+   * Market search sits on the exchange. The library's default highlight is system blue;
+   * keep the menu on the charcoal shell and the mint mark.
+   */
+  .dark .spotlight-container {
+    background: #242826 !important;
+    color: #e7efe8 !important;
+    box-shadow:
+      0 24px 48px -16px rgba(0, 0, 0, 0.65),
+      0 0 0 1px #262626 !important;
+  }
+
+  .dark .spotlight-search {
+    border-bottom-color: #262626 !important;
+  }
+
+  .dark .spotlight-item {
+    border-bottom-color: rgba(255, 255, 255, 0.04) !important;
+  }
+
+  .dark .spotlight-item:hover,
+  .dark .spotlight-item.selected {
+    background: rgba(154, 225, 157, 0.14) !important;
+  }
+
+  .dark .spotlight-item.selected::before {
+    background: #9ae19d !important;
+  }
+
+  .dark .spotlight-item-name {
+    color: #e7efe8 !important;
   }
 
   .trade-marquee-edge-mask {

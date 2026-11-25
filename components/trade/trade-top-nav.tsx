@@ -66,12 +66,12 @@ function TradeSpotlightSearchTrigger({
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-11 max-w-full items-center rounded-full border border-trade-shell bg-muted/50 text-left text-[13px] text-[var(--muted-foreground)]',
+        'flex h-11 max-w-full items-center rounded-full border border-trade-shell bg-muted/50 text-left text-[13px] text-muted-foreground',
         'w-full justify-start gap-2 px-3.5',
         'sm:rounded-xl sm:w-11 sm:shrink-0 sm:justify-center sm:gap-0 sm:px-0',
         'lg:rounded-full lg:w-[min(100%,14rem)] lg:justify-start lg:gap-2 lg:px-3.5 xl:w-[min(100%,21rem)]',
         'shadow-[0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-muted/70 hover:text-foreground',
-        'dark:bg-muted/30 dark:hover:bg-muted/45',
+        'dark:bg-muted/30 dark:hover:bg-[#242826]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         className
       )}
@@ -182,7 +182,7 @@ function TradeNavAuthActions({
   return (
     <div className="flex shrink-0 items-center gap-2 sm:gap-3">
       {!isConfigured ? (
-        <span className="hidden text-xs text-[var(--muted-foreground)] sm:inline">
+        <span className="hidden text-xs text-muted-foreground sm:inline">
           Set env to enable login
         </span>
       ) : null}

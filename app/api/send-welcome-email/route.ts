@@ -1,14 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { render } from '@react-email/render'
+import { z } from 'zod'
 import { addContactToResend, type ResendContact } from '@/lib/resend'
 import { WelcomeEmail } from '@/components/email-templates'
+import {
+  clientKey,
+  enforceRateLimit,
+  isAllowedOrigin,
+} from '@/lib/api-guard'
 
 // Route configuration
 export const runtime = 'nodejs'
 export const maxDuration = 30 // 30 seconds timeout
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+
+/**
+ * This endpoint sends mail from the project's verified Resend domain, so it must not be an
+ * open relay: it is same-origin restricted, strictly rate limited, and the links inside the
+ * message are derived server-side. `baseUrl` from the caller is ignored — previously it was
+ * interpolated into the email's links and images, letting anyone send brand-consistent
+ * phishing mail to arbitrary recipients.
+ */
+const welcomeEmailSchema = z.object({
+  email: z.string().trim().email().max(254),
+  firstName: z.string().trim().max(80).optional(),
+  lastName: z.string().trim().max(80).optional(),
+})
 
 // Environment variables needed:
 // RESEND_API_KEY - Your Resend API key
@@ -17,6 +36,22 @@ const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: NextRequest) {
   try {
+    const origin = request.headers.get('origin')
+    if (!isAllowedOrigin(origin)) {
+      return NextResponse.json(
+        { success: false, message: 'This origin is not allowed to request emails' },
+        { status: 403 }
+      )
+    }
+
+    const limit = enforceRateLimit(`welcome-email:${clientKey(request)}`, 5, 60_000)
+    if (!limit.ok) {
+      return NextResponse.json(
+        { success: false, message: 'Too many signup attempts. Please try again shortly.' },
+        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+      )
+    }
+
     // Parse request body with error handling
     let body;
     try {
@@ -29,14 +64,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { email, firstName, lastName, baseUrl } = body || {}
-
-    if (!email || typeof email !== 'string') {
+    const parsed = welcomeEmailSchema.safeParse(body || {})
+    if (!parsed.success) {
       return NextResponse.json(
-        { success: false, message: 'Email is required' },
+        { success: false, message: 'A valid email address is required' },
         { status: 400 }
       )
     }
+
+    const { email, firstName, lastName } = parsed.data
 
     if (!process.env.RESEND_API_KEY) {
       console.warn('⚠️ RESEND_API_KEY not configured')
@@ -58,7 +94,8 @@ export async function POST(request: NextRequest) {
 
     // Continue with email sending even if contact addition fails
     // The email is the primary goal, contact list is secondary
-    const emailBaseUrl = baseUrl || process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz'
+    // Links are always built from server-side configuration, never from the request body.
+    const emailBaseUrl = (process.env.NEXT_PUBLIC_BASE_URL || 'https://sofiswap.xyz').replace(/\/$/, '')
     
     // Render the React Email template to HTML
     const emailHtml = await render(WelcomeEmail({
@@ -121,14 +158,10 @@ Terms of Service: ${emailBaseUrl}/terms
     })
 
   } catch (error) {
+    // Log the cause server-side only; the response stays a stable, non-enumerating message.
     console.error('Welcome email API error:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
     return NextResponse.json(
-      { 
-        success: false, 
-        message: 'Failed to send welcome email',
-        error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
-      },
+      { success: false, message: 'Failed to send welcome email' },
       { status: 500 }
     )
   }

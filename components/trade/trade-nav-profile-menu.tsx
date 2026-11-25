@@ -41,14 +41,14 @@ const MYSOCIAL_ORIGIN = 'https://www.mysocial.network';
 const MYSOCIAL_CREATE_POOL_HREF = `${MYSOCIAL_ORIGIN}/ecosystem/sofiswap/create-pool`;
 
 const profileMenuChevronClass =
-  'h-4 w-4 shrink-0 text-[var(--muted-foreground)] opacity-0 transition-opacity duration-150 group-data-[highlighted]:opacity-100';
+  'h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-data-[highlighted]:opacity-100';
 
 const profileMenuRowLinkClass =
   'group flex w-full cursor-pointer items-center rounded-md px-2.5 py-2 text-sm outline-none transition-colors text-foreground data-[highlighted]:bg-muted/70';
 
 /** Nested Environment tier rows — muted chrome so they read below primary menu rows. */
 const profileMenuEnvironmentSubRowClass =
-  'group relative flex w-full cursor-pointer items-center rounded-md px-2.5 py-2 pl-7 text-sm outline-none transition-colors border border-transparent bg-muted/25 text-[var(--muted-foreground)] data-[highlighted]:border-border/50 data-[highlighted]:bg-muted/50 data-[highlighted]:text-foreground';
+  'group relative flex w-full cursor-pointer items-center rounded-md px-2.5 py-2 pl-7 text-sm outline-none transition-colors border border-transparent bg-muted/25 text-muted-foreground data-[highlighted]:border-border/50 data-[highlighted]:bg-muted/50 data-[highlighted]:text-foreground';
 
 export function parseReservationPercent(raw: string | null | undefined): number {
   if (raw == null || raw === '') return 0;
@@ -66,7 +66,7 @@ function resolveProfilePhotoUrl(url: string | null | undefined): string | null {
   return t;
 }
 
-export function formatWalletAddressForDisplay(address: string, head = 10, tail = 10): string {
+export function formatWalletAddressForDisplay(address: string, head = 8, tail = 8): string {
   const t = address.trim();
   if (t.length <= head + tail + 3) return t;
   return `${t.slice(0, head)}…${t.slice(-tail)}`;
@@ -98,8 +98,8 @@ export function formatSocialCount(value: number | null | undefined): string {
 
 export function ProfileMenuWalletCopyRow({
   address,
-  addressHead = 10,
-  addressTail = 10,
+  addressHead = 8,
+  addressTail = 8,
 }: {
   address: string;
   addressHead?: number;
@@ -139,7 +139,7 @@ export function ProfileMenuWalletCopyRow({
           'flex h-5 w-5 shrink-0 items-center justify-center rounded-sm transition-colors',
           copied
             ? 'text-green-500'
-            : 'text-[var(--muted-foreground)] hover:text-secondary-foreground group-hover/wallet:text-secondary-foreground',
+            : 'text-muted-foreground hover:text-secondary-foreground group-hover/wallet:text-secondary-foreground',
           'disabled:cursor-not-allowed disabled:opacity-50'
         )}
         aria-label={copied ? 'Copied' : 'Copy wallet address'}
@@ -157,7 +157,7 @@ export function ProfileMenuWalletCopyRow({
         title="Copy wallet address"
         className={cn(
           'min-w-0 flex-1 cursor-pointer truncate rounded-sm px-0.5 py-0.5 text-left font-mono text-xs leading-none tracking-tight outline-none',
-          'text-[var(--muted-foreground)] transition-colors',
+          'text-muted-foreground transition-colors',
           'hover:text-secondary-foreground group-hover/wallet:text-secondary-foreground',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-popover'
         )}
@@ -310,7 +310,7 @@ function ProfileAvatarPlain({
       ) : (
         <span
           className={cn(
-            'font-semibold text-[var(--muted-foreground)]',
+            'font-semibold text-muted-foreground',
             sizePx >= 44 ? 'text-lg' : 'text-sm'
           )}
         >
@@ -415,7 +415,7 @@ export function ProfileAvatarWithReservationRing({
         ) : (
           <span
             className={cn(
-              'font-semibold text-[var(--muted-foreground)]',
+              'font-semibold text-muted-foreground',
               outer >= 48 ? 'text-lg' : 'text-sm'
             )}
           >
@@ -566,23 +566,23 @@ export function TradeNavProfileMenu({
                     {profileHeadline}
                   </span>
                   <ChevronRight
-                    className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]"
+                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
                     aria-hidden
                   />
                 </div>
               </Link>
               <div className="-mt-px pl-px">
-                <ProfileMenuWalletCopyRow address={walletAddress} addressHead={10} addressTail={10} />
+                <ProfileMenuWalletCopyRow address={walletAddress} />
               </div>
               {hasProfile ? (
                 <p className="mt-0.5 pl-px text-sm leading-tight">
                   <span className="font-bold tabular-nums">{formatSocialCount(followers)}</span>
-                  <span className="font-normal text-[var(--muted-foreground)]"> followers</span>
-                  <span className="text-[var(--muted-foreground)] px-1" aria-hidden>
+                  <span className="font-normal text-muted-foreground"> followers</span>
+                  <span className="text-muted-foreground px-1" aria-hidden>
                     {' '}
                   </span>
                   <span className="font-bold tabular-nums">{formatSocialCount(following)}</span>
-                  <span className="font-normal text-[var(--muted-foreground)]"> following</span>
+                  <span className="font-normal text-muted-foreground"> following</span>
                 </p>
               ) : null}
             </div>
@@ -597,7 +597,7 @@ export function TradeNavProfileMenu({
               rel="noopener noreferrer"
               className={profileMenuRowLinkClass}
             >
-              <User className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              <User className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 truncate">Open in Explorer</span>
               <ChevronRight className={profileMenuChevronClass} aria-hidden />
             </Link>
@@ -608,7 +608,7 @@ export function TradeNavProfileMenu({
                 href={tradeSptPath(walletAddress)}
                 className={profileMenuRowLinkClass}
               >
-                <Coins className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+                <Coins className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="min-w-0 flex-1 truncate">
                   {tokenMenuAction === 'launch' ? 'Launch SPT' : 'Enable Reservations'}
                 </span>
@@ -621,7 +621,7 @@ export function TradeNavProfileMenu({
               href="/trade/spt"
               className={profileMenuRowLinkClass}
             >
-              <Wallet className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              <Wallet className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 truncate">My Social Proof Tokens</span>
               <ChevronRight className={profileMenuChevronClass} aria-hidden />
             </Link>
@@ -633,7 +633,7 @@ export function TradeNavProfileMenu({
               rel="noopener noreferrer"
               className={profileMenuRowLinkClass}
             >
-              <Droplets className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              <Droplets className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 truncate">Create Pool</span>
               <ChevronRight className={profileMenuChevronClass} aria-hidden />
             </Link>
@@ -647,11 +647,11 @@ export function TradeNavProfileMenu({
             }}
             aria-expanded={environmentExpanded}
           >
-            <Globe className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+            <Globe className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="min-w-0 flex-1 truncate">Environment</span>
             <ChevronRight
               className={cn(
-                'ml-auto h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform duration-200 ease-out group-data-[highlighted]:text-foreground',
+                'ml-auto h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-data-[highlighted]:text-foreground',
                 environmentExpanded ? 'rotate-90' : 'rotate-0'
               )}
               aria-hidden
@@ -698,7 +698,7 @@ export function TradeNavProfileMenu({
             className={cn(profileMenuRowLinkClass, 'cursor-default')}
             onSelect={(e) => e.preventDefault()}
           >
-            <Palette className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+            <Palette className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
             <span className="min-w-0 flex-1 truncate">Appearance</span>
             <div
               className="ml-auto shrink-0"
@@ -720,7 +720,7 @@ export function TradeNavProfileMenu({
               rel="noopener noreferrer"
               className={profileMenuRowLinkClass}
             >
-              <Settings className="mr-2 h-4 w-4 shrink-0 text-[var(--muted-foreground)]" aria-hidden />
+              <Settings className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
               <span className="min-w-0 flex-1 truncate">Settings</span>
               <ChevronRight className={profileMenuChevronClass} aria-hidden />
             </Link>

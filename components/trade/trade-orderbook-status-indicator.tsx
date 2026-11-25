@@ -281,7 +281,7 @@ export function TradeOrderbookStatusIndicator() {
         )}
 
         <p className="border-t border-white/10 pt-2 text-[10px] text-[#666]">
-          {obNet === 'testnet' ? 'Testnet' : obNet === 'localnet' ? 'Localnet' : 'Mainnet'} · Refreshes every{' '}
+          {obNet === 'testnet' ? 'Testnet' : obNet === 'localnet' ? 'Localnet' : 'Mainnet'}, refreshes every{' '}
           {POLL_MS / 1000}s
         </p>
       </HoverCardContent>

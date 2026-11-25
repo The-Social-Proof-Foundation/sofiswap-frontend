@@ -28,6 +28,10 @@ import {
   storeWalletSigningKey,
 } from '@/lib/mysocial-wallet-signing-storage';
 import { clearGraphqlProfileCacheForPrefix } from '@/lib/graphql-profile-cache';
+import {
+  clearPopupIntent,
+  markPopupIntent,
+} from '@/lib/mysocial-popup-handshake';
 import { clearTradeGateOkForPrefix } from '@/lib/trade-platform-gate-storage';
 import { keypairFromWalletCredentials } from '@/lib/wallet-credentials-keypair';
 import {
@@ -239,10 +243,13 @@ export function useMySocialAuth() {
         }
 
         try {
+          // Lets the callback relay accept this popup's result, and only this one.
+          markPopupIntent();
           await auth.signIn({ ...signInOpts, mode: 'popup' });
           await syncSession();
         } catch (e) {
           if (e instanceof PopupBlockedError) {
+            clearPopupIntent();
             await auth.signIn({ ...signInOpts, mode: 'redirect' });
             return;
           }

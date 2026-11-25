@@ -37,19 +37,19 @@ export function Footer() {
                   <div className="w-8 h-8" />
                 )}
               </div>
-              <span className="hidden font-satoshi font-semibold lg:inline text-2xl font-semibold transition-all text-[var(--foreground)]">
+              <span className="hidden font-satoshi font-semibold lg:inline text-2xl font-semibold transition-all text-[hsl(var(--foreground))]">
                 SofiSwap
               </span>
             </Link>
-            <p className="text-sm font-satoshi text-[var(--secondary-foreground)] max-w-[380px] text-center lg:text-left">
+            <p className="text-sm font-satoshi text-[hsl(var(--secondary-foreground))] max-w-[380px] text-center lg:text-left">
               We&apos;re creating the leading SocialFi + DataFi decentralized exchange for Social Proof Tokens & MyData.
             </p>
           </div>
 
           {/* Right side — Resources (flush right on lg, same edge as copyright block) */}
-          <div className="w-full lg:w-auto lg:ml-auto lg:shrink-0 pt-5 sm:pt-0 text-[var(--foreground)]">
+          <div className="w-full lg:w-auto lg:ml-auto lg:shrink-0 pt-5 sm:pt-0 text-[hsl(var(--foreground))]">
             <div className="mb-6 sm:mb-12 lg:mb-0 w-full lg:w-max flex flex-col items-center lg:items-end">
-               <p className="mb-3 w-1/2 border-b border-muted pb-2 text-center text-xs text-[var(--secondary-foreground)] sm:w-full md:max-w-[320px] lg:mb-5 lg:w-full lg:max-w-none lg:text-right">Resources</p>
+               <p className="mb-3 w-1/2 border-b border-muted pb-2 text-center text-xs text-[hsl(var(--secondary-foreground))] sm:w-full md:max-w-[320px] lg:mb-5 lg:w-full lg:max-w-none lg:text-right">Resources</p>
                <div className="grid grid-cols-2 sm:grid-cols-1 gap-2 sm:space-y-2 text-sm justify-items-center lg:justify-items-end w-full">
                 <Link 
                    href="https://www.mysocial.network/ecosystem/sofiswap"
@@ -100,7 +100,7 @@ export function Footer() {
                      <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/>
                    </svg>
                    <span className="flex items-end gap-2">
-                     X <span className="text-xs text-[var(--secondary-foreground)]">(Twitter)</span>
+                     X <span className="text-xs text-[hsl(var(--secondary-foreground))]">(Twitter)</span>
                    </span>
                  </Link>
                </div>
@@ -118,20 +118,20 @@ export function Footer() {
              {/* Center - Terms and Privacy - Mobile: centered, Desktop: absolutely centered */}
              <div className="flex flex-col items-center sm:absolute sm:left-1/2 sm:transform sm:-translate-x-1/2 order-2 sm:order-2">
                <div className="flex gap-4 text-xs mb-2 md:mb-0 translate-y-0 md:translate-y-2">
-                 <Link href="https://docs.google.com/document/d/1qxKECZAOfgaZxl49Y3PhP9oAxB1yOsKJLasPEU-b6GY/" className="hover:underline text-[var(--secondary)] transition-colors duration-300 font-medium hover:font-semibold">
+                 <Link href="https://docs.google.com/document/d/1qxKECZAOfgaZxl49Y3PhP9oAxB1yOsKJLasPEU-b6GY/" className="hover:underline text-[hsl(var(--secondary))] transition-colors duration-300 font-medium hover:font-semibold">
                    Terms of Service
                  </Link>
-                 <Link href="https://docs.google.com/document/d/1_lFu0GsqmcsyiuKrlGF-RBz6nd4Gm3vGluxhALiXYQA/" className="hover:underline text-[var(--secondary)] transition-colors duration-300 font-medium hover:font-semibold">
+                 <Link href="https://docs.google.com/document/d/1_lFu0GsqmcsyiuKrlGF-RBz6nd4Gm3vGluxhALiXYQA/" className="hover:underline text-[hsl(var(--secondary))] transition-colors duration-300 font-medium hover:font-semibold">
                    Privacy Policy
                  </Link>
                </div>
 
                {/* Mobile: Show copyright info centered below terms */}
                <div className="text-center sm:hidden">
-                 <Link href="https://socialproof.foundation" target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--secondary)] hover:underline hover:font-medium block">
+                 <Link href="https://socialproof.foundation" target="_blank" rel="noopener noreferrer" className="text-xs text-[hsl(var(--secondary))] hover:underline hover:font-medium block">
                    The Social Proof Foundation, LLC.
                  </Link>
-                 <p className="text-xs text-[var(--secondary)]">
+                 <p className="text-xs text-[hsl(var(--secondary))]">
                    © Copyright {new Date().getFullYear()}. All Rights Reserved.
                  </p>
                </div>
@@ -139,10 +139,10 @@ export function Footer() {
 
              {/* Right side - Copyright info (Desktop only) */}
              <div className="hidden sm:flex sm:flex-col sm:items-end order-3 sm:order-3">
-               <Link href="https://socialproof.foundation" target="_blank" rel="noopener noreferrer" className="text-xs text-[var(--secondary)] hover:underline hover:font-medium block">
+               <Link href="https://socialproof.foundation" target="_blank" rel="noopener noreferrer" className="text-xs text-[hsl(var(--secondary))] hover:underline hover:font-medium block">
                  The Social Proof Foundation, LLC.
                </Link>
-               <p className="text-xs text-[var(--secondary)]">
+               <p className="text-xs text-[hsl(var(--secondary))]">
                  © Copyright {new Date().getFullYear()}. All Rights Reserved.
                </p>
              </div>

@@ -1,6 +1,10 @@
 import { Ed25519Keypair } from '@socialproof/myso/keypairs/ed25519'
 
-import { SOCIAL_INDEXER_TESTNET_DEFAULT } from '@/lib/social-indexer/base-url'
+import {
+  getClientSelectedNetwork,
+  type NetworkType,
+} from '@/lib/network-utils'
+import { getSocialIndexerRestBaseUrl } from '@/lib/social-indexer/base-url'
 
 // Profile creation data interface
 interface ProfileCreationData {
@@ -59,14 +63,23 @@ interface GoogleUserInfo {
 }
 
 // MySocial indexing API endpoints (same default as reservation-pools / marquee)
-export const SOCIAL_INDEX_API = SOCIAL_INDEXER_TESTNET_DEFAULT
+/**
+ * Social indexer REST base for the *selected* network.
+ *
+ * This was pinned to the testnet host, so on mainnet/localnet every profile lookup, username
+ * check, follow check and blocklist check silently read testnet state — reporting "not
+ * following" for an existing follower and inviting a follow transaction that aborts on chain.
+ */
+export function socialIndexApi(network?: NetworkType): string {
+  return getSocialIndexerRestBaseUrl(network ?? getClientSelectedNetwork())
+}
 
 /**
  * Fetch a MySocial profile by address
  */
 export async function fetchMySocialProfile(address: string): Promise<MySocialProfile | null> {
   try {
-    const response = await fetch(`${SOCIAL_INDEX_API}/profiles/address/${address}`, {
+    const response = await fetch(`${socialIndexApi()}/profiles/address/${address}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -104,7 +117,7 @@ export async function fetchMySocialProfile(address: string): Promise<MySocialPro
  */
 export async function checkMySocialProfileExists(address: string): Promise<boolean> {
   try {
-    const response = await fetch(`${SOCIAL_INDEX_API}/profiles/address/${address}`, {
+    const response = await fetch(`${socialIndexApi()}/profiles/address/${address}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -152,7 +165,7 @@ export function getDisplayName(
 
   // Priority 4: Truncated address
   if (displayAddress) {
-    return `${displayAddress.slice(0, 6)}...${displayAddress.slice(-6)}`
+    return `${displayAddress.slice(0, 8)}...${displayAddress.slice(-8)}`
   }
 
   return ""
@@ -205,7 +218,7 @@ export async function createProfile(
       })
     }
 
-    const response = await fetch(`${SOCIAL_INDEX_API}/profiles`, {
+    const response = await fetch(`${socialIndexApi()}/profiles`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -306,7 +319,7 @@ async function signProfileCreation(
  */
 export async function checkUsernameAvailability(username: string): Promise<boolean> {
   try {
-    const response = await fetch(`${SOCIAL_INDEX_API}/profiles/username/${username}/availability`, {
+    const response = await fetch(`${socialIndexApi()}/profiles/username/${username}/availability`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -352,7 +365,7 @@ export async function updateProfile(
       })
     }
 
-    const response = await fetch(`${SOCIAL_INDEX_API}/profiles/${address}`, {
+    const response = await fetch(`${socialIndexApi()}/profiles/${address}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -380,12 +393,21 @@ export async function updateProfile(
  * @param followingAddress - Address of the profile being followed
  * @returns Promise<boolean> - true if following, false if not
  */
+/**
+ * Whether `viewer` follows `target`.
+ *
+ * `unknown` is a distinct outcome on purpose: a transport failure must not be reported as
+ * "not following", because the UI would then offer a follow action that aborts on chain for
+ * an existing follower. Callers should surface `unknown` as unavailable-with-retry.
+ */
+export type FollowStatus = 'following' | 'not_following' | 'unknown';
+
 export async function checkFollowStatus(
   followerAddress: string,
   followingAddress: string
-): Promise<boolean> {
+): Promise<FollowStatus> {
   try {
-    const response = await fetch(`${SOCIAL_INDEX_API}/social-graph/check/${followerAddress}/${followingAddress}`, {
+    const response = await fetch(`${socialIndexApi()}/social-graph/check/${followerAddress}/${followingAddress}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -393,23 +415,24 @@ export async function checkFollowStatus(
     })
 
     if (!response.ok) {
-      console.warn('Follow status check failed:', response.statusText)
-      return false
+      console.warn('Follow status check failed:', response.status, response.statusText)
+      // A missing profile genuinely has no follow edge; anything else is indeterminate.
+      return response.status === 404 ? 'not_following' : 'unknown'
     }
 
     const data = await response.json()
-    
+
     // Handle the response structure: { error?, is_following: boolean }
     if (data.error) {
       console.log('Follow status check - profile not found:', data.error)
-      return false
+      return 'not_following'
     }
-    
-    return data.is_following === true
-    
+
+    return data.is_following === true ? 'following' : 'not_following'
+
   } catch (error) {
     console.error('Error checking follow status:', error)
-    return false
+    return 'unknown'
   }
 }
 
@@ -424,7 +447,7 @@ export async function checkBlockStatus(
   blockedAddress: string
 ): Promise<boolean> {
   try {
-    const response = await fetch(`${SOCIAL_INDEX_API}/blocklist/check/profile/${blockerAddress}/${blockedAddress}`, {
+    const response = await fetch(`${socialIndexApi()}/blocklist/check/profile/${blockerAddress}/${blockedAddress}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

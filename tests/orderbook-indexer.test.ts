@@ -16,6 +16,7 @@ import {
   fetchOrderbookMarketSummaries,
   formatTickerPrice,
   marketDisplayPrice,
+  priceChangePercent24hFromCandles,
   mergeOrderbookMarketSummaries,
   parseOrderbookSummaryPayload,
 } from '../lib/orderbook-indexer/ticker';
@@ -80,6 +81,7 @@ test('OHLCV converts server milliseconds to lightweight-charts Unix seconds', ()
     high: 2,
     low: 0.5,
     close: 1.5,
+    volume: 10,
   });
 });
 
@@ -100,7 +102,7 @@ test('OHLCV accepts string tuples and seeds a live candle when the indexer has n
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.deepEqual(result.data, [
-    { time: 1_788_807_803, open: 1, high: 2, low: 0.5, close: 1.5 },
+    { time: 1_788_807_803, open: 1, high: 2, low: 0.5, close: 1.5, volume: 10 },
   ]);
 
   const seeded = applyLivePriceToCandles([], 2493.8, '1h', 1_788_807_803_000);
@@ -187,6 +189,30 @@ test('market summary uses last trade or bid/ask mid and lists every indexer pool
   ]);
   assert.equal(markets.pools.BTC_MYUSD?.address, '0xbtc');
   assert.equal(markets.coins.BTC?.scalar, 100_000_000);
+});
+
+test('24h change uses the price still in effect a day ago when the summary reports 0', () => {
+  const now = Date.parse('2026-11-25T06:00:00.000Z');
+  const hour = 60 * 60;
+  const btc = priceChangePercent24hFromCandles(
+    [
+      { time: now / 1000 - 51 * hour, open: 61007.9, close: 61341.3 },
+      { time: now / 1000 - 167 * hour, open: 64387.1, close: 64645.3 },
+    ],
+    (59018.3 + 59255) / 2,
+    now
+  );
+  assert.ok(btc != null && btc < -3 && btc > -4);
+
+  const myso = priceChangePercent24hFromCandles(
+    [
+      { time: now / 1000 - 14 * hour, open: 0.004702, close: 0.004702 },
+      { time: now / 1000 - 50 * hour, open: 0.004702, close: 0.004702 },
+    ],
+    0.004702,
+    now
+  );
+  assert.ok(myso != null && Math.abs(myso) < 1e-9);
 });
 
 test('ticker keeps every catalog pool and fills missing prices from live depth', async () => {

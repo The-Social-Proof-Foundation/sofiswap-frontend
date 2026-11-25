@@ -2,7 +2,19 @@ import https from 'https';
 
 import axios from 'axios';
 import { type NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 
+import {
+  GAS_POOL_EXECUTE_LIMIT,
+  GAS_POOL_MAX_BODY_BYTES,
+  clientKey,
+  corsHeaders,
+  enforceBodyLimit,
+  enforceRateLimit,
+  isAllowedOrigin,
+  jsonError,
+  preflightResponse,
+} from '@/lib/api-guard';
 import {
   buildGasPoolExecuteHttpUrl,
   getCurrentNetworkFromCookies,
@@ -16,17 +28,16 @@ import {
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Max-Age': '86400',
-} as const;
+/** A sponsored transaction is bounded client-side; cap it so this proxy cannot be used as a bulk relay. */
+const MAX_TX_BYTES_CHARS = 96 * 1024;
 
-const jsonHeaders = {
-  ...corsHeaders,
-  'Content-Type': 'application/json',
-} as const;
+const executeRequestSchema = z
+  .object({
+    reservation_id: z.number().int().nonnegative(),
+    tx_bytes: z.string().min(1).max(MAX_TX_BYTES_CHARS),
+    user_sig: z.string().min(1).max(8 * 1024),
+  })
+  .strict();
 
 function createHttpsAgent(): https.Agent {
   const isProduction = process.env.NODE_ENV === 'production';
@@ -39,7 +50,6 @@ function createHttpsAgent(): https.Agent {
     keepAliveMsecs: 1000,
     maxSockets: 50,
     minVersion: 'TLSv1.2',
-    maxVersion: 'TLSv1.2',
     ...(rejectUnauthorized === false && {
       checkServerIdentity: () => undefined,
     }),
@@ -48,151 +58,118 @@ function createHttpsAgent(): https.Agent {
   return new https.Agent(secureOptions);
 }
 
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 200,
-    headers: { ...corsHeaders },
-  });
+export async function OPTIONS(request: NextRequest) {
+  return preflightResponse(request);
 }
 
 export async function POST(request: NextRequest) {
+  const origin = request.headers.get('origin');
+  if (!isAllowedOrigin(origin)) {
+    return jsonError(request, 'origin_not_allowed', 'This origin is not allowed to use the gas pool.');
+  }
+
+  if (!enforceBodyLimit(request, GAS_POOL_MAX_BODY_BYTES)) {
+    return jsonError(request, 'body_too_large', 'Request body is too large.');
+  }
+
+  const limit = enforceRateLimit(
+    `gas-execute:${clientKey(request)}`,
+    GAS_POOL_EXECUTE_LIMIT,
+    60_000
+  );
+  if (!limit.ok) {
+    return jsonError(request, 'rate_limited', 'Too many sponsored submissions. Please slow down.', {
+      retryAfterSeconds: limit.retryAfterSeconds,
+    });
+  }
+
+  const selected = request.nextUrl.searchParams.get('network');
+  if (selected != null && !isNetworkType(selected)) {
+    return jsonError(request, 'invalid_request', 'Unsupported network.');
+  }
+  const network = isNetworkType(selected)
+    ? selected
+    : getCurrentNetworkFromCookies(request.headers.get('cookie'));
+
+  if (!isSponsoredGasAllowed(network)) {
+    const message =
+      'Sponsored transactions are not available on localnet. Please ensure you have sufficient MySo balance to pay for gas.';
+    return jsonError(request, 'invalid_request', message);
+  }
+
+  let body: unknown;
   try {
-    const cookieHeader = request.headers.get('cookie');
-    const selected = request.nextUrl.searchParams.get('network');
-    if (selected != null && !isNetworkType(selected)) return NextResponse.json({ error: 'Unsupported network.' }, { status: 400 });
-    const network = isNetworkType(selected) ? selected : getCurrentNetworkFromCookies(cookieHeader);
-    if (!isSponsoredGasAllowed(network)) {
-      const msg =
-        'Sponsored transactions are not available on localnet. Please ensure you have sufficient MySo balance to pay for gas.';
-      console.warn('🚀 [Gas Pool Execute] Sponsored transactions not allowed on localnet');
-      return NextResponse.json(
-        { error: msg, message: msg },
-        { status: 400, headers: { ...jsonHeaders } }
-      );
-    }
+    body = await request.json();
+  } catch {
+    return jsonError(request, 'invalid_request', 'Invalid request body.');
+  }
 
-    const body = await request.json();
+  const parsed = executeRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return jsonError(
+      request,
+      'invalid_request',
+      'Invalid sponsored submission. reservation_id, tx_bytes and user_sig are required.'
+    );
+  }
 
-    console.log('🚀 [Gas Pool Execute] Request Details:');
-    console.log('  Reservation ID:', (body as { reservation_id?: unknown }).reservation_id);
-    console.log('  TX Bytes Length:', (body as { tx_bytes?: string }).tx_bytes?.length || 0);
-    console.log('  User Sig Length:', (body as { user_sig?: string }).user_sig?.length || 0);
-    console.log('  Network:', network);
+  const baseRaw = getGasPoolBaseUrlForNetwork(network);
+  if (!baseRaw?.trim()) {
+    console.error('[Gas Pool Execute] Gas pool URL is not configured for this network.');
+    return jsonError(request, 'not_configured', 'The gas pool service is not configured.');
+  }
 
-    const baseRaw = getGasPoolBaseUrlForNetwork(network);
-    if (!baseRaw) {
-      console.error(
-        `❌ [Gas Pool Execute] No gas pool URL for network="${network}". Set NEXT_PUBLIC_GAS_POOL_URL or NEXT_PUBLIC_GAS_POOL_URL_${network === 'mainnet' ? 'MAINNET' : 'TESTNET'}.`
-      );
-      return NextResponse.json(
-        { error: 'Gas pool URL configuration error' },
-        { status: 500, headers: { ...jsonHeaders } }
-      );
-    }
+  const token = getGasPoolBearerTokenForNetwork(network);
+  if (!token) {
+    console.error('[Gas Pool Execute] Gas pool token is not configured for this network.');
+    return jsonError(request, 'not_configured', 'The gas pool service is not configured.');
+  }
 
-    const token = getGasPoolBearerTokenForNetwork(network);
-    if (!token) {
-      console.error(
-        `❌ [Gas Pool Execute] Missing gas pool token for network="${network}"`
-      );
-      return NextResponse.json(
-        { error: 'Gas pool authentication token is not configured.' },
-        { status: 500, headers: { ...jsonHeaders } }
-      );
-    }
+  const executeUrl = buildGasPoolExecuteHttpUrl(normalizeGasPoolBaseUrl(baseRaw));
 
-    const executeUrl = buildGasPoolExecuteHttpUrl(normalizeGasPoolBaseUrl(baseRaw));
-
-    const httpsAgent = createHttpsAgent();
-
-    const axiosResponse = await axios.post(executeUrl, body, {
+  try {
+    const axiosResponse = await axios.post(executeUrl, parsed.data, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      httpsAgent,
+      httpsAgent: createHttpsAgent(),
       timeout: 30_000,
       validateStatus: (status) => status < 500,
     });
 
-    console.log('🚀 [Gas Pool Execute] Response status:', axiosResponse.status);
-
     if (axiosResponse.status >= 400) {
-      const errorText =
+      // Log upstream detail server-side; return a stable message to the caller.
+      const upstreamText =
         typeof axiosResponse.data === 'string'
           ? axiosResponse.data
           : JSON.stringify(axiosResponse.data);
-      console.error('❌ [Gas Pool Execute] HTTP Error Response:');
-      console.error('  Status:', axiosResponse.status);
-      console.error('  Status Text:', axiosResponse.statusText);
-      console.error('  Body:', errorText);
-      throw new Error(`HTTP error! status: ${axiosResponse.status}, response: ${errorText}`);
-    }
-
-    const data = axiosResponse.data;
-
-    console.log('✅ [Gas Pool Execute] Success:', {
-      digest: data.result?.digest,
-      effectsStatus: data.result?.effects?.status?.status,
-    });
-
-    return NextResponse.json(data, { headers: { ...jsonHeaders } });
-  } catch (error: unknown) {
-    const err = error as {
-      message?: string;
-      stack?: string;
-      code?: string;
-      cause?: unknown;
-    };
-
-    console.error('❌ [Gas Pool Execute] Exception occurred:');
-    console.error('  Error:', err.message);
-    console.error('  Stack:', err.stack);
-
-    let errorMessage = err.message || 'Unknown error occurred';
-    let errorDetails = String(error);
-
-    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
-      errorMessage =
-        'Gas pool service request timed out. The service may be temporarily unavailable. Please try again.';
-    } else if (
-      err.code === 'EPROTO' ||
-      err.message?.includes('SSL') ||
-      err.message?.includes('TLS') ||
-      err.message?.includes('handshake')
-    ) {
-      errorMessage =
-        'SSL/TLS handshake failed with gas pool service. This may be a protocol or certificate issue.';
-      errorDetails = `SSL/TLS error: ${err.message}. ${err.code ? `Code: ${err.code}` : ''}`;
-      console.error('🔒 SSL/TLS Error Details:', {
-        code: err.code,
-        message: err.message,
-        stack: err.stack,
+      console.error('[Gas Pool Execute] Upstream rejected the submission:', {
+        status: axiosResponse.status,
+        body: upstreamText.slice(0, 500),
       });
-    } else if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
-      errorMessage =
-        'Unable to connect to gas pool service. Please check if the service is running.';
-      errorDetails = `Connection error: ${err.message}. Code: ${err.code}`;
-    } else if (err.message?.includes('fetch failed') || err.cause) {
-      errorMessage =
-        'Unable to connect to gas pool service. Please check your network connection and try again.';
-      errorDetails = `Connection failed: ${err.message}. ${err.cause ? `Cause: ${String(err.cause)}` : ''}`;
+      return jsonError(
+        request,
+        'upstream_error',
+        'The gas pool could not submit this transaction. Please try again.'
+      );
     }
 
-    if (axios.isAxiosError(error)) {
-      const underlyingError = error.cause || error;
-      if (underlyingError && underlyingError !== error) {
-        errorDetails = `${errorDetails}. Underlying error: ${String(underlyingError)}`;
-      }
-    }
-
-    return NextResponse.json(
-      {
-        error: 'Gas pool execute request failed',
-        details: errorDetails,
-        message: errorMessage,
-      },
-      { status: 500, headers: { ...jsonHeaders } }
+    return NextResponse.json(axiosResponse.data, { headers: corsHeaders(request) });
+  } catch (error: unknown) {
+    const err = error as { name?: string; code?: string; message?: string };
+    const timedOut = err.name === 'AbortError' || err.code === 'ECONNABORTED';
+    console.error('[Gas Pool Execute] Request failed:', {
+      name: err.name,
+      code: err.code,
+      message: err.message,
+    });
+    return jsonError(
+      request,
+      'upstream_error',
+      timedOut
+        ? 'The gas pool request timed out. Please try again.'
+        : 'Could not reach the gas pool service. Please try again.'
     );
   }
 }

@@ -37,7 +37,7 @@ export function spotlightItemsFromIndexerPools(
     const id = p.pool_name.trim();
 
     const poolIdShort =
-      p.pool_id.length > 18 ? `${p.pool_id.slice(0, 10)}…${p.pool_id.slice(-6)}` : p.pool_id;
+      p.pool_id.length > 19 ? `${p.pool_id.slice(0, 8)}…${p.pool_id.slice(-8)}` : p.pool_id;
 
     return {
       id,

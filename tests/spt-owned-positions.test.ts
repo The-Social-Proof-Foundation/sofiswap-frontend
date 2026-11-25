@@ -279,7 +279,7 @@ test('unlaunched reservations stay listed with no curve value', async () => {
   assert.equal(positions[0].redeemableMysoBaseUnits, BigInt(0));
   assert.equal(positions[0].redeemableMysoDisplay, '0');
   assert.equal(positions[0].href, `/trade/spt/${wallet}`);
-  assert.equal(positions[0].title, wallet.length > 20 ? `${wallet.slice(0, 10)}…${wallet.slice(-6)}` : wallet);
+  assert.equal(positions[0].title, wallet.length > 19 ? `${wallet.slice(0, 8)}…${wallet.slice(-8)}` : wallet);
 });
 
 test('holdings never depend on the indexer sptHoldings list', async () => {

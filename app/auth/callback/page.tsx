@@ -25,6 +25,7 @@ import {
   MYSOCIAL_AUTH_BROADCAST_CHANNEL,
 } from '@/lib/mysocial-auth-client';
 import { resolveDisplayAddress } from '@/lib/mysocial-oauth-utils';
+import { consumePopupIntent } from '@/lib/mysocial-popup-handshake';
 import { writeCachedPlatformAccess } from '@/lib/trade-platform-gate-storage';
 import { writeTradingSetupCache } from '@/lib/trading-setup-cache';
 
@@ -37,6 +38,18 @@ function paramFromUrl(url: URL, key: string): string | null {
 function runPopupFallback(): void {
   const url = new URL(window.location.href);
   const channel = new BroadcastChannel(MYSOCIAL_AUTH_BROADCAST_CHANNEL);
+
+  /**
+   * Only relay a result for a popup this browser actually opened. Without this, a crafted
+   * `?_popup_fallback=1` link could push an attacker's session into an open SofiSwap tab.
+   * The marker is consumed here, so a replayed URL relays nothing.
+   */
+  if (!consumePopupIntent()) {
+    console.warn('[auth/callback] ignored a popup result with no matching sign-in attempt');
+    channel.close();
+    return;
+  }
+
   const oauthError = paramFromUrl(url, 'error');
   if (oauthError) {
     channel.postMessage({
@@ -245,7 +258,7 @@ function CallbackContent() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background font-sans text-foreground">
-      <p className="text-sm text-[var(--muted-foreground)]">{note ?? 'Completing sign-in…'}</p>
+      <p className="text-sm text-muted-foreground">{note ?? 'Completing sign-in…'}</p>
     </div>
   );
 }
@@ -255,7 +268,7 @@ export default function AuthCallbackPage() {
     <Suspense
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-background font-sans">
-          <p className="text-sm text-[var(--muted-foreground)]">Loading…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         </div>
       }
     >

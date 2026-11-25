@@ -17,7 +17,6 @@ export function LandingHero() {
       data-landing-hero
       className="relative isolate overflow-hidden border-b border-border/50"
     >
-      <div className="absolute inset-x-0 top-0 h-1.5 bg-primary" aria-hidden />
       <div
         data-hero-orbit
         className="absolute -right-[12%] top-[8%] -z-10 size-[36rem] rounded-full border border-primary/15 bg-primary/[0.05] will-change-transform sm:size-[46rem]"
@@ -64,7 +63,7 @@ export function LandingHero() {
             data-hero-actions
             className="mt-9 flex w-full max-w-md flex-col gap-3 sm:max-w-none sm:flex-row"
           >
-            <Button asChild size="lg" className="h-12 rounded-full bg-[var(--primary)] px-7 text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90 active:scale-[0.98]">
+            <Button asChild size="lg" className="h-12 rounded-full bg-[hsl(var(--primary))] px-7 text-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary))]/90 active:scale-[0.98]">
               <Link href="/trade">
                 Start trading <ArrowRight className="ml-2 size-4" />
               </Link>
@@ -73,7 +72,7 @@ export function LandingHero() {
               asChild
               size="lg"
               variant="outline"
-              className="h-12 rounded-full border-[color-mix(in_srgb,var(--primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--background)_70%,transparent)] px-7 text-[var(--foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-foreground)] active:scale-[0.98]"
+              className="h-12 rounded-full border-[color-mix(in_srgb,hsl(var(--primary))_35%,transparent)] bg-[color-mix(in_srgb,hsl(var(--background))_70%,transparent)] px-7 text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--accent-foreground))] active:scale-[0.98]"
             >
               <Link href="/trade/spt">
                 <Search className="mr-2 size-4" />
@@ -99,7 +98,7 @@ export function LandingHero() {
           data-orderbook-preview
           className="relative z-10 will-change-transform lg:mt-16 lg:justify-self-end"
         >
-          <div className="w-full max-w-md border border-primary/25 bg-[color-mix(in_srgb,var(--card)_88%,transparent)] p-5 shadow-[0_28px_70px_-28px_color-mix(in_srgb,var(--foreground)_28%,transparent)] backdrop-blur-md sm:p-6">
+          <div className="w-full max-w-md border border-primary/25 bg-[color-mix(in_srgb,hsl(var(--card))_88%,transparent)] p-5 shadow-[0_28px_70px_-28px_color-mix(in_srgb,hsl(var(--foreground))_28%,transparent)] backdrop-blur-md sm:p-6">
             <div className="flex items-end justify-between gap-4 border-b border-border/50 pb-4">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -122,12 +121,12 @@ export function LandingHero() {
             </div>
           </div>
 
-          <div className="relative z-10 mx-4 -mt-6 border border-primary/30 bg-[var(--background)] p-5 sm:mx-0 sm:-mr-6 sm:ml-16">
+          <div className="relative z-10 mx-4 -mt-6 border border-primary/30 bg-[hsl(var(--background))] p-5 sm:mx-0 sm:-mr-6 sm:ml-16">
             <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
               Reservation
             </p>
             <p className="mt-2 text-lg font-semibold tracking-tight">grove</p>
-            <p className="mt-1 text-sm text-muted-foreground">Profile token · 184 of 256 MYSO</p>
+            <p className="mt-1 text-sm text-muted-foreground">Profile token, 184 of 256 MYSO</p>
             <div className="mt-4 h-1.5 overflow-hidden bg-primary/15" aria-hidden>
               <div className="h-full w-[72%] bg-primary" />
             </div>

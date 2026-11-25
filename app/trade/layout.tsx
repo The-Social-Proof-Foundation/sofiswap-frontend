@@ -1,6 +1,10 @@
-import { TradeMarketTicker } from '@/components/trade/trade-market-ticker';
 import type { Metadata } from 'next';
+import dynamic from 'next/dynamic';
 import type { ReactNode } from 'react';
+
+const TradeMarketTicker = dynamic(() =>
+  import('@/components/trade/trade-market-ticker').then((mod) => mod.TradeMarketTicker)
+);
 
 export const metadata: Metadata = {
   title: 'Trade — SofiSwap',

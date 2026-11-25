@@ -1,6 +1,7 @@
 import type { SpotlightItem } from '@sehaj23/react-spotlight-search';
 
 import { getMySoGraphQLClient } from '@/lib/myso-graphql-client';
+import { postDirectoryThumbUrl, profileDirectoryThumbUrl } from '@/lib/spt/media';
 import type { NetworkType } from '@/lib/network-utils';
 
 export type SptDiscoveryProfile = {
@@ -16,6 +17,7 @@ export type SptDiscoveryProfile = {
     reservationPoolId: string | null;
     tokenType: number | null;
     isActive: boolean;
+    reservationPercentage: string | number | null;
   } | null;
 };
 
@@ -71,6 +73,7 @@ export const SPT_DISCOVERY_QUERY = /* GraphQL */ `
         reservationPoolId
         tokenType
         isActive
+        reservationPercentage
       }
     }
     posts(limit: $limit, offset: $offset) {
@@ -129,8 +132,28 @@ export async function fetchSptDiscovery(
   };
 }
 
+export function reservationFillPercent(value: string | number | null | undefined): number | null {
+  if (value == null || value === '') return null;
+  const n = Number.parseFloat(String(value));
+  if (!Number.isFinite(n)) return null;
+  return Math.min(100, Math.max(0, n));
+}
+
+export function formatReservationPercent(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}%`;
+}
+
+/** A reservation is still filling when a pool exists and the token has not launched. */
+export function isProfileReservationStage(profile: SptDiscoveryProfile): boolean {
+  const token = profile.socialProofToken;
+  const launched = Boolean(token?.poolId?.trim()) || token?.isActive === true;
+  const reserving = Boolean(profile.reservationPoolAddress?.trim() || token?.reservationPoolId?.trim());
+  return reserving && !launched;
+}
+
 function short(value: string): string {
-  return value.length > 20 ? `${value.slice(0, 10)}…${value.slice(-6)}` : value;
+  return value.length > 19 ? `${value.slice(0, 8)}…${value.slice(-8)}` : value;
 }
 
 function postTitle(post: SptDiscoveryPost): string {
@@ -141,12 +164,23 @@ function postTitle(post: SptDiscoveryPost): string {
 
 export function sptSpotlightItems(result: SptDiscoveryResult): SpotlightItem[] {
   const profileItems = result.profiles
-    .filter((profile) => profile.profileId || profile.socialProofToken || profile.reservationPoolAddress)
-    .map((profile): SpotlightItem => ({
+    .filter(
+      (profile) =>
+        Boolean(profile.reservationPoolAddress?.trim()) ||
+        Boolean(profile.socialProofToken?.reservationPoolId?.trim()) ||
+        Boolean(profile.socialProofToken?.poolId?.trim()) ||
+        profile.socialProofToken?.isActive === true
+    )
+    .map((profile): SpotlightItem => {
+      const reserving = isProfileReservationStage(profile);
+      const reserved = reserving ? reservationFillPercent(profile.socialProofToken?.reservationPercentage) : null;
+      return {
       id: `spt:profile:${profile.address}`,
-      name: `${profile.displayName?.trim() || profile.username?.trim() || short(profile.address)} · Profile SPT`,
+      name: `${profile.displayName?.trim() || profile.username?.trim() || short(profile.address)} Profile SPT`,
       url: `/trade/spt/${profile.address}`,
+      icon: profileDirectoryThumbUrl(profile.profilePhoto) ?? undefined,
       tags: [
+        ...(reserved != null ? [`reservation-pct:${reserved}`] : []),
         'spt',
         'profile',
         'social proof token',
@@ -156,7 +190,8 @@ export function sptSpotlightItems(result: SptDiscoveryResult): SpotlightItem[] {
         profile.displayName || '',
         profile.bio || '',
       ].filter(Boolean),
-    }));
+    };
+  });
 
   const postById = new Map(result.posts.map((post) => [post.postId.toLowerCase(), post]));
   for (const pool of result.pools) {
@@ -165,12 +200,15 @@ export function sptSpotlightItems(result: SptDiscoveryResult): SpotlightItem[] {
     }
   }
 
-  const postItems = Array.from(postById.values()).map((post): SpotlightItem => {
+  const postItems = Array.from(postById.values())
+    .filter((post) => post.enableSpt === true || Boolean(post.sptId?.trim()))
+    .map((post): SpotlightItem => {
       const creator = post.ownerProfile?.displayName || post.ownerProfile?.username || short(post.owner);
       return {
         id: `spt:post:${post.postId}`,
-        name: `${postTitle(post)} · Post SPT`,
+        name: `${postTitle(post)} Post SPT`,
         url: `/trade/spt/post/${post.postId}`,
+        icon: postDirectoryThumbUrl(post.mediaUrls, post.ownerProfile?.profilePhoto) ?? undefined,
         tags: [
           'spt',
           'post',

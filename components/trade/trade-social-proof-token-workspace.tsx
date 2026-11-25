@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { SptReservationCard } from '@/components/trade/spt-reservation-card';
 import { useMySocialAuth } from '@/hooks/useMySocialAuth';
 import { useNetwork } from '@/lib/network-provider';
-import { checkFollowStatus } from '@/lib/profile-utils';
+import { checkFollowStatus, type FollowStatus } from '@/lib/profile-utils';
 import {
   signAndExecuteFollowUser,
   signAndExecuteUnfollowUser,
@@ -34,6 +34,7 @@ import {
   Globe,
   Layers,
   Loader2,
+  RefreshCw,
   Lock,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -171,7 +172,7 @@ const chartConfig = {
 
 function truncateAddress(addr: string): string {
   if (addr.length <= 12) return addr;
-  return `${addr.slice(0, 10)}...${addr.slice(-10)}`;
+  return `${addr.slice(0, 8)}...${addr.slice(-8)}`;
 }
 
 /** Pulls a signed % from strings like `24h 1.5%` for the chip; leaves the remainder for the caption. */
@@ -185,9 +186,10 @@ function mysoAddressesEqual(a: string | null | undefined, b: string | null | und
 function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | null }) {
   const { displayAddress, keypair, isAuthenticated } = useMySocialAuth();
   const { currentNetwork } = useNetwork();
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [followStatus, setFollowStatus] = useState<FollowStatus>('not_following');
   const [statusLoading, setStatusLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [statusNonce, setStatusNonce] = useState(0);
 
   const target = targetAddress?.trim() ?? null;
   const viewer = displayAddress?.trim() ?? null;
@@ -196,13 +198,13 @@ function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | nul
     let cancelled = false;
     async function run() {
       if (!viewer || !target || mysoAddressesEqual(viewer, target)) {
-        if (!cancelled) setIsFollowing(false);
+        if (!cancelled) setFollowStatus('not_following');
         return;
       }
       setStatusLoading(true);
       try {
-        const v = await checkFollowStatus(viewer, target);
-        if (!cancelled) setIsFollowing(v);
+        const status = await checkFollowStatus(viewer, target);
+        if (!cancelled) setFollowStatus(status);
       } finally {
         if (!cancelled) setStatusLoading(false);
       }
@@ -211,7 +213,7 @@ function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | nul
     return () => {
       cancelled = true;
     };
-  }, [viewer, target]);
+  }, [viewer, target, statusNonce]);
 
   if (!target || !viewer || mysoAddressesEqual(viewer, target)) {
     return null;
@@ -221,6 +223,7 @@ function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | nul
   }
 
   const busy = statusLoading || actionLoading;
+  const isFollowing = followStatus === 'following';
 
   const onPress = async () => {
     if (!keypair || !viewer) {
@@ -236,7 +239,7 @@ function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | nul
           followerAddress: viewer,
           followingAddress: target,
         });
-        setIsFollowing(false);
+        setFollowStatus('not_following');
         toast.success('Unfollowed');
       } else {
         await signAndExecuteFollowUser({
@@ -245,7 +248,7 @@ function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | nul
           followerAddress: viewer,
           followingAddress: target,
         });
-        setIsFollowing(true);
+        setFollowStatus('following');
         toast.success('Following');
       }
     } catch (e) {
@@ -259,6 +262,25 @@ function SptCreatorFollowButton({ targetAddress }: { targetAddress: string | nul
       setActionLoading(false);
     }
   };
+
+  // An unverifiable follow state must not present a Follow action: for an existing follower
+  // it would submit a transaction that aborts on chain.
+  if (followStatus === 'unknown' && !statusLoading) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-8 shrink-0 gap-1.5 px-3 text-xs font-medium"
+        disabled={actionLoading}
+        onClick={() => setStatusNonce((n) => n + 1)}
+        title="Could not check whether you follow this account"
+      >
+        <RefreshCw className="size-3.5" aria-hidden />
+        Retry
+      </Button>
+    );
+  }
 
   return (
     <Button
@@ -449,7 +471,7 @@ function WorkspaceHeaderAvatar({
             cy={c}
             r={42.35}
             fill="none"
-            className="stroke-[var(--muted-foreground)]"
+            className="stroke-muted-foreground"
             strokeWidth={ringStroke * 1.12}
             opacity={0.14}
           />
@@ -458,7 +480,7 @@ function WorkspaceHeaderAvatar({
             cy={c}
             r={r}
             fill="none"
-            className="stroke-[var(--muted-foreground)]"
+            className="stroke-muted-foreground"
             strokeWidth={ringStroke}
             opacity={0.28}
           />
@@ -503,7 +525,7 @@ function SptWorkspacePriceBand({
         </p>
         {isReservationPhase ? (
           <span
-            className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-[var(--muted-foreground)] sm:h-4 sm:w-4"
+            className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-muted-foreground sm:h-4 sm:w-4"
             title="Reservation phase"
           >
             <Lock aria-hidden className="block" size="100%" strokeWidth={1.35} />
@@ -513,7 +535,7 @@ function SptWorkspacePriceBand({
           <SptQuoteChangePctChip value={quotePctChipValue} />
         ) : null}
       </div>
-      <p className="text-xs text-muted-foreground">{isReservationPhase ? 'Base price per SPT · reservations open' : 'Price per SPT'}</p>
+      <p className="text-xs text-muted-foreground">{isReservationPhase ? 'Base price per SPT, reservations open' : 'Price per SPT'}</p>
       {!isReservationPhase && show24hChange ? (
         <p className="text-sm text-muted-foreground">{quoteSubline}</p>
       ) : null}
@@ -597,13 +619,13 @@ function SptProfileIdentityCard({
                     {headline}
                   </h1>
                   {username ? (
-                    <span className="shrink-0 text-sm leading-tight text-[var(--muted-foreground)]">
+                    <span className="shrink-0 text-sm leading-tight text-muted-foreground">
                       @
                       {username}
                     </span>
                   ) : null}
                   {sym ? (
-                    <span className="shrink-0 rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium leading-none text-[var(--muted-foreground)]">
+                    <span className="shrink-0 rounded-md bg-muted/60 px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground">
                       {sym}
                     </span>
                   ) : null}
@@ -612,7 +634,7 @@ function SptProfileIdentityCard({
 
               {profileAddress ? (
                 <div className="mt-1 max-w-md min-w-0">
-                  <ProfileMenuWalletCopyRow address={profileAddress} addressHead={10} addressTail={10} />
+                  <ProfileMenuWalletCopyRow address={profileAddress} />
                 </div>
               ) : null}
 
@@ -623,7 +645,7 @@ function SptProfileIdentityCard({
                       <span className="font-semibold tabular-nums text-primary">
                         {profileRibbon.followersCount.toLocaleString()}
                       </span>
-                      <span className="text-[var(--muted-foreground)]">followers</span>
+                      <span className="text-muted-foreground">followers</span>
                     </p>
                   ) : null}
                   {profileRibbon.followingCount != null ? (
@@ -631,7 +653,7 @@ function SptProfileIdentityCard({
                       <span className="font-semibold tabular-nums text-primary">
                         {profileRibbon.followingCount.toLocaleString()}
                       </span>
-                      <span className="text-[var(--muted-foreground)]">following</span>
+                      <span className="text-muted-foreground">following</span>
                     </p>
                   ) : null}
                 </div>
@@ -701,7 +723,7 @@ function AboutBlock({
           <p
             ref={aboutRef}
             className={cn(
-              'text-sm leading-relaxed text-[var(--muted-foreground)]',
+              'text-sm leading-relaxed text-muted-foreground',
               !expanded && 'line-clamp-3 overflow-hidden'
             )}
           >
@@ -718,7 +740,7 @@ function AboutBlock({
           ) : null}
         </div>
       ) : (
-        <p className="text-sm text-[var(--muted-foreground)]">No description.</p>
+        <p className="text-sm text-muted-foreground">No description.</p>
       )}
       <div className="flex flex-wrap gap-2 pt-0.5">
         {blockExplorerHref ? (
@@ -779,7 +801,7 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
     <div className={tradeSptTableWellClass} role="region" aria-label="Token transaction history">
       <table className="w-full text-left text-xs font-satoshi">
         <thead>
-          <tr className="border-b border-trade-shell text-[var(--muted-foreground)]">
+          <tr className="border-b border-trade-shell text-muted-foreground">
             <th className="px-3 py-2.5 font-medium">Time</th>
             <th className="px-3 py-2.5 font-medium">Side</th>
             <th className="px-3 py-2.5 text-right font-medium">Amount (SPT)</th>
@@ -794,7 +816,7 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-trade-shell bg-muted/25 text-muted-foreground dark:bg-muted/15">
                     <Layers className="size-5" strokeWidth={1.65} aria-hidden />
                   </span>
-                  <p className="text-[13px] font-medium leading-snug tracking-tight text-[var(--muted-foreground)]">
+                  <p className="text-[13px] font-medium leading-snug tracking-tight text-muted-foreground">
                     No transactions yet.
                   </p>
                 </div>
@@ -806,7 +828,7 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
                 key={r.id}
                 className="border-b border-trade-shell last:border-b-0 hover:bg-muted/25"
               >
-                <td className="max-w-[8rem] truncate px-3 py-2 text-[var(--muted-foreground)]">
+                <td className="max-w-[8rem] truncate px-3 py-2 text-muted-foreground">
                   {formatUtcTimeShortFromIso(r.time)}
                 </td>
               <td className="px-3 py-2">
@@ -822,7 +844,7 @@ function TradeHistoryTable({ rows }: { rows: TradeHistoryRow[] }) {
                 </span>
               </td>
               <td className="px-3 py-2 text-right">{r.amount}</td>
-              <td className="hidden px-3 py-2 text-right sm:table-cell">{r.traderAddress ? <a href={buildMysocialWalletExplorerHref(r.traderAddress)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{`${r.traderAddress.slice(0, 6)}…${r.traderAddress.slice(-4)}`}</a> : '—'}</td>
+              <td className="hidden px-3 py-2 text-right sm:table-cell">{r.traderAddress ? <a href={buildMysocialWalletExplorerHref(r.traderAddress)} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{`${r.traderAddress.slice(0, 8)}…${r.traderAddress.slice(-8)}`}</a> : '—'}</td>
               </tr>
             ))
           )}
@@ -837,7 +859,7 @@ function HoldersTable({ rows }: { rows: readonly SocialProofHolderRow[] }) {
     <div className={tradeSptTableWellClass} role="region" aria-label="Token holders">
       <table className="w-full text-left text-xs">
         <thead>
-          <tr className="border-b border-trade-shell text-[var(--muted-foreground)]">
+          <tr className="border-b border-trade-shell text-muted-foreground">
             <th className="px-3 py-2.5 font-medium">Holder</th>
             <th className="px-3 py-2.5 font-medium">Address</th>
             <th className="hidden px-3 py-2.5 text-right font-medium sm:table-cell">Amount</th>
@@ -848,7 +870,7 @@ function HoldersTable({ rows }: { rows: readonly SocialProofHolderRow[] }) {
             <tr>
               <td
                 colSpan={3}
-                className="px-3 py-6 text-center text-sm text-[var(--muted-foreground)]"
+                className="px-3 py-6 text-center text-sm text-muted-foreground"
               >
                 No holders yet.
               </td>
@@ -861,7 +883,7 @@ function HoldersTable({ rows }: { rows: readonly SocialProofHolderRow[] }) {
               >
                 <td className="max-w-[10rem] truncate px-3 py-2 text-foreground/90">{r.label}</td>
                 <td
-                  className="max-w-[9rem] truncate px-3 py-2 text-[var(--muted-foreground)]"
+                  className="max-w-[9rem] truncate px-3 py-2 text-muted-foreground"
                   title={r.address}
                 >
                   {truncateAddress(r.address)}
@@ -894,7 +916,7 @@ function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
     <div className={tradeSptTableWellClass} role="region" aria-label="Reservation holder history">
       <table className="w-full text-left text-xs font-satoshi">
         <thead>
-          <tr className="border-b border-trade-shell text-[var(--muted-foreground)]">
+          <tr className="border-b border-trade-shell text-muted-foreground">
             <th className="px-3 py-2.5 font-medium">Time</th>
             <th className="px-3 py-2.5 font-medium">Holder</th>
             <th className="hidden px-3 py-2.5 font-medium md:table-cell">Reservation</th>
@@ -911,7 +933,7 @@ function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-trade-shell bg-muted/25 text-muted-foreground dark:bg-muted/15">
                     <Layers className="size-5" strokeWidth={1.65} aria-hidden />
                   </span>
-                  <p className="text-[13px] font-medium leading-snug tracking-tight text-[var(--muted-foreground)]">
+                  <p className="text-[13px] font-medium leading-snug tracking-tight text-muted-foreground">
                     No reservations yet.
                   </p>
                 </div>
@@ -923,7 +945,7 @@ function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
                 key={r.id}
                 className="border-b border-trade-shell last:border-b-0 hover:bg-muted/25"
               >
-                <td className="max-w-[8rem] truncate px-3 py-2 text-[var(--muted-foreground)]">
+                <td className="max-w-[8rem] truncate px-3 py-2 text-muted-foreground">
                   {formatUtcTimeShortFromIso(r.time)}
                 </td>
               <td className="max-w-[7rem] truncate px-3 py-2 text-foreground/90" title={r.holder}>
@@ -938,7 +960,7 @@ function ReservationsHistoryTable({ rows }: { rows: ReservationHistoryRow[] }) {
                     'text-[11px] font-semibold tracking-tight tabular-nums',
                     r.status === 'filled' && 'text-emerald-600 dark:text-emerald-400',
                     r.status === 'partial' && 'text-amber-600 dark:text-amber-400',
-                    r.status === 'pending' && 'text-[var(--muted-foreground)]'
+                    r.status === 'pending' && 'text-muted-foreground'
                   )}
                 >
                   {reservationStatusLabel(r.status)}
@@ -1074,7 +1096,7 @@ function SocialProofSwapCard({
   const sellBucket = (
     <div className={sptSwapBucketClass}>
           <div className="mb-3 flex items-start justify-between gap-2">
-            <span className="pt-0.5 text-[12px] font-medium text-[var(--muted-foreground)]">
+            <span className="pt-0.5 text-[12px] font-medium text-muted-foreground">
               {tradeMode === 'sell' ? 'You sell' : 'You receive'}
             </span>
             <div
@@ -1123,7 +1145,7 @@ function SocialProofSwapCard({
               <span className="max-w-[5rem] truncate">{sellSym}</span>
             </span>
           </div>
-          <div className="mt-3 flex items-baseline justify-between gap-2 text-[11px] text-[var(--muted-foreground)]">
+          <div className="mt-3 flex items-baseline justify-between gap-2 text-[11px] text-muted-foreground">
             <span className="tabular-nums">{tradeMode === 'sell' ? `${baseUnitsToDisplay(sellNet, 6)} MySo` : 'Estimated receive'}</span>
             <span className="tabular-nums">
               {baseUnitsToDisplay(ownedTokenBaseUnits, 6)} {sellSym} available
@@ -1156,7 +1178,7 @@ function SocialProofSwapCard({
   const buyBucket = (
     <div className={sptSwapBucketClass}>
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[12px] font-medium text-[var(--muted-foreground)]">{tradeMode === 'buy' ? 'You pay' : 'You receive'}</span>
+        <span className="text-[12px] font-medium text-muted-foreground">{tradeMode === 'buy' ? 'You pay' : 'You receive'}</span>
       </div>
       <div className="flex min-h-[2.75rem] items-end justify-between gap-3">
         {tradeMode === 'buy' ? (
@@ -1189,7 +1211,7 @@ function SocialProofSwapCard({
           <span className="max-w-[5rem] truncate">MySo</span>
         </span>
       </div>
-      <div className="mt-3 flex justify-between text-[11px] tabular-nums text-[var(--muted-foreground)]">
+      <div className="mt-3 flex justify-between text-[11px] tabular-nums text-muted-foreground">
         <span>{tradeMode === 'buy' ? `${baseUnitsToDisplay(buyQuote.cost, 6)} MySo curve cost` : 'Estimated receive'}</span>
         <span>{baseUnitsToDisplay(walletMysoBaseUnits, 6)} MySo available</span>
       </div>
@@ -1199,7 +1221,7 @@ function SocialProofSwapCard({
   return (
     <div data-trade-mode={tradeMode} className={cn(tradeSptTallCardSwapClass, className)}>
       {tradingEnabled !== true ? (
-        <p className="rounded-lg bg-muted/35 px-3 py-2.5 text-center text-xs text-[var(--muted-foreground)] dark:bg-muted/25">
+        <p className="rounded-lg bg-muted/35 px-3 py-2.5 text-center text-xs text-muted-foreground dark:bg-muted/25">
           Trading isn’t enabled for this token in your network configuration.
         </p>
       ) : null}
@@ -1308,7 +1330,7 @@ function PriceChartBlock({
         <div
           className={cn(
             'flex h-[min(52vw,340px)] w-full max-h-[400px] min-h-[220px] items-center justify-center rounded-xl',
-            'bg-muted/25 text-sm text-[var(--muted-foreground)] dark:bg-muted/20'
+            'bg-muted/25 text-sm text-muted-foreground dark:bg-muted/20'
           )}
         >
           No price history in this timeframe.
@@ -1919,7 +1941,7 @@ export function TradeSocialProofTokenWorkspace({
           {sidePanelMode === 'none' ? (
             <div className={cn(tradeSptEmptyAsideClass, 'rounded-t-none border-t-0')}>
               <p className="text-sm font-medium text-foreground">No reservation or trading</p>
-              <p className="mt-2 text-xs leading-relaxed text-[var(--muted-foreground)]">
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                 This token does not have an open reservation pool or live trading pool yet, so swap
                 and reserve actions are unavailable.
               </p>

@@ -26,16 +26,23 @@ export function CookieConsent() {
   }, [])
 
   const handleAccept = () => {
-    Cookies.set('cookieConsent', 'true', { expires: 365 })
+    Cookies.set('cookieConsent', 'true', { expires: 365, sameSite: 'lax' })
+    notifyConsentChange('true')
+    setIsVisible(false)
+  }
+
+  const handleReject = () => {
+    Cookies.set('cookieConsent', 'false', { expires: 365, sameSite: 'lax' })
+    notifyConsentChange('false')
     setIsVisible(false)
   }
 
   const getMessage = () => {
     switch (region) {
       case 'EU':
-        return "This website uses cookies to enhance your browsing experience and analyze our traffic. By clicking 'Accept', you consent to the our Privacy Policy in accordance with GDPR requirements.";
+        return "This website uses cookies to enhance your browsing experience and analyze our traffic. You can accept or decline analytics cookies; declining still lets you use SofiSwap."
       default:
-        return "We use cookies to enhance your browsing experience and analyze our traffic.";
+        return "We use cookies to enhance your browsing experience and analyze our traffic."
     }
   }
 
@@ -54,23 +61,41 @@ export function CookieConsent() {
               setShowConsent(false)
             }
           }}
-          className="fixed bottom-4 md:bottom-6 left-4 right-4 md:right-6 md:left-auto z-50 max-w-[500px] md:max-w-[400px] mx-auto md:mx-0 border border-[var(--border)] rounded-lg shadow-[0_6px_16px_rgba(0,0,0,0.15)]"
+          role="dialog"
+          aria-label="Cookie consent"
+          className="fixed bottom-4 md:bottom-6 left-4 right-4 md:right-6 md:left-auto z-50 max-w-[500px] md:max-w-[400px] mx-auto md:mx-0 border border-border rounded-lg shadow-[0_6px_16px_rgba(0,0,0,0.15)]"
         >
-          <div className="bg-[var(--background-transparent)] backdrop-blur supports-[backdrop-filter]:bg-[var(--background-transparent)] rounded-lg p-4 flex items-center justify-between gap-4">
-            <Button 
-              onClick={handleAccept}
-              className="whitespace-nowrap"
-            >
-              {region === 'EU' ? 'Accept' : 'Okay'}
-            </Button>
-            <p className="text-sm text-[var(--primary)]">
+          {/* Solid surface: the previous `--background-transparent` token was never defined,
+              so consent copy rendered directly on top of page content. */}
+          <div className="bg-background/[0.97] backdrop-blur-xl supports-[backdrop-filter]:bg-background/90 rounded-lg p-4">
+            <p className="text-sm text-foreground">
               {getMessage()}
             </p>
+            <div className="mt-3 flex items-center gap-2">
+              <Button onClick={handleAccept} className="whitespace-nowrap">
+                {region === 'EU' ? 'Accept' : 'Okay'}
+              </Button>
+              <Button
+                onClick={handleReject}
+                variant="outline"
+                className="whitespace-nowrap"
+              >
+                Decline
+              </Button>
+            </div>
           </div>
         </motion.div>
       )}
     </AnimatePresence>
   )
+}
+
+/** Broadcasts the consent decision so analytics can react without a page reload. */
+export const COOKIE_CONSENT_CHANGE_EVENT = 'sofiswap-cookie-consent-change'
+
+export function notifyConsentChange(value: 'true' | 'false'): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_CHANGE_EVENT, { detail: value }))
 }
 
 async function checkIfInRequiredRegion(): Promise<{ isRequired: boolean; region: 'EU' | 'US' | 'OTHER' }> {

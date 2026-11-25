@@ -11,7 +11,7 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { wallet } = await params;
   const addr = mySoAddressFromString(wallet);
-  const short = addr && addr.length > 12 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : (addr ?? 'Profile');
+  const short = addr && addr.length > 19 ? `${addr.slice(0, 8)}…${addr.slice(-8)}` : (addr ?? 'Profile');
   return {
     title: `SPT ${short} — SofiSwap`,
     description: 'Social proof token profile on SofiSwap.',

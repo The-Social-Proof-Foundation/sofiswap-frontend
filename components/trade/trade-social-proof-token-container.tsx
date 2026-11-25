@@ -27,7 +27,7 @@ function TokenNotFound() {
   return (
     <div className={cn(tradeWorkspaceRouteEmptyRootClass, 'gap-3')} role="status">
       <p className="text-lg font-semibold text-foreground">Profile or post not found</p>
-      <p className="max-w-md text-sm text-[var(--muted-foreground)]">
+      <p className="max-w-md text-sm text-muted-foreground">
         It may not be indexed on the selected network yet.
       </p>
       <Link href="/trade/spt" className="text-sm text-primary underline">Browse Social Proof Tokens</Link>
